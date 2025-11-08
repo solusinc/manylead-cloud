@@ -23,6 +23,8 @@
     "dev": "tsc",
     "format": "prettier --check . --ignore-path ../../.gitignore",
     "lint": "eslint --flag unstable_native_nodejs_ts_config",
+    "generate": "pnpm with-env drizzle-kit generate",
+    "migrate": "pnpm with-env tsx src/migrate.ts",
     "push": "pnpm with-env drizzle-kit push",
     "studio": "pnpm with-env drizzle-kit studio",
     "typecheck": "tsc --noEmit --emitDeclarationOnly false",
@@ -42,6 +44,7 @@
     "drizzle-kit": "^0.31.5",
     "eslint": "catalog:",
     "prettier": "catalog:",
+    "tsx": "^4.20.6",
     "typescript": "catalog:"
   },
   "prettier": "@manylead/prettier-config"

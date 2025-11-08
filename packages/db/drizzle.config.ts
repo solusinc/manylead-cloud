@@ -8,6 +8,7 @@ if (!process.env.DATABASE_URL_DIRECT) {
 
 export default {
   schema: "./src/schema.ts",
+  out: "./drizzle",
   dialect: "postgresql",
   dbCredentials: { url: process.env.DATABASE_URL_DIRECT },
   casing: "snake_case",
@@ -17,4 +18,7 @@ export default {
 
   // Only manage tables in the public schema
   schemaFilter: ["public"],
+
+  // Strict mode for safer migrations
+  strict: true,
 } satisfies Config;

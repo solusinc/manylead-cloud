@@ -47,6 +47,7 @@
   },
   "globalEnv": [
     "DATABASE_URL",
+    "DATABASE_URL_DIRECT",
     "AUTH_REDIRECT_PROXY_URL",
     "AUTH_SECRET",
     "PORT"
