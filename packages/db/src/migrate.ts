@@ -15,7 +15,7 @@ async function main() {
   const connection = postgres(databaseUrl, { max: 1 });
   const db = drizzle(connection);
 
-  await migrate(db, { migrationsFolder: "drizzle" });
+  await migrate(db, { migrationsFolder: "drizzle/catalog" });
 
   await connection.end();
 

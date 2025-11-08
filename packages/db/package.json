@@ -25,6 +25,7 @@
     "lint": "eslint --flag unstable_native_nodejs_ts_config",
     "generate": "pnpm with-env drizzle-kit generate",
     "migrate": "pnpm with-env tsx src/migrate.ts",
+    "seed": "pnpm with-env tsx src/seed.ts",
     "push": "pnpm with-env drizzle-kit push",
     "studio": "pnpm with-env drizzle-kit studio",
     "typecheck": "tsc --noEmit --emitDeclarationOnly false",
