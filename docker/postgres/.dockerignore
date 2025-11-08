@@ -1,0 +1,14 @@
+# Ignore git files
+.git
+.gitignore
+
+# Ignore documentation
+*.md
+README*
+
+# Ignore macOS files
+.DS_Store
+
+# Ignore temporary files
+*.tmp
+*.log
