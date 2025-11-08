@@ -1,0 +1,5 @@
+{
+  "extends": "@manylead/tsconfig/compiled-package.json",
+  "include": ["src", "drizzle.config.ts"],
+  "exclude": ["node_modules"]
+}

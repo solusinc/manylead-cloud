@@ -1,0 +1,431 @@
+import { drizzle } from "drizzle-orm/postgres-js";
+import { migrate } from "drizzle-orm/postgres-js/migrator";
+import { eq } from "drizzle-orm";
+import postgres from "postgres";
+import * as catalogSchema from "@manylead/db";
+
+import { databaseHost, tenant } from "@manylead/db";
+import type { Tenant } from "@manylead/db";
+
+import { ActivityLogger } from "./activity-logger";
+import {
+  buildConnectionString,
+  generateDatabaseName,
+  isValidSlug,
+  retryWithBackoff,
+} from "./utils";
+import type {
+  HealthCheckResult,
+  MigrateAllOptions,
+  MigrationResult,
+  ProvisionTenantParams,
+} from "./types";
+
+export class TenantDatabaseManager {
+  private catalogDb;
+  private catalogClient;
+  private activityLogger: ActivityLogger;
+
+  constructor(catalogConnectionString?: string) {
+    const connString =
+      catalogConnectionString ?? process.env.DATABASE_URL_DIRECT;
+
+    if (!connString) {
+      throw new Error("Missing catalog database connection string");
+    }
+
+    this.catalogClient = postgres(connString, {
+      max: 5,
+      prepare: false,
+    });
+
+    this.catalogDb = drizzle(this.catalogClient, { schema: catalogSchema });
+    this.activityLogger = new ActivityLogger(connString);
+  }
+
+  async provisionTenant(params: ProvisionTenantParams): Promise<Tenant> {
+    const startTime = Date.now();
+
+    if (!isValidSlug(params.slug)) {
+      throw new Error(`Invalid slug: ${params.slug}`);
+    }
+
+    const dbName = generateDatabaseName(params.organizationId);
+
+    let host;
+    if (params.databaseHostId) {
+      const result = await this.catalogDb.query.databaseHost.findFirst({
+        where: eq(databaseHost.id, params.databaseHostId),
+      });
+
+      if (!result) {
+        throw new Error(`Database host not found: ${params.databaseHostId}`);
+      }
+
+      host = result;
+    } else {
+      const result = await this.catalogDb.query.databaseHost.findFirst({
+        where: eq(databaseHost.isDefault, true),
+      });
+
+      if (!result) {
+        throw new Error("No default database host found");
+      }
+
+      host = result;
+    }
+
+    const postgresUser = process.env.POSTGRES_USER ?? "postgres";
+    const postgresPassword = process.env.POSTGRES_PASSWORD;
+
+    if (!postgresPassword) {
+      throw new Error("Missing POSTGRES_PASSWORD");
+    }
+
+    const connectionString = buildConnectionString({
+      host: host.host,
+      port: host.port,
+      database: dbName,
+      user: postgresUser,
+      password: postgresPassword,
+    });
+
+    const result = await this.catalogDb
+      .insert(tenant)
+      .values({
+        organizationId: params.organizationId,
+        slug: params.slug,
+        name: params.name,
+        databaseName: dbName,
+        connectionString,
+        databaseHostId: host.id,
+        host: host.host,
+        port: host.port,
+        region: host.region,
+        tier: params.tier ?? "shared",
+        status: "provisioning",
+        metadata: params.metadata,
+      })
+      .returning();
+
+    const newTenant = result[0];
+
+    if (!newTenant) {
+      throw new Error("Failed to create tenant record");
+    }
+
+    await this.activityLogger.logTenantCreated(
+      newTenant.id,
+      newTenant.slug,
+      params.metadata,
+    );
+
+    try {
+      const adminConnString = buildConnectionString({
+        host: host.host,
+        port: host.port,
+        database: "postgres",
+        user: postgresUser,
+        password: postgresPassword,
+      });
+
+      const adminClient = postgres(adminConnString, { max: 1 });
+
+      await adminClient.unsafe(`CREATE DATABASE "${dbName}"`);
+      await adminClient.end();
+
+      const tenantClient = postgres(connectionString, {
+        max: 1,
+        prepare: false,
+      });
+
+      await tenantClient.unsafe("CREATE EXTENSION IF NOT EXISTS vector");
+      await tenantClient.unsafe("CREATE EXTENSION IF NOT EXISTS pg_cron");
+
+      const tenantDb = drizzle(tenantClient);
+      await migrate(tenantDb, { migrationsFolder: "drizzle/tenant" });
+
+      await tenantClient.end();
+
+      await this.catalogDb
+        .update(tenant)
+        .set({
+          status: "active",
+          provisionedAt: new Date(),
+        })
+        .where(eq(tenant.id, newTenant.id));
+
+      const duration = Date.now() - startTime;
+      await this.activityLogger.logTenantProvisioned(
+        newTenant.id,
+        dbName,
+        duration,
+      );
+
+      return { ...newTenant, status: "active", provisionedAt: new Date() };
+    } catch (error) {
+      await this.catalogDb
+        .update(tenant)
+        .set({ status: "failed" })
+        .where(eq(tenant.id, newTenant.id));
+
+      await this.activityLogger.logSystemError(error as Error, {
+        tenantId: newTenant.id,
+        slug: params.slug,
+      });
+
+      throw error;
+    }
+  }
+
+  async getConnection(organizationId: string) {
+    const tenantRecord = await this.catalogDb.query.tenant.findFirst({
+      where: eq(tenant.organizationId, organizationId),
+    });
+
+    if (!tenantRecord) {
+      throw new Error(`Tenant not found: ${organizationId}`);
+    }
+
+    if (tenantRecord.status !== "active") {
+      throw new Error(
+        `Tenant is not active: ${tenantRecord.slug} (status: ${tenantRecord.status})`,
+      );
+    }
+
+    const client = postgres(tenantRecord.connectionString, {
+      max: 3,
+      prepare: false,
+    });
+
+    return drizzle(client);
+  }
+
+  async getTenantBySlug(slug: string): Promise<Tenant | null> {
+    const result = await this.catalogDb.query.tenant.findFirst({
+      where: eq(tenant.slug, slug),
+    });
+
+    return result ?? null;
+  }
+
+  async getTenantById(tenantId: string): Promise<Tenant | null> {
+    const result = await this.catalogDb.query.tenant.findFirst({
+      where: eq(tenant.id, tenantId),
+    });
+
+    return result ?? null;
+  }
+
+  async migrateTenant(tenantId: string): Promise<void> {
+    const tenantRecord = await this.getTenantById(tenantId);
+
+    if (!tenantRecord) {
+      throw new Error(`Tenant not found: ${tenantId}`);
+    }
+
+    await this.activityLogger.logMigrationStarted(tenantId, "all");
+
+    const startTime = Date.now();
+
+    try {
+      const client = postgres(tenantRecord.connectionString, {
+        max: 1,
+        prepare: false,
+      });
+
+      const db = drizzle(client);
+      await migrate(db, { migrationsFolder: "drizzle/tenant" });
+      await client.end();
+
+      const duration = Date.now() - startTime;
+      await this.activityLogger.logMigrationExecuted(tenantId, "all", duration);
+    } catch (error) {
+      await this.activityLogger.logMigrationFailed(
+        tenantId,
+        "all",
+        (error as Error).message,
+      );
+      throw error;
+    }
+  }
+
+  async migrateAll(options?: MigrateAllOptions): Promise<MigrationResult[]> {
+    const parallel = options?.parallel ?? true;
+    const maxConcurrency = options?.maxConcurrency ?? 5;
+    const continueOnError = options?.continueOnError ?? false;
+
+    const tenants = await this.catalogDb.query.tenant.findMany({
+      where: eq(tenant.status, "active"),
+    });
+
+    const results: MigrationResult[] = [];
+
+    if (!parallel) {
+      for (const t of tenants) {
+        const startTime = Date.now();
+        try {
+          await this.migrateTenant(t.id);
+          results.push({
+            tenantId: t.id,
+            slug: t.slug,
+            success: true,
+            duration: Date.now() - startTime,
+          });
+        } catch (error) {
+          results.push({
+            tenantId: t.id,
+            slug: t.slug,
+            success: false,
+            duration: Date.now() - startTime,
+            error: (error as Error).message,
+          });
+
+          if (!continueOnError) {
+            throw error;
+          }
+        }
+      }
+    } else {
+      const chunks: Tenant[][] = [];
+      for (let i = 0; i < tenants.length; i += maxConcurrency) {
+        chunks.push(tenants.slice(i, i + maxConcurrency));
+      }
+
+      for (const chunk of chunks) {
+        const chunkResults = await Promise.allSettled(
+          chunk.map(async (t) => {
+            const startTime = Date.now();
+            await this.migrateTenant(t.id);
+            return {
+              tenantId: t.id,
+              slug: t.slug,
+              success: true,
+              duration: Date.now() - startTime,
+            };
+          }),
+        );
+
+        for (let i = 0; i < chunkResults.length; i++) {
+          const result = chunkResults[i];
+          const t = chunk[i];
+
+          if (!t || !result) continue;
+
+          if (result.status === "fulfilled") {
+            results.push(result.value);
+          } else {
+            const errorMessage =
+              result.reason instanceof Error
+                ? result.reason.message
+                : String(result.reason);
+            results.push({
+              tenantId: t.id,
+              slug: t.slug,
+              success: false,
+              duration: 0,
+              error: errorMessage,
+            });
+          }
+        }
+      }
+    }
+
+    return results;
+  }
+
+  async checkTenantHealth(tenantId: string): Promise<HealthCheckResult> {
+    const tenantRecord = await this.getTenantById(tenantId);
+
+    if (!tenantRecord) {
+      return {
+        tenantId,
+        slug: "unknown",
+        status: "unhealthy",
+        canConnect: false,
+        databaseExists: false,
+        error: "Tenant not found",
+      };
+    }
+
+    try {
+      const client = postgres(tenantRecord.connectionString, {
+        max: 1,
+        prepare: false,
+      });
+
+      await retryWithBackoff(() => client`SELECT 1`, {
+        maxAttempts: 3,
+        delayMs: 500,
+      });
+
+      await client.end();
+
+      return {
+        tenantId: tenantRecord.id,
+        slug: tenantRecord.slug,
+        status: "healthy",
+        canConnect: true,
+        databaseExists: true,
+        schemaVersion: typeof tenantRecord.metadata?.schemaVersion === "string"
+          ? tenantRecord.metadata.schemaVersion
+          : undefined,
+      };
+    } catch (error) {
+      return {
+        tenantId: tenantRecord.id,
+        slug: tenantRecord.slug,
+        status: "unhealthy",
+        canConnect: false,
+        databaseExists: false,
+        error: (error as Error).message,
+      };
+    }
+  }
+
+  async checkAllTenantsHealth(): Promise<HealthCheckResult[]> {
+    const tenants = await this.catalogDb.query.tenant.findMany();
+    const results = await Promise.all(
+      tenants.map((t) => this.checkTenantHealth(t.id)),
+    );
+    return results;
+  }
+
+  async updateTenantStatus(
+    tenantId: string,
+    status: "provisioning" | "active" | "suspended" | "deleted" | "failed",
+  ): Promise<void> {
+    await this.catalogDb
+      .update(tenant)
+      .set({ status })
+      .where(eq(tenant.id, tenantId));
+  }
+
+  async deleteTenant(organizationId: string): Promise<void> {
+    const tenantRecord = await this.catalogDb.query.tenant.findFirst({
+      where: eq(tenant.organizationId, organizationId),
+    });
+
+    if (!tenantRecord) {
+      throw new Error(`Tenant not found: ${organizationId}`);
+    }
+
+    await this.catalogDb
+      .update(tenant)
+      .set({
+        status: "deleted",
+        deletedAt: new Date(),
+      })
+      .where(eq(tenant.id, tenantRecord.id));
+
+    await this.activityLogger.logTenantDeleted(
+      tenantRecord.id,
+      tenantRecord.slug,
+    );
+  }
+
+  async close(): Promise<void> {
+    await this.catalogClient.end();
+    await this.activityLogger.close();
+  }
+}

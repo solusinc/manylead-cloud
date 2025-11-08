@@ -11,7 +11,7 @@ import * as tenantSchema from "./schema/tenant";
  * @returns Drizzle client configurado para o catalog
  */
 export function createCatalogClient(connectionString?: string) {
-  const connString = connectionString || process.env.DATABASE_URL;
+  const connString = connectionString ?? process.env.DATABASE_URL;
 
   if (!connString) {
     throw new Error("Missing DATABASE_URL or connectionString");
@@ -56,12 +56,12 @@ export function createTenantClient(connectionString: string) {
   });
 }
 
+// Export types
+export type CatalogDB = ReturnType<typeof createCatalogClient>;
+export type TenantDB = ReturnType<typeof createTenantClient>;
+
 /**
  * Instância singleton do catalog client (para compatibilidade)
  * Usa DATABASE_URL por padrão (via PgBouncer)
  */
-export const db = createCatalogClient();
-
-// Export types
-export type CatalogDB = ReturnType<typeof createCatalogClient>;
-export type TenantDB = ReturnType<typeof createTenantClient>;
+export const db: CatalogDB = createCatalogClient();

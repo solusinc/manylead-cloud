@@ -12,6 +12,7 @@ import { z, ZodError } from "zod/v4";
 
 import type { Auth } from "@manylead/auth";
 import { db } from "@manylead/db/client";
+import type { CatalogDB } from "@manylead/db/client";
 
 /**
  * 1. CONTEXT
@@ -29,7 +30,11 @@ import { db } from "@manylead/db/client";
 export const createTRPCContext = async (opts: {
   headers: Headers;
   auth: Auth;
-}) => {
+}): Promise<{
+  authApi: Auth["api"];
+  session: Awaited<ReturnType<Auth["api"]["getSession"]>>;
+  db: CatalogDB;
+}> => {
   const authApi = opts.auth.api;
   const session = await authApi.getSession({
     headers: opts.headers,
