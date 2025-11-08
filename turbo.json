@@ -50,7 +50,7 @@
     "DATABASE_URL_DIRECT",
     "AUTH_REDIRECT_PROXY_URL",
     "AUTH_SECRET",
-    "PORT"
+    "NEXT_PUBLIC_SENTRY_DSN"
   ],
   "globalPassThroughEnv": ["NODE_ENV", "CI", "npm_lifecycle_event"]
 }
