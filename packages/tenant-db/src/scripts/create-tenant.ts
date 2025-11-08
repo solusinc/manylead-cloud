@@ -61,7 +61,11 @@ async function main() {
     process.exit(0);
   } catch (error) {
     console.error("❌ Failed to create tenant");
-    console.error(error);
+    if (error instanceof Error) {
+      console.error(`   ${error.message}`);
+    } else {
+      console.error(error);
+    }
     await manager.close();
     process.exit(1);
   }

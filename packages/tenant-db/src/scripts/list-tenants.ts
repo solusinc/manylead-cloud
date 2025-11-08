@@ -75,7 +75,11 @@ async function main() {
     process.exit(0);
   } catch (error) {
     console.error("❌ Failed to list tenants");
-    console.error(error);
+    if (error instanceof Error) {
+      console.error(`   ${error.message}`);
+    } else {
+      console.error(error);
+    }
     await client.end();
     process.exit(1);
   }

@@ -50,29 +50,41 @@ export class TenantDatabaseManager {
       throw new Error(`Invalid slug: ${params.slug}`);
     }
 
+    // Verificar se já existe tenant com esse slug
+    const existingTenant = await this.getTenantBySlug(params.slug);
+    if (existingTenant) {
+      throw new Error(
+        `Tenant with slug '${params.slug}' already exists (status: ${existingTenant.status})`,
+      );
+    }
+
     const dbName = generateDatabaseName(params.organizationId);
 
     let host;
     if (params.databaseHostId) {
-      const result = await this.catalogDb.query.databaseHost.findFirst({
-        where: eq(databaseHost.id, params.databaseHostId),
-      });
+      const result = await this.catalogDb
+        .select()
+        .from(databaseHost)
+        .where(eq(databaseHost.id, params.databaseHostId))
+        .limit(1);
 
-      if (!result) {
+      if (!result[0]) {
         throw new Error(`Database host not found: ${params.databaseHostId}`);
       }
 
-      host = result;
+      host = result[0];
     } else {
-      const result = await this.catalogDb.query.databaseHost.findFirst({
-        where: eq(databaseHost.isDefault, true),
-      });
+      const result = await this.catalogDb
+        .select()
+        .from(databaseHost)
+        .where(eq(databaseHost.isDefault, true))
+        .limit(1);
 
-      if (!result) {
+      if (!result[0]) {
         throw new Error("No default database host found");
       }
 
-      host = result;
+      host = result[0];
     }
 
     const postgresUser = process.env.POSTGRES_USER ?? "postgres";
@@ -139,11 +151,16 @@ export class TenantDatabaseManager {
         prepare: false,
       });
 
+      // Criar extensões disponíveis no servidor
+      // NOTA: pg_cron só pode ser criado no database configurado em cron.database_name (manylead_catalog)
+      // Para jobs agendados nos tenants, use pg_cron no catalog + dblink
       await tenantClient.unsafe("CREATE EXTENSION IF NOT EXISTS vector");
-      await tenantClient.unsafe("CREATE EXTENSION IF NOT EXISTS pg_cron");
+      await tenantClient.unsafe("CREATE EXTENSION IF NOT EXISTS pg_partman");
+      await tenantClient.unsafe("CREATE EXTENSION IF NOT EXISTS dblink");
 
-      const tenantDb = drizzle(tenantClient);
-      await migrate(tenantDb, { migrationsFolder: "drizzle/tenant" });
+      // TODO FASE-2: Rodar migrations quando tiver schema tenant
+      // const tenantDb = drizzle(tenantClient);
+      // await migrate(tenantDb, { migrationsFolder: "drizzle/tenant" });
 
       await tenantClient.end();
 
@@ -179,9 +196,13 @@ export class TenantDatabaseManager {
   }
 
   async getConnection(organizationId: string) {
-    const tenantRecord = await this.catalogDb.query.tenant.findFirst({
-      where: eq(tenant.organizationId, organizationId),
-    });
+    const result = await this.catalogDb
+      .select()
+      .from(tenant)
+      .where(eq(tenant.organizationId, organizationId))
+      .limit(1);
+
+    const tenantRecord = result[0];
 
     if (!tenantRecord) {
       throw new Error(`Tenant not found: ${organizationId}`);
@@ -202,19 +223,23 @@ export class TenantDatabaseManager {
   }
 
   async getTenantBySlug(slug: string): Promise<Tenant | null> {
-    const result = await this.catalogDb.query.tenant.findFirst({
-      where: eq(tenant.slug, slug),
-    });
+    const result = await this.catalogDb
+      .select()
+      .from(tenant)
+      .where(eq(tenant.slug, slug))
+      .limit(1);
 
-    return result ?? null;
+    return result[0] ?? null;
   }
 
   async getTenantById(tenantId: string): Promise<Tenant | null> {
-    const result = await this.catalogDb.query.tenant.findFirst({
-      where: eq(tenant.id, tenantId),
-    });
+    const result = await this.catalogDb
+      .select()
+      .from(tenant)
+      .where(eq(tenant.id, tenantId))
+      .limit(1);
 
-    return result ?? null;
+    return result[0] ?? null;
   }
 
   async migrateTenant(tenantId: string): Promise<void> {
@@ -255,9 +280,10 @@ export class TenantDatabaseManager {
     const maxConcurrency = options?.maxConcurrency ?? 5;
     const continueOnError = options?.continueOnError ?? false;
 
-    const tenants = await this.catalogDb.query.tenant.findMany({
-      where: eq(tenant.status, "active"),
-    });
+    const tenants = await this.catalogDb
+      .select()
+      .from(tenant)
+      .where(eq(tenant.status, "active"));
 
     const results: MigrationResult[] = [];
 
@@ -359,6 +385,12 @@ export class TenantDatabaseManager {
         delayMs: 500,
       });
 
+      // Buscar extensões instaladas
+      const extensionsResult = await client<{ extname: string }[]>`
+        SELECT extname FROM pg_extension WHERE extname != 'plpgsql'
+      `;
+      const extensions = extensionsResult.map((row) => row.extname);
+
       await client.end();
 
       return {
@@ -367,6 +399,7 @@ export class TenantDatabaseManager {
         status: "healthy",
         canConnect: true,
         databaseExists: true,
+        extensions,
         schemaVersion: typeof tenantRecord.metadata?.schemaVersion === "string"
           ? tenantRecord.metadata.schemaVersion
           : undefined,
@@ -384,7 +417,7 @@ export class TenantDatabaseManager {
   }
 
   async checkAllTenantsHealth(): Promise<HealthCheckResult[]> {
-    const tenants = await this.catalogDb.query.tenant.findMany();
+    const tenants = await this.catalogDb.select().from(tenant);
     const results = await Promise.all(
       tenants.map((t) => this.checkTenantHealth(t.id)),
     );
@@ -402,14 +435,19 @@ export class TenantDatabaseManager {
   }
 
   async deleteTenant(organizationId: string): Promise<void> {
-    const tenantRecord = await this.catalogDb.query.tenant.findFirst({
-      where: eq(tenant.organizationId, organizationId),
-    });
+    const result = await this.catalogDb
+      .select()
+      .from(tenant)
+      .where(eq(tenant.organizationId, organizationId))
+      .limit(1);
+
+    const tenantRecord = result[0];
 
     if (!tenantRecord) {
       throw new Error(`Tenant not found: ${organizationId}`);
     }
 
+    // Soft delete - marca como deleted mas mantém database físico
     await this.catalogDb
       .update(tenant)
       .set({
@@ -422,6 +460,55 @@ export class TenantDatabaseManager {
       tenantRecord.id,
       tenantRecord.slug,
     );
+  }
+
+  async purgeTenant(organizationId: string): Promise<void> {
+    const result = await this.catalogDb
+      .select()
+      .from(tenant)
+      .where(eq(tenant.organizationId, organizationId))
+      .limit(1);
+
+    const tenantRecord = result[0];
+
+    if (!tenantRecord) {
+      throw new Error(`Tenant not found: ${organizationId}`);
+    }
+
+    const postgresUser = process.env.POSTGRES_USER;
+    const postgresPassword = process.env.POSTGRES_PASSWORD;
+
+    if (!postgresUser || !postgresPassword) {
+      throw new Error("Missing POSTGRES_USER or POSTGRES_PASSWORD");
+    }
+
+    // Logar ANTES de deletar (senão viola foreign key)
+    await this.activityLogger.logTenantDeleted(
+      tenantRecord.id,
+      tenantRecord.slug,
+    );
+
+    // Hard delete - deleta database físico e registro do catalog
+    const adminConnString = buildConnectionString({
+      host: tenantRecord.host,
+      port: tenantRecord.port,
+      database: "postgres",
+      user: postgresUser,
+      password: postgresPassword,
+    });
+
+    const adminClient = postgres(adminConnString, { max: 1 });
+
+    try {
+      await adminClient.unsafe(
+        `DROP DATABASE IF EXISTS "${tenantRecord.databaseName}"`,
+      );
+    } finally {
+      await adminClient.end();
+    }
+
+    // Deletar registro do catalog (CASCADE vai deletar activity_log, metrics, etc)
+    await this.catalogDb.delete(tenant).where(eq(tenant.id, tenantRecord.id));
   }
 
   async close(): Promise<void> {

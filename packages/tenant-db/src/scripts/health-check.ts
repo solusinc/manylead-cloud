@@ -29,6 +29,11 @@ async function main() {
       console.log(`   Status: ${result.status}`);
       console.log(`   Can Connect: ${result.canConnect}`);
       console.log(`   Database Exists: ${result.databaseExists}`);
+      if (result.extensions && result.extensions.length > 0) {
+        console.log(`   Extensions: ${result.extensions.join(", ")}`);
+      } else if (result.extensions) {
+        console.log(`   Extensions: none`);
+      }
       if (result.schemaVersion) {
         console.log(`   Schema Version: ${result.schemaVersion}`);
       }
@@ -70,7 +75,11 @@ async function main() {
     }
   } catch (error) {
     console.error("❌ Health check failed");
-    console.error(error);
+    if (error instanceof Error) {
+      console.error(`   ${error.message}`);
+    } else {
+      console.error(error);
+    }
     await manager.close();
     process.exit(1);
   }

@@ -21,7 +21,7 @@ async function main() {
     .values({
       name: "postgres-ca-primary",
       host: "148.113.164.109",
-      port: 5432,
+      port: 5454,
       region: "ca-toronto",
       tier: "shared",
       maxTenants: 70,

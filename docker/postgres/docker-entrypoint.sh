@@ -8,9 +8,12 @@ set -e
 POSTGRES_DB="${POSTGRES_DB:-postgres}"
 
 # Start PostgreSQL with pg_cron enabled and performance tuning
+# IMPORTANTE: cron.database_name define onde o metadata do pg_cron é armazenado
+# Mas a extensão pode ser criada em qualquer database usando cron.use_background_workers=off
 exec docker-entrypoint.sh postgres \
   -c shared_preload_libraries=pg_cron \
   -c cron.database_name="${POSTGRES_DB}" \
+  -c cron.use_background_workers=on \
   -c shared_buffers=256MB \
   -c effective_cache_size=1GB \
   -c maintenance_work_mem=64MB \

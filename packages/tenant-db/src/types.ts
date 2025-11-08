@@ -30,6 +30,7 @@ export interface HealthCheckResult {
   canConnect: boolean;
   databaseExists: boolean;
   schemaVersion?: string;
+  extensions?: string[];
   error?: string;
 }
 
