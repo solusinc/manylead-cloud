@@ -9,10 +9,12 @@ if (!process.env.DATABASE_URL) {
 }
 
 // Create PostgreSQL connection
+// Disable prepared statements for PgBouncer compatibility in transaction mode
 export const client = postgres(process.env.DATABASE_URL, {
   max: 10,
   idle_timeout: 20,
   connect_timeout: 10,
+  prepare: false, // Required for PgBouncer in transaction mode
 });
 
 // Create Drizzle instance
