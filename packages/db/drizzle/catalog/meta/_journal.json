@@ -8,6 +8,20 @@
       "when": 1762630743624,
       "tag": "0000_first_black_queen",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1762647801504,
+      "tag": "0001_familiar_medusa",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1762648488351,
+      "tag": "0002_flippant_layla_miller",
+      "breakpoints": true
     }
   ]
 }

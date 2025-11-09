@@ -14,6 +14,7 @@ import { databaseHost } from "../database-hosts";
 import { tenantMetric } from "../tenant-metrics";
 import { migrationLog } from "../migrations-log";
 import { activityLog } from "../activity-logs";
+import { organization } from "../auth/organization";
 import { tenantStatus, tenantTier } from "./constants";
 
 /**
@@ -27,7 +28,10 @@ export const tenant = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
 
     // Identificação
-    organizationId: uuid("organization_id").notNull().unique(),
+    organizationId: text("organization_id")
+      .notNull()
+      .unique()
+      .references(() => organization.id, { onDelete: "cascade" }),
     slug: varchar("slug", { length: 100 }).notNull().unique(),
     name: varchar("name", { length: 255 }).notNull(),
 
@@ -83,6 +87,10 @@ export const tenant = pgTable(
 );
 
 export const tenantRelations = relations(tenant, ({ one, many }) => ({
+  organization: one(organization, {
+    fields: [tenant.organizationId],
+    references: [organization.id],
+  }),
   databaseHost: one(databaseHost, {
     fields: [tenant.databaseHostId],
     references: [databaseHost.id],
