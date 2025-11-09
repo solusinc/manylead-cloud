@@ -84,7 +84,7 @@ export function NavUser() {
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-medium">{userName}</span>
-                <span className="truncate font-commit-mono text-xs tracking-tight">
+                <span className="truncate font-inter text-xs tracking-tight">
                   {user.email}
                 </span>
               </div>
@@ -107,7 +107,7 @@ export function NavUser() {
                 </Avatar>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-medium">{userName}</span>
-                  <span className="truncate font-commit-mono text-xs tracking-tight">
+                  <span className="truncate font-inter text-xs tracking-tight">
                     {user.email}
                   </span>
                 </div>
@@ -120,7 +120,7 @@ export function NavUser() {
                   <Link
                     href="/settings/billing"
                     onClick={() => setOpenMobile(false)}
-                    className="font-commit-mono tracking-tight"
+                    className="font-inter tracking-tight"
                   >
                     <Sparkles />
                     Upgrade Organization
@@ -129,7 +129,7 @@ export function NavUser() {
                 <DropdownMenuSeparator />
               </>
             ) : null}
-            <DropdownMenuGroup className="font-commit-mono tracking-tight">
+            <DropdownMenuGroup className="font-inter tracking-tight">
               <DropdownMenuItem asChild>
                 <Link
                   href="/settings/account"
@@ -151,7 +151,7 @@ export function NavUser() {
                   Theme
                 </DropdownMenuSubTrigger>
                 <DropdownMenuPortal>
-                  <DropdownMenuSubContent className="font-commit-mono tracking-tight">
+                  <DropdownMenuSubContent className="font-inter tracking-tight">
                     <DropdownMenuItem onClick={() => setTheme("light")}>
                       <Sun /> Light
                     </DropdownMenuItem>
@@ -177,7 +177,7 @@ export function NavUser() {
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={() => handleSignOut()}
-              className="font-commit-mono tracking-tight"
+              className="font-inter tracking-tight"
             >
               <LogOut />
               Log out

@@ -66,7 +66,7 @@ export function OrganizationSwitcher() {
                   {organization.name || "Untitled Organization"}
                 </div>
                 <div className="truncate text-xs">
-                  <span className="font-commit-mono tracking-tight">
+                  <span className="font-inter tracking-tight">
                     {organization.slug}
                   </span>{" "}
                   <span className="text-muted-foreground">
@@ -107,7 +107,7 @@ export function OrganizationSwitcher() {
             <DropdownMenuItem className="gap-2 p-2" asChild>
               <Link href="/settings/general">
                 <Plus />
-                <div className="font-commit-mono text-muted-foreground tracking-tight">
+                <div className="font-inter text-muted-foreground tracking-tight">
                   Add team member
                 </div>
               </Link>

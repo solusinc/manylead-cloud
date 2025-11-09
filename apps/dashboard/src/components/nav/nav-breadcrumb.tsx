@@ -43,7 +43,7 @@ export function NavBreadcrumb({ items }: NavBreadcrumbProps) {
                 >
                   <Link
                     href={item.href}
-                    className="font-commit-mono tracking-tight"
+                    className="font-inter tracking-tight"
                   >
                     {item.icon && <item.icon size={16} aria-hidden="true" />}
                     {item.label}
@@ -51,7 +51,7 @@ export function NavBreadcrumb({ items }: NavBreadcrumbProps) {
                 </BreadcrumbLink>
               ) : null}
               {item.type === "page" ? (
-                <BreadcrumbPage className=" hidden max-w-[120px] truncate font-commit-mono tracking-tight md:block lg:max-w-[200px] ">
+                <BreadcrumbPage className=" hidden max-w-[120px] truncate font-inter tracking-tight md:block lg:max-w-[200px] ">
                   <span className="flex items-center gap-1.5">
                     {item.icon && <item.icon size={16} aria-hidden="true" />}
 

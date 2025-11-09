@@ -39,7 +39,7 @@ export function NavOverview({
               <Link
                 href={item.url}
                 onClick={() => setOpenMobile(false)}
-                className="font-commit-mono tracking-tight"
+                className="font-inter font-medium tracking-tight"
               >
                 <item.icon />
                 <span>{item.name}</span>
