@@ -21,6 +21,9 @@ export function initAuth<
     }),
     baseURL: options.baseUrl,
     secret: options.secret,
+    emailAndPassword: {
+      enabled: true,
+    },
     plugins: [
       organization({
         allowUserToCreateOrganization: true,

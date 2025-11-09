@@ -1,69 +1,95 @@
-import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
-
-import { cn } from "@manylead/ui";
-import { ThemeProvider, ThemeToggle } from "@manylead/ui/theme";
+import type { Metadata } from "next";
+import { Geist, Geist_Mono, Inter } from "next/font/google";
+import LocalFont from "next/font/local";
+import "./globals.css";
+import { ThemeProvider } from "@manylead/ui/theme";
 import { Toaster } from "@manylead/ui/toast";
+import { cn } from "@manylead/ui";
+import { NuqsAdapter } from "nuqs/adapters/next/app";
+import { TRPCReactProvider } from "~/lib/trpc/react";
+import { defaultMetadata, ogMetadata, twitterMetadata } from "./metadata";
 
-import { env } from "~/env";
-import { TRPCReactProvider } from "~/trpc/react";
+const cal = LocalFont({
+  src: "../../public/fonts/CalSans-SemiBold.ttf",
+  variable: "--font-cal-sans",
+});
 
-import "~/app/styles.css";
-
-export const metadata: Metadata = {
-  metadataBase: new URL(
-    env.VERCEL_ENV === "production"
-      ? "https://turbo.t3.gg"
-      : "http://localhost:3000",
-  ),
-  title: "Create T3 Turbo",
-  description: "Simple monorepo with shared backend for web & mobile apps",
-  openGraph: {
-    title: "Create T3 Turbo",
-    description: "Simple monorepo with shared backend for web & mobile apps",
-    url: "https://create-t3-turbo.vercel.app",
-    siteName: "Create T3 Turbo",
-  },
-  twitter: {
-    card: "summary_large_image",
-    site: "@jullerino",
-    creator: "@jullerino",
-  },
-};
-
-export const viewport: Viewport = {
-  themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "white" },
-    { media: "(prefers-color-scheme: dark)", color: "black" },
+const commitMono = LocalFont({
+  src: [
+    {
+      path: "../../public/fonts/CommitMono-400-Regular.otf",
+      weight: "400",
+      style: "normal",
+    },
+    {
+      path: "../../public/fonts/CommitMono-400-Italic.otf",
+      weight: "400",
+      style: "italic",
+    },
+    {
+      path: "../../public/fonts/CommitMono-700-Regular.otf",
+      weight: "700",
+      style: "normal",
+    },
+    {
+      path: "../../public/fonts/CommitMono-700-Italic.otf",
+      weight: "700",
+      style: "italic",
+    },
   ],
-};
+  variable: "--font-commit-mono",
+});
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+});
 
 const geistSans = Geist({
-  subsets: ["latin"],
   variable: "--font-geist-sans",
-});
-const geistMono = Geist_Mono({
   subsets: ["latin"],
-  variable: "--font-geist-mono",
 });
 
-export default function RootLayout(props: { children: React.ReactNode }) {
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
+
+export const metadata: Metadata = {
+  ...defaultMetadata,
+  twitter: {
+    ...twitterMetadata,
+  },
+  openGraph: {
+    ...ogMetadata,
+  },
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
     <html lang="en" suppressHydrationWarning>
       <body
         className={cn(
-          "bg-background text-foreground min-h-screen font-sans antialiased",
           geistSans.variable,
           geistMono.variable,
+          cal.variable,
+          commitMono.variable,
+          inter.variable,
+          "font-sans antialiased",
         )}
       >
-        <ThemeProvider>
-          <TRPCReactProvider>{props.children}</TRPCReactProvider>
-          <div className="absolute right-4 bottom-4">
-            <ThemeToggle />
-          </div>
-          <Toaster />
-        </ThemeProvider>
+        <NuqsAdapter>
+          <TRPCReactProvider>
+            <ThemeProvider>
+              {children}
+              <Toaster richColors expand />
+            </ThemeProvider>
+          </TRPCReactProvider>
+        </NuqsAdapter>
       </body>
     </html>
   );
