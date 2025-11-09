@@ -13,7 +13,7 @@ import * as tenantSchema from "./schema/tenant";
  */
 export function createCatalogClient(
   connectionString?: string,
-  options?: { prepare?: boolean }
+  options?: { prepare?: boolean; timeout?: number }
 ) {
   const connString = connectionString ?? process.env.DATABASE_URL;
 
@@ -24,7 +24,7 @@ export function createCatalogClient(
   const client = postgres(connString, {
     max: 10,
     idle_timeout: 20,
-    connect_timeout: 10,
+    connect_timeout: options?.timeout ?? 10,
     // prepare: false é necessário para PgBouncer em transaction mode
     // prepare: true é necessário para suportar transações do Better Auth
     prepare: options?.prepare ?? false,
@@ -67,15 +67,11 @@ export type CatalogDB = ReturnType<typeof createCatalogClient>;
 export type TenantDB = ReturnType<typeof createTenantClient>;
 
 /**
- * Instância singleton do catalog client (para compatibilidade)
+ * Instância singleton do catalog client
  * Usa DATABASE_URL por padrão (via PgBouncer)
+ *
+ * Note: PgBouncer em transaction mode não suporta prepared statements,
+ * então prepare: false. Better Auth detecta isso e executa operações
+ * sequencialmente ao invés de usar transações.
  */
 export const db: CatalogDB = createCatalogClient();
-
-/**
- * Cliente para Better Auth com suporte a transações
- * Usa DATABASE_URL_DIRECT (conexão direta sem PgBouncer) com prepare: true
- */
-export const authDb = createCatalogClient(process.env.DATABASE_URL_DIRECT, {
-  prepare: true,
-});

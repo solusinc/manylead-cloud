@@ -24,6 +24,7 @@
     "create-tenant": "pnpm with-env tsx src/scripts/create-tenant.ts",
     "delete-tenant": "pnpm with-env tsx src/scripts/delete-tenant.ts",
     "purge-tenant": "pnpm with-env tsx src/scripts/purge-tenant.ts",
+    "delete-organization": "pnpm with-env tsx src/scripts/delete-organization.ts",
     "list-tenants": "pnpm with-env tsx src/scripts/list-tenants.ts",
     "health-check": "pnpm with-env tsx src/scripts/health-check.ts",
     "with-env": "dotenv -e ../../.env --"

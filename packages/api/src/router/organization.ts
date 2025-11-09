@@ -1,7 +1,9 @@
 import { z } from "zod";
 import slugify from "slugify";
 import { TRPCError } from "@trpc/server";
+import { eq } from "drizzle-orm";
 import { TenantDatabaseManager } from "@manylead/tenant-db";
+import { organization } from "@manylead/db";
 
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
@@ -100,7 +102,7 @@ export const organizationRouter = createTRPCRouter({
         name: z.string().min(1),
       }),
     )
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const slug = slugify(input.name, {
         lower: true,
         strict: true,
@@ -111,6 +113,22 @@ export const organizationRouter = createTRPCRouter({
         return { available: false, slug: "", reason: "invalid" };
       }
 
+      // Verifica se o slug já existe na tabela organization (Better Auth)
+      const existingOrg = await ctx.db
+        .select({ id: organization.id })
+        .from(organization)
+        .where(eq(organization.slug, slug))
+        .limit(1);
+
+      if (existingOrg.length > 0) {
+        return {
+          available: false,
+          slug,
+          reason: "exists",
+        };
+      }
+
+      // Verifica se o slug já existe na tabela tenant
       const existingTenant = await tenantManager.getTenantBySlug(slug);
 
       return {

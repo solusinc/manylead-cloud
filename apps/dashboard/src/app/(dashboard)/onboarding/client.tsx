@@ -166,6 +166,7 @@ export function OnboardingClient() {
               type="submit"
               className="w-full"
             >
+              {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {pending ? "Criando organização..." : "Criar organização"}
             </Button>
           </CardFooter>

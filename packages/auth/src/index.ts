@@ -3,7 +3,7 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { organization } from "better-auth/plugins";
 
-import { authDb } from "@manylead/db/client";
+import { db } from "@manylead/db/client";
 
 export function initAuth<
   TExtraPlugins extends BetterAuthPlugin[] = [],
@@ -13,7 +13,7 @@ export function initAuth<
   extraPlugins?: TExtraPlugins;
 }) {
   const config = {
-    database: drizzleAdapter(authDb, {
+    database: drizzleAdapter(db, {
       provider: "pg",
     }),
     baseURL: options.baseUrl,
