@@ -1,10 +1,14 @@
 export default function OverviewPage() {
   return (
-    <div className="container mx-auto p-8">
-      <h1 className="font-cal text-3xl">Overview</h1>
-      <p className="text-muted-foreground mt-2">
-        Welcome to your dashboard overview.
-      </p>
+    <div className="p-6">
+      <div className="mx-auto max-w-4xl space-y-6">
+        <div>
+          <h2 className="text-2xl font-bold">Welcome to ManyLead</h2>
+          <p className="text-muted-foreground mt-2">
+            Your all-in-one lead management platform.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

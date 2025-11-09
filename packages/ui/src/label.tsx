@@ -2,7 +2,7 @@
 
 import { Label as LabelPrimitive } from "radix-ui";
 
-import { cn } from "@manylead/ui";
+import { cn } from ".";
 
 export function Label({
   className,
