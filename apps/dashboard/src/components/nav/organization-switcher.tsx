@@ -1,6 +1,7 @@
 "use client";
 
 import { ChevronsUpDown, Plus } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 
 import {
   DropdownMenu,
@@ -17,28 +18,35 @@ import {
   useSidebar,
 } from "@manylead/ui/sidebar";
 import Link from "next/link";
+import { useTRPC } from "~/lib/trpc/react";
+import { authClient } from "~/lib/auth/client";
 
 export function OrganizationSwitcher() {
   const { isMobile, setOpenMobile } = useSidebar();
+  const trpc = useTRPC();
 
-  // TODO: Implement TRPC queries
-  // const trpc = useTRPC();
-  // const { data: organization } = useQuery(trpc.organizations.getCurrent.queryOptions());
-  // const { data: organizations } = useQuery(trpc.organizations.list.queryOptions());
+  const { data: organization, isLoading: isLoadingOrg } = useQuery(
+    trpc.organization.getCurrent.queryOptions(),
+  );
+  const { data: organizations, isLoading: isLoadingOrgs } = useQuery(
+    trpc.organization.list.queryOptions(),
+  );
 
-  // Mock data for now
-  const organization = {
-    id: "1",
-    name: "My Organization",
-    slug: "my-org",
-    plan: "free",
-  };
+  // Se não há organização ativa mas há organizações disponíveis, use a primeira
+  const activeOrg = organization ?? organizations?.[0];
 
-  const organizations = [organization];
+  if (isLoadingOrg || isLoadingOrgs) {
+    return null;
+  }
 
-  function handleClick(slug: string) {
-    // eslint-disable-next-line react-hooks/immutability -- needed for cookie setting
-    document.cookie = `organization-slug=${slug}; path=/;`;
+  if (!activeOrg) {
+    return null;
+  }
+
+  async function handleClick(organizationId: string) {
+    await authClient.organization.setActive({
+      organizationId,
+    });
     // eslint-disable-next-line react-hooks/immutability -- needed for navigation
     window.location.href = "/overview";
   }
@@ -56,21 +64,18 @@ export function OrganizationSwitcher() {
                 <div className="size-8 overflow-hidden rounded-lg">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={`https://api.dicebear.com/9.x/glass/svg?seed=${organization.slug}`}
+                    src={`https://api.dicebear.com/9.x/glass/svg?seed=${activeOrg.slug}`}
                     alt="avatar"
                   />
                 </div>
               </div>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <div className="truncate font-medium">
-                  {organization.name || "Untitled Organization"}
+                  {activeOrg.name || "Organização sem nome"}
                 </div>
                 <div className="truncate text-xs">
                   <span className="font-inter tracking-tight">
-                    {organization.slug}
-                  </span>{" "}
-                  <span className="text-muted-foreground">
-                    {organization.plan}
+                    {activeOrg.slug}
                   </span>
                 </div>
               </div>
@@ -84,19 +89,19 @@ export function OrganizationSwitcher() {
             sideOffset={4}
           >
             <DropdownMenuLabel className="text-muted-foreground text-xs">
-              Organizations
+              Organizações
             </DropdownMenuLabel>
-            {organizations.map((org) => (
+            {organizations?.map((org) => (
               <DropdownMenuItem
                 key={org.id}
                 onClick={() => {
-                  handleClick(org.slug);
+                  void handleClick(org.id);
                   setOpenMobile(false);
                 }}
                 className="gap-2 p-2"
               >
                 <span className="truncate">
-                  {org.name || "Untitled Organization"}
+                  {org.name || "Organização sem nome"}
                 </span>
                 <span className="truncate font-mono text-muted-foreground text-xs">
                   {org.slug}
@@ -108,7 +113,7 @@ export function OrganizationSwitcher() {
               <Link href="/settings/general">
                 <Plus />
                 <div className="font-inter text-muted-foreground tracking-tight">
-                  Add team member
+                  Adicionar membro
                 </div>
               </Link>
             </DropdownMenuItem>

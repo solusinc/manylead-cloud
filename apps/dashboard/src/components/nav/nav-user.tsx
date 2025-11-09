@@ -6,7 +6,6 @@ import {
   Laptop,
   LogOut,
   Moon,
-  Sparkles,
   Sun,
   User,
 } from "lucide-react";
@@ -33,38 +32,45 @@ import {
 } from "@manylead/ui/sidebar";
 import { useTheme } from "@manylead/ui/theme";
 import Link from "next/link";
+import { useTRPC } from "~/lib/trpc/react";
+import { useQuery } from "@tanstack/react-query";
+import { authClient, useSession } from "~/lib/auth/client";
 
 export function NavUser() {
   const { isMobile, setOpenMobile } = useSidebar();
   const { themeMode, setTheme } = useTheme();
+  const { data: session } = useSession();
+  const trpc = useTRPC();
 
-  // TODO: Implement TRPC queries and Better Auth
-  // const trpc = useTRPC();
-  // const { data: organization } = useQuery(trpc.organizations.getCurrent.queryOptions());
-  // const { data: user } = useQuery(trpc.user.get.queryOptions());
+  const { data: organization, isLoading: isLoadingOrg } = useQuery(
+    trpc.organization.getCurrent.queryOptions(),
+  );
+  const { data: organizations, isLoading: isLoadingOrgs } = useQuery(
+    trpc.organization.list.queryOptions(),
+  );
 
-  // Mock data for now
-  const organization = {
-    id: "1",
-    name: "My Organization",
-    slug: "my-org",
-    plan: "free",
-  };
+  // Se não há organização ativa mas há organizações disponíveis, use a primeira
+  const activeOrg = organization ?? organizations?.[0];
 
-  const user = {
-    id: "1",
-    name: "John Doe",
-    email: "john@example.com",
-    image: null as string | null,
-  };
+  if (isLoadingOrg || isLoadingOrgs) {
+    return null;
+  }
 
+  if (!session?.user || !activeOrg) {
+    return null;
+  }
+
+  const user = session.user;
   const userName = user.name;
 
-  function handleSignOut() {
-    // TODO: Implement Better Auth signOut
-    // await signOut({ callbackUrl: "/sign-in" });
-     
-    window.location.href = "/sign-in";
+  async function handleSignOut() {
+    await authClient.signOut({
+      fetchOptions: {
+        onSuccess: () => {
+          window.location.href = "/sign-in";
+        },
+      },
+    });
   }
 
   return (
@@ -114,7 +120,8 @@ export function NavUser() {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            {organization.plan === "free" ? (
+            {/* TODO: Implementar verificação de plano quando tiver billing
+            {activeOrg.plan === "free" ? (
               <>
                 <DropdownMenuItem asChild>
                   <Link
@@ -123,12 +130,12 @@ export function NavUser() {
                     className="font-inter tracking-tight"
                   >
                     <Sparkles />
-                    Upgrade Organization
+                    Fazer Upgrade
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
               </>
-            ) : null}
+            ) : null} */}
             <DropdownMenuGroup className="font-inter tracking-tight">
               <DropdownMenuItem asChild>
                 <Link
@@ -136,7 +143,7 @@ export function NavUser() {
                   onClick={() => setOpenMobile(false)}
                 >
                   <User />
-                  Account
+                  Conta
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuSub>
@@ -148,18 +155,18 @@ export function NavUser() {
                   ) : (
                     <Laptop />
                   )}
-                  Theme
+                  Tema
                 </DropdownMenuSubTrigger>
                 <DropdownMenuPortal>
                   <DropdownMenuSubContent className="font-inter tracking-tight">
                     <DropdownMenuItem onClick={() => setTheme("light")}>
-                      <Sun /> Light
+                      <Sun /> Claro
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => setTheme("dark")}>
-                      <Moon /> Dark
+                      <Moon /> Escuro
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => setTheme("auto")}>
-                      <Laptop /> Auto
+                      <Laptop /> Automático
                     </DropdownMenuItem>
                   </DropdownMenuSubContent>
                 </DropdownMenuPortal>
@@ -170,17 +177,17 @@ export function NavUser() {
                   onClick={() => setOpenMobile(false)}
                 >
                   <CreditCard />
-                  Billing
+                  Faturamento
                 </Link>
               </DropdownMenuItem>
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem
-              onClick={() => handleSignOut()}
+              onClick={() => void handleSignOut()}
               className="font-inter tracking-tight"
             >
               <LogOut />
-              Log out
+              Sair
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

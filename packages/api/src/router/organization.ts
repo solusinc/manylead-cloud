@@ -137,4 +137,39 @@ export const organizationRouter = createTRPCRouter({
         reason: existingTenant ? "exists" : null,
       };
     }),
+
+  /**
+   * Get current active organization
+   */
+  getCurrent: protectedProcedure.query(async ({ ctx }) => {
+    const activeOrgId = ctx.session.session.activeOrganizationId;
+
+    if (!activeOrgId) {
+      return null;
+    }
+
+    // Busca a organização ativa
+    const currentOrg = await ctx.db
+      .select()
+      .from(organization)
+      .where(eq(organization.id, activeOrgId))
+      .limit(1);
+
+    if (currentOrg.length === 0) {
+      return null;
+    }
+
+    return currentOrg[0];
+  }),
+
+  /**
+   * List all organizations for the current user
+   */
+  list: protectedProcedure.query(async ({ ctx }) => {
+    const result = await ctx.authApi.listOrganizations({
+      headers: ctx.headers,
+    });
+
+    return result;
+  }),
 });
