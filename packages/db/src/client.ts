@@ -8,9 +8,13 @@ import * as tenantSchema from "./schema/tenant";
  * Cria cliente para o catalog database
  *
  * @param connectionString - Connection string customizada (opcional)
+ * @param options - Opções adicionais
  * @returns Drizzle client configurado para o catalog
  */
-export function createCatalogClient(connectionString?: string) {
+export function createCatalogClient(
+  connectionString?: string,
+  options?: { prepare?: boolean }
+) {
   const connString = connectionString ?? process.env.DATABASE_URL;
 
   if (!connString) {
@@ -21,7 +25,9 @@ export function createCatalogClient(connectionString?: string) {
     max: 10,
     idle_timeout: 20,
     connect_timeout: 10,
-    prepare: false, // Required for PgBouncer in transaction mode
+    // prepare: false é necessário para PgBouncer em transaction mode
+    // prepare: true é necessário para suportar transações do Better Auth
+    prepare: options?.prepare ?? false,
   });
 
   return drizzle({
@@ -65,3 +71,11 @@ export type TenantDB = ReturnType<typeof createTenantClient>;
  * Usa DATABASE_URL por padrão (via PgBouncer)
  */
 export const db: CatalogDB = createCatalogClient();
+
+/**
+ * Cliente para Better Auth com suporte a transações
+ * Usa DATABASE_URL_DIRECT (conexão direta sem PgBouncer) com prepare: true
+ */
+export const authDb = createCatalogClient(process.env.DATABASE_URL_DIRECT, {
+  prepare: true,
+});

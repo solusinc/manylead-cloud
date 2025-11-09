@@ -13,7 +13,7 @@ import { Alert, AlertTitle } from "@manylead/ui";
 import { Field, FieldLabel, FieldError } from "@manylead/ui/field";
 import { authClient } from "~/lib/auth/client";
 
-export const LoginView = () => {
+export const SignInView = () => {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -37,7 +37,7 @@ export const LoginView = () => {
         router.push("/");
       } catch (err) {
         setPending(false);
-        setError(err instanceof Error ? err.message : "An error occurred");
+        setError(err instanceof Error ? err.message : "Ocorreu um erro");
       }
     },
   });
@@ -62,7 +62,7 @@ export const LoginView = () => {
         <form.Field
           name="email"
           validators={{
-            onChange: z.string().email("Invalid email address"),
+            onChange: z.string().email("Email inválido"),
           }}
         >
           {(field) => {
@@ -91,7 +91,7 @@ export const LoginView = () => {
         <form.Field
           name="password"
           validators={{
-            onChange: z.string().min(1, "Password is required"),
+            onChange: z.string().min(1, "Senha é obrigatória"),
           }}
         >
           {(field) => {

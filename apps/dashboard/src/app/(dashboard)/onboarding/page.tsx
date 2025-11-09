@@ -2,8 +2,9 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 
 import { auth } from "~/lib/auth/server";
+import { OnboardingClient } from "./client";
 
-export default async function HomePage() {
+export default async function OnboardingPage() {
   const session = await auth.api.getSession({
     headers: await headers(),
   });
@@ -12,14 +13,15 @@ export default async function HomePage() {
     redirect("/sign-in");
   }
 
-  // Verifica se o usuário tem organizações
+  // Verifica se o usuário já tem uma organização
   const organizations = await auth.api.listOrganizations({
     headers: await headers(),
   });
 
-  if (organizations.length === 0) {
-    redirect("/onboarding");
+  if (organizations.length > 0) {
+    // Se já tem org, redireciona para o dashboard
+    redirect("/overview");
   }
 
-  redirect("/overview");
+  return <OnboardingClient />;
 }
