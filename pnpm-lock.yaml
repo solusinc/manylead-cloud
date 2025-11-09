@@ -200,9 +200,18 @@ importers:
       '@manylead/db':
         specifier: workspace:*
         version: link:../db
+      '@manylead/tenant-db':
+        specifier: workspace:*
+        version: link:../tenant-db
       '@trpc/server':
         specifier: 'catalog:'
         version: 11.7.1(typescript@5.9.3)
+      drizzle-orm:
+        specifier: ^0.44.7
+        version: 0.44.7(@opentelemetry/api@1.9.0)(@prisma/client@5.22.0(prisma@5.22.0))(@types/better-sqlite3@7.6.13)(@types/pg@8.15.5)(@vercel/postgres@0.10.0)(better-sqlite3@12.4.1)(kysely@0.28.8)(postgres@3.4.7)(prisma@5.22.0)
+      slugify:
+        specifier: ^1.6.6
+        version: 1.6.6
       superjson:
         specifier: 2.2.3
         version: 2.2.3

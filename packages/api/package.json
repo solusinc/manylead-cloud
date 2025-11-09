@@ -20,7 +20,10 @@
   "dependencies": {
     "@manylead/auth": "workspace:*",
     "@manylead/db": "workspace:*",
+    "@manylead/tenant-db": "workspace:*",
     "@trpc/server": "catalog:",
+    "drizzle-orm": "^0.44.7",
+    "slugify": "^1.6.6",
     "superjson": "2.2.3",
     "zod": "catalog:"
   },

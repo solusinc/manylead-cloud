@@ -1,6 +1,7 @@
 import type { BetterAuthOptions, BetterAuthPlugin } from "better-auth";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { organization } from "better-auth/plugins";
 
 import { db } from "@manylead/db/client";
 
@@ -17,7 +18,15 @@ export function initAuth<
     }),
     baseURL: options.baseUrl,
     secret: options.secret,
-    plugins: [...(options.extraPlugins ?? [])],
+    plugins: [
+      organization({
+        allowUserToCreateOrganization: true,
+        organizationLimit: 10,
+        membershipLimit: 100,
+        creatorRole: "owner",
+      }),
+      ...(options.extraPlugins ?? []),
+    ],
     onAPIError: {
       onError(error, ctx) {
         console.error("BETTER AUTH API ERROR", error, ctx);

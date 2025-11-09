@@ -13,6 +13,7 @@ import { z, ZodError } from "zod/v4";
 import type { Auth } from "@manylead/auth";
 import { db } from "@manylead/db/client";
 import type { CatalogDB } from "@manylead/db/client";
+import { TenantDatabaseManager } from "@manylead/tenant-db";
 
 /**
  * 1. CONTEXT
@@ -30,10 +31,13 @@ import type { CatalogDB } from "@manylead/db/client";
 export const createTRPCContext = async (opts: {
   headers: Headers;
   auth: Auth;
+  req?: Request;
 }): Promise<{
   authApi: Auth["api"];
   session: Awaited<ReturnType<Auth["api"]["getSession"]>>;
   db: CatalogDB;
+  headers: Headers;
+  req?: Request;
 }> => {
   const authApi = opts.auth.api;
   const session = await authApi.getSession({
@@ -43,6 +47,8 @@ export const createTRPCContext = async (opts: {
     authApi,
     session,
     db,
+    headers: opts.headers,
+    req: opts.req,
   };
 };
 /**
@@ -118,16 +124,31 @@ export const publicProcedure = t.procedure.use(timingMiddleware);
  *
  * @see https://trpc.io/docs/procedures
  */
+/**
+ * Middleware that enforces user is authenticated
+ */
+const enforceUserIsAuthed = t.middleware(({ ctx, next }) => {
+  if (!ctx.session?.user) {
+    throw new TRPCError({ code: "UNAUTHORIZED" });
+  }
+  return next({
+    ctx: {
+      // infers the `session` as non-nullable
+      session: { ...ctx.session, user: ctx.session.user },
+    },
+  });
+});
+
 export const protectedProcedure = t.procedure
   .use(timingMiddleware)
-  .use(({ ctx, next }) => {
-    if (!ctx.session?.user) {
-      throw new TRPCError({ code: "UNAUTHORIZED" });
-    }
-    return next({
-      ctx: {
-        // infers the `session` as non-nullable
-        session: { ...ctx.session, user: ctx.session.user },
-      },
-    });
-  });
+  .use(enforceUserIsAuthed);
+
+/**
+ * Tenant Manager instance
+ *
+ * Use this to get tenant database connections in your routers.
+ * Better Auth organization plugin handles organization data in catalog DB.
+ * This manager provides access to isolated tenant databases.
+ */
+const _tenantManager = new TenantDatabaseManager();
+export { _tenantManager as tenantManager };
