@@ -72,6 +72,14 @@ export const organizationRouter = createTRPCRouter({
         name: input.name,
       });
 
+      // 5. Define esta organização como ativa na sessão
+      await ctx.authApi.setActiveOrganization({
+        body: {
+          organizationId: organization.id,
+        },
+        headers: ctx.headers,
+      });
+
       return organization;
     }),
 
@@ -142,7 +150,32 @@ export const organizationRouter = createTRPCRouter({
    * Get current active organization
    */
   getCurrent: protectedProcedure.query(async ({ ctx }) => {
-    const activeOrgId = ctx.session.session.activeOrganizationId;
+    let activeOrgId = ctx.session.session.activeOrganizationId;
+
+    // Se não houver organização ativa, tenta pegar a primeira do usuário
+    if (!activeOrgId) {
+      const userOrgs = await ctx.authApi.listOrganizations({
+        headers: ctx.headers,
+      });
+
+      if (userOrgs.length > 0) {
+        const firstOrg = userOrgs[0];
+        if (firstOrg) {
+          // Seta a primeira organização como ativa
+          await ctx.authApi.setActiveOrganization({
+            body: {
+              organizationId: firstOrg.id,
+            },
+            headers: ctx.headers,
+          });
+          activeOrgId = firstOrg.id;
+        } else {
+          return null;
+        }
+      } else {
+        return null;
+      }
+    }
 
     if (!activeOrgId) {
       return null;
@@ -172,4 +205,42 @@ export const organizationRouter = createTRPCRouter({
 
     return result;
   }),
+
+  /**
+   * Update organization name
+   */
+  updateName: protectedProcedure
+    .input(
+      z.object({
+        name: z.string().min(2, "Nome deve ter no mínimo 2 caracteres"),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const activeOrgId = ctx.session.session.activeOrganizationId;
+
+      if (!activeOrgId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Nenhuma organização ativa encontrada",
+        });
+      }
+
+      // Atualiza o nome da organização no Better Auth
+      const result = await ctx.db
+        .update(organization)
+        .set({
+          name: input.name,
+        })
+        .where(eq(organization.id, activeOrgId))
+        .returning();
+
+      if (result.length === 0) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Organização não encontrada",
+        });
+      }
+
+      return result[0];
+    }),
 });

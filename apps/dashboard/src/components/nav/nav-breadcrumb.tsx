@@ -8,8 +8,16 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from "@manylead/ui/breadcrumb";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@manylead/ui";
 import type { LucideIcon } from "lucide-react";
 import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { Fragment } from "react";
 
 interface NavBreadcrumbProps {
@@ -25,10 +33,18 @@ interface NavBreadcrumbProps {
         label: string;
         icon?: LucideIcon;
       }
+    | {
+        type: "select";
+        items: { value: string; label: string; icon: LucideIcon }[];
+      }
   )[];
 }
 
 export function NavBreadcrumb({ items }: NavBreadcrumbProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const value = pathname.split("/").pop();
+
   return (
     <Breadcrumb>
       <BreadcrumbList>
@@ -58,6 +74,37 @@ export function NavBreadcrumb({ items }: NavBreadcrumbProps) {
                     {item.label}
                   </span>
                 </BreadcrumbPage>
+              ) : null}
+              {item.type === "select" ? (
+                <Select
+                  value={value}
+                  onValueChange={(newValue) => {
+                    // Construct the full path
+                    const pathSegments = pathname.split("/").slice(0, -1);
+                    const newPath = [...pathSegments, newValue].join("/");
+                    router.push(newPath);
+                  }}
+                >
+                  <SelectTrigger
+                    id="select-option"
+                    className="font-inter text-foreground tracking-tight [&>span]:flex [&>span]:items-center [&>span]:gap-2 [&>span_svg]:shrink-0 [&>span_svg]:text-muted-foreground/80"
+                    aria-label="Select option"
+                  >
+                    <SelectValue placeholder="Select option" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {item.items.map((item, i) => (
+                      <SelectItem
+                        key={i}
+                        value={item.value}
+                        className="font-inter tracking-tight"
+                      >
+                        <item.icon size={16} aria-hidden="true" />
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               ) : null}
             </BreadcrumbItem>
             {i < items.length - 1 && (
