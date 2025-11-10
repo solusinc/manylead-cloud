@@ -134,7 +134,7 @@ export function FormCardFooterInfo({
   return (
     <div
       data-slot="card-footer-info"
-      className={cn("text-sm text-muted-foreground", className)}
+      className={cn("text-muted-foreground text-sm", className)}
       {...props}
     >
       {children}

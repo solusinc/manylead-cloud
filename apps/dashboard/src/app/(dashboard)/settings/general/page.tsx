@@ -1,5 +1,7 @@
 "use client";
 
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+
 import {
   Section,
   SectionDescription,
@@ -8,10 +10,10 @@ import {
   SectionTitle,
 } from "~/components/content/section";
 import { FormCardGroup } from "~/components/forms/form-card";
+import { FormMembers } from "~/components/forms/settings/form-members";
 import { FormOrganization } from "~/components/forms/settings/form-organization";
 import { FormSlug } from "~/components/forms/settings/form-slug";
 import { useTRPC } from "~/lib/trpc/react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 export default function Page() {
   const trpc = useTRPC();
@@ -28,6 +30,16 @@ export default function Page() {
         });
         void queryClient.invalidateQueries({
           queryKey: trpc.organization.list.queryKey(),
+        });
+      },
+    }),
+  );
+
+  const createInvitationMutation = useMutation(
+    trpc.invitation.create.mutationOptions({
+      onSuccess: () => {
+        void queryClient.invalidateQueries({
+          queryKey: trpc.invitation.list.queryKey(),
         });
       },
     }),
@@ -80,6 +92,13 @@ export default function Page() {
             }}
           />
           <FormSlug defaultValues={{ slug: organization.slug }} />
+          <FormMembers
+            onCreate={async (values) => {
+              await createInvitationMutation.mutateAsync({
+                email: values.email,
+              });
+            }}
+          />
         </FormCardGroup>
       </Section>
     </SectionGroup>

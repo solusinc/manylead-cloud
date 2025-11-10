@@ -31,6 +31,16 @@ export default async function DashboardLayout({
     redirect("/onboarding");
   }
 
+  // Verificar se há organização ativa
+  const currentOrg = await queryClient.fetchQuery(
+    trpc.organization.getCurrent.queryOptions(),
+  );
+
+  // Se não há organização ativa, redirecionar para a raiz
+  if (!currentOrg) {
+    redirect("/");
+  }
+
   const cookieStore = await cookies();
   const hasState = cookieStore.has("sidebar_state");
   const defaultOpen = hasState

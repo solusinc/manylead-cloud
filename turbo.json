@@ -53,6 +53,8 @@
     "AUTH_REDIRECT_PROXY_URL",
     "AUTH_SECRET",
     "NEXT_PUBLIC_SENTRY_DSN",
+    "RESEND_API_KEY",
+    "NEXT_PUBLIC_APP_URL",
     "PORT"
   ],
   "globalPassThroughEnv": ["NODE_ENV", "CI", "npm_lifecycle_event"]

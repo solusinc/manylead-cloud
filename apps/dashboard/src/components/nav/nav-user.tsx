@@ -1,5 +1,8 @@
 "use client";
 
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import {
   ChevronsUpDown,
   CreditCard,
@@ -31,10 +34,9 @@ import {
   useSidebar,
 } from "@manylead/ui/sidebar";
 import { useTheme } from "@manylead/ui/theme";
-import Link from "next/link";
-import { useTRPC } from "~/lib/trpc/react";
-import { useQuery } from "@tanstack/react-query";
+
 import { authClient, useSession } from "~/lib/auth/client";
+import { useTRPC } from "~/lib/trpc/react";
 
 export function NavUser() {
   const { isMobile, setOpenMobile } = useSidebar();
@@ -67,7 +69,7 @@ export function NavUser() {
     await authClient.signOut({
       fetchOptions: {
         onSuccess: () => {
-          window.location.href = "/sign-in";
+          redirect("/sign-in");
         },
       },
     });
@@ -80,7 +82,7 @@ export function NavUser() {
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
               size="lg"
-              className="h-14 rounded-none px-4 ring-inset data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground group-data-[collapsible=icon]:mx-2!"
+              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground h-14 rounded-none px-4 ring-inset group-data-[collapsible=icon]:mx-2!"
             >
               <Avatar className="h-8 w-8 rounded-lg">
                 <AvatarImage src={user.image ?? undefined} alt={userName} />
@@ -90,7 +92,7 @@ export function NavUser() {
               </Avatar>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-medium">{userName}</span>
-                <span className="truncate font-inter text-xs tracking-tight">
+                <span className="font-inter truncate text-xs tracking-tight">
                   {user.email}
                 </span>
               </div>
@@ -113,7 +115,7 @@ export function NavUser() {
                 </Avatar>
                 <div className="grid flex-1 text-left text-sm leading-tight">
                   <span className="truncate font-medium">{userName}</span>
-                  <span className="truncate font-inter text-xs tracking-tight">
+                  <span className="font-inter truncate text-xs tracking-tight">
                     {user.email}
                   </span>
                 </div>
@@ -147,7 +149,7 @@ export function NavUser() {
                 </Link>
               </DropdownMenuItem>
               <DropdownMenuSub>
-                <DropdownMenuSubTrigger className="gap-2 [&_svg:not([class*='size-'])]:size-4 [&_svg:not([class*='text-'])]:text-muted-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0">
+                <DropdownMenuSubTrigger className="[&_svg:not([class*='text-'])]:text-muted-foreground gap-2 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4">
                   {themeMode === "dark" ? (
                     <Moon />
                   ) : themeMode === "light" ? (

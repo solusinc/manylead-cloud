@@ -1,4 +1,11 @@
 import {
+  ActionCard,
+  ActionCardDescription,
+  ActionCardGroup,
+  ActionCardHeader,
+  ActionCardTitle,
+} from "~/components/content/action-card";
+import {
   Section,
   SectionDescription,
   SectionGroup,
@@ -29,18 +36,20 @@ export default function Page() {
         <div className="mb-4">
           <CreateOrgButton />
         </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <ActionCardGroup>
           {settings.map((setting) => (
             <Link href={setting.href} key={setting.href}>
-              <div className="h-full w-full rounded-lg border bg-card p-6 hover:bg-accent">
-                <h3 className="mb-2 font-semibold">{setting.title}</h3>
-                <p className="text-muted-foreground text-sm">
-                  {setting.description}
-                </p>
-              </div>
+              <ActionCard className="h-full w-full">
+                <ActionCardHeader>
+                  <ActionCardTitle>{setting.title}</ActionCardTitle>
+                  <ActionCardDescription>
+                    {setting.description}
+                  </ActionCardDescription>
+                </ActionCardHeader>
+              </ActionCard>
             </Link>
           ))}
-        </div>
+        </ActionCardGroup>
       </Section>
     </SectionGroup>
   );

@@ -13,10 +13,17 @@ import { Alert, AlertTitle } from "@manylead/ui";
 import { Field, FieldLabel, FieldError } from "@manylead/ui/field";
 import { authClient } from "~/lib/auth/client";
 
-export const RegisterView = () => {
+interface RegisterViewProps {
+  callbackURL?: string;
+}
+
+export const RegisterView = ({ callbackURL = "/" }: RegisterViewProps) => {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Decode callbackURL if it's URL encoded
+  const decodedCallbackURL = decodeURIComponent(callbackURL);
 
   const form = useForm({
     defaultValues: {
@@ -40,10 +47,9 @@ export const RegisterView = () => {
           name: value.name,
           email: value.email,
           password: value.password,
-          callbackURL: "/",
         });
         setPending(false);
-        router.push("/");
+        router.push(decodedCallbackURL);
       } catch (err) {
         setPending(false);
         setError(err instanceof Error ? err.message : "Ocorreu um erro");
@@ -54,9 +60,9 @@ export const RegisterView = () => {
   return (
     <div className="my-4 grid w-full max-w-lg gap-6">
       <div className="flex flex-col gap-1 text-center">
-        <h1 className="font-semibold text-3xl tracking-tight">Sign Up</h1>
+        <h1 className="font-semibold text-3xl tracking-tight">Cadastrar</h1>
         <p className="text-muted-foreground text-sm">
-          Get started now. No credit card required.
+          Comece agora. Não é necessário cartão de crédito.
         </p>
       </div>
       <form
@@ -78,7 +84,7 @@ export const RegisterView = () => {
             const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
             return (
               <Field data-invalid={isInvalid}>
-                <FieldLabel htmlFor={field.name}>Name</FieldLabel>
+                <FieldLabel htmlFor={field.name}>Nome</FieldLabel>
                 <Input
                   id={field.name}
                   name="name"
@@ -107,7 +113,7 @@ export const RegisterView = () => {
             const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
             return (
               <Field data-invalid={isInvalid}>
-                <FieldLabel htmlFor={field.name}>Email</FieldLabel>
+                <FieldLabel htmlFor={field.name}>E-mail</FieldLabel>
                 <Input
                   id={field.name}
                   name="email"
@@ -136,7 +142,7 @@ export const RegisterView = () => {
             const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
             return (
               <Field data-invalid={isInvalid}>
-                <FieldLabel htmlFor={field.name}>Password</FieldLabel>
+                <FieldLabel htmlFor={field.name}>Senha</FieldLabel>
                 <Input
                   id={field.name}
                   name="password"
@@ -165,7 +171,7 @@ export const RegisterView = () => {
             const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
             return (
               <Field data-invalid={isInvalid}>
-                <FieldLabel htmlFor={field.name}>Confirm Password</FieldLabel>
+                <FieldLabel htmlFor={field.name}>Confirmar Senha</FieldLabel>
                 <Input
                   id={field.name}
                   name="confirmPassword"
@@ -192,33 +198,33 @@ export const RegisterView = () => {
         )}
 
         <Button disabled={pending} type="submit" className="w-full">
-          {pending ? "Creating account..." : "Create account"}
+          {pending ? "Criando conta..." : "Criar conta"}
         </Button>
 
         <div className="text-center text-sm">
-          Already have an account?{" "}
+          Já tem uma conta?{" "}
           <Link
-            href="/sign-in"
+            href={`/sign-in${decodedCallbackURL !== "/" ? `?callbackURL=${encodeURIComponent(decodedCallbackURL)}` : ""}`}
             className="underline underline-offset-4 hover:text-primary"
           >
-            Sign in
+            Entrar
           </Link>
         </div>
       </form>
       <p className="px-8 text-center text-muted-foreground text-sm">
-        By clicking continue, you agree to our{" "}
+        Ao continuar, você concorda com nossos{" "}
         <Link
           href="/legal/terms"
           className="underline underline-offset-4 hover:text-primary hover:no-underline"
         >
-          Terms of Service
+          Termos de Serviço
         </Link>{" "}
-        and{" "}
+        e{" "}
         <Link
           href="/legal/privacy"
           className="underline underline-offset-4 hover:text-primary hover:no-underline"
         >
-          Privacy Policy
+          Política de Privacidade
         </Link>
         .
       </p>

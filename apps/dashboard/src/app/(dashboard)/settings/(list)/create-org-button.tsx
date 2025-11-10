@@ -1,10 +1,12 @@
 "use client";
 
-import { Button } from "@manylead/ui";
-import { useMutation } from "@tanstack/react-query";
-import { useTRPC } from "~/lib/trpc/react";
 import { useState } from "react";
-import { Input } from "@manylead/ui";
+import { redirect } from "next/navigation";
+import { useMutation } from "@tanstack/react-query";
+
+import { Button, Input } from "@manylead/ui";
+
+import { useTRPC } from "~/lib/trpc/react";
 
 export function CreateOrgButton() {
   const trpc = useTRPC();
@@ -14,8 +16,7 @@ export function CreateOrgButton() {
   const createOrg = useMutation(
     trpc.organization.create.mutationOptions({
       onSuccess: () => {
-        // eslint-disable-next-line react-hooks/immutability -- needed for navigation
-        window.location.href = "/overview";
+        redirect("/overview");
       },
     }),
   );

@@ -4,6 +4,7 @@ import { twMerge } from "tailwind-merge";
 export const cn = (...inputs: Parameters<typeof cx>) => twMerge(cx(inputs));
 
 export * from "./alert";
+export * from "./alert-dialog";
 export * from "./avatar";
 export * from "./badge";
 export * from "./breadcrumb";
@@ -22,5 +23,7 @@ export * from "./separator";
 export * from "./sheet";
 export * from "./sidebar";
 export * from "./skeleton";
+export * from "./table";
+export * from "./tabs";
 export * from "./textarea";
 export * from "./tooltip";

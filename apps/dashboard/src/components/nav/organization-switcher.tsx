@@ -1,7 +1,10 @@
 "use client";
 
-import { ChevronsUpDown, Plus } from "lucide-react";
+import { useEffect } from "react";
+import Link from "next/link";
+import { redirect } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
+import { ChevronsUpDown, Plus } from "lucide-react";
 
 import {
   DropdownMenu,
@@ -17,9 +20,9 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@manylead/ui/sidebar";
-import Link from "next/link";
-import { useTRPC } from "~/lib/trpc/react";
+
 import { authClient } from "~/lib/auth/client";
+import { useTRPC } from "~/lib/trpc/react";
 
 export function OrganizationSwitcher() {
   const { isMobile, setOpenMobile } = useSidebar();
@@ -35,6 +38,13 @@ export function OrganizationSwitcher() {
   // Se não há organização ativa mas há organizações disponíveis, use a primeira
   const activeOrg = organization ?? organizations?.[0];
 
+  // Redirecionar quando não houver organização ativa
+  useEffect(() => {
+    if (!isLoadingOrg && !isLoadingOrgs && !activeOrg) {
+      redirect("/overview");
+    }
+  }, [isLoadingOrg, isLoadingOrgs, activeOrg]);
+
   if (isLoadingOrg || isLoadingOrgs) {
     return null;
   }
@@ -47,8 +57,7 @@ export function OrganizationSwitcher() {
     await authClient.organization.setActive({
       organizationId,
     });
-    // eslint-disable-next-line react-hooks/immutability -- needed for navigation
-    window.location.href = "/overview";
+    redirect("/overview");
   }
 
   return (
@@ -58,9 +67,9 @@ export function OrganizationSwitcher() {
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
               size="lg"
-              className="h-14 rounded-none px-4 ring-inset data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground group-data-[collapsible=icon]:mx-2!"
+              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground h-14 rounded-none px-4 ring-inset group-data-[collapsible=icon]:mx-2!"
             >
-              <div className="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary">
+              <div className="bg-sidebar-primary flex aspect-square size-8 items-center justify-center rounded-lg">
                 <div className="size-8 overflow-hidden rounded-lg">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
@@ -103,7 +112,7 @@ export function OrganizationSwitcher() {
                 <span className="truncate">
                   {org.name || "Organização sem nome"}
                 </span>
-                <span className="truncate font-mono text-muted-foreground text-xs">
+                <span className="text-muted-foreground truncate font-mono text-xs">
                   {org.slug}
                 </span>
               </DropdownMenuItem>
