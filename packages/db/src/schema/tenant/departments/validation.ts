@@ -4,9 +4,26 @@ import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { department } from "./department";
 
 /**
+ * Working hours schemas
+ */
+const dayScheduleSchema = z.object({
+  start: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, "Formato inválido (HH:MM)"),
+  end: z.string().regex(/^([01]\d|2[0-3]):([0-5]\d)$/, "Formato inválido (HH:MM)"),
+  enabled: z.boolean(),
+});
+
+export const workingHoursSchema = z.object({
+  enabled: z.boolean(),
+  timezone: z.string().min(1, "Timezone é obrigatório"),
+  schedule: z.record(z.string(), dayScheduleSchema),
+}).optional();
+
+/**
  * Select schema
  */
-export const selectDepartmentSchema = createSelectSchema(department);
+export const selectDepartmentSchema = createSelectSchema(department, {
+  workingHours: workingHoursSchema,
+});
 
 /**
  * Insert schema
@@ -18,6 +35,7 @@ export const insertDepartmentSchema = createInsertSchema(department, {
     .max(100, "Nome deve ter no máximo 100 caracteres"),
   description: z.string().max(1000).optional(),
   autoAssignment: z.boolean().default(false),
+  workingHours: workingHoursSchema,
 });
 
 /**

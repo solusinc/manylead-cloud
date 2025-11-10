@@ -1,6 +1,8 @@
+import { relations } from "drizzle-orm";
 import {
   boolean,
   index,
+  jsonb,
   pgTable,
   text,
   timestamp,
@@ -8,6 +10,8 @@ import {
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
+
+import { agent } from "../agents/agent";
 
 /**
  * Departments table - Departamentos para organização da equipe
@@ -34,6 +38,16 @@ export const department = pgTable(
     autoAssignment: boolean("auto_assignment").default(false).notNull(),
     // Se true, conversas são distribuídas automaticamente entre membros
 
+    workingHours: jsonb("working_hours").$type<{
+      enabled: boolean;
+      timezone: string;
+      schedule: Record<
+        string,
+        { start: string; end: string; enabled: boolean }
+      >;
+      // Ex: { monday: { start: "09:00", end: "18:00", enabled: true } }
+    }>(),
+
     isActive: boolean("is_active").default(true).notNull(),
 
     // Timestamps
@@ -46,3 +60,10 @@ export const department = pgTable(
     index("department_active_idx").on(table.isActive),
   ],
 );
+
+/**
+ * Relations
+ */
+export const departmentRelations = relations(department, ({ many }) => ({
+  agents: many(agent),
+}));

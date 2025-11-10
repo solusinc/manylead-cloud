@@ -2,10 +2,11 @@
 
 import { useTransition } from "react";
 import { useForm } from "@tanstack/react-form";
+import { isTRPCClientError } from "@trpc/client";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import { Button, Input, Label } from "@manylead/ui";
+import { Button, Input } from "@manylead/ui";
 
 import {
   FormCard,
@@ -22,18 +23,16 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>;
 
-export function FormOrganization({
-  defaultValues,
+export function FormCreateOrganization({
   onSubmit,
   ...props
 }: Omit<React.ComponentProps<"form">, "onSubmit"> & {
-  defaultValues?: FormValues;
   onSubmit: (values: FormValues) => Promise<void>;
 }) {
   const [isPending, startTransition] = useTransition();
 
   const form = useForm({
-    defaultValues: defaultValues ?? {
+    defaultValues: {
       name: "",
     },
     onSubmit: ({ value }) => {
@@ -43,11 +42,18 @@ export function FormOrganization({
         try {
           const promise = onSubmit(value);
           toast.promise(promise, {
-            loading: "Salvando...",
-            success: () => "Salvo",
-            error: "Falha ao salvar",
+            loading: "Aguarde...",
+            success: () => "Organização criada com sucesso",
+            error: (error) => {
+              if (isTRPCClientError(error)) {
+                return error.message;
+              }
+              return "Falha ao criar organização";
+            },
           });
           await promise;
+          // Reset form after success
+          form.reset();
         } catch (error) {
           console.error(error);
         }
@@ -66,9 +72,10 @@ export function FormOrganization({
     >
       <FormCard>
         <FormCardHeader>
-          <FormCardTitle>Organização</FormCardTitle>
+          <FormCardTitle>Nova Organização</FormCardTitle>
           <FormCardDescription>
-            Atualize o nome da sua organização.
+            Crie uma nova organização. Você será automaticamente definido como
+            proprietário.
           </FormCardDescription>
         </FormCardHeader>
         <FormCardContent>
@@ -86,13 +93,13 @@ export function FormOrganization({
           >
             {(field) => (
               <div className="grid gap-2">
-                <Label htmlFor={field.name}>Nome</Label>
                 <Input
                   id={field.name}
                   name={field.name}
                   value={field.state.value}
                   onBlur={field.handleBlur}
                   onChange={(e) => field.handleChange(e.target.value)}
+                  placeholder="Ex: Minha Empresa"
                 />
                 {field.state.meta.errors.length > 0 ? (
                   <p className="text-destructive text-sm">
@@ -105,7 +112,7 @@ export function FormOrganization({
         </FormCardContent>
         <FormCardFooter>
           <Button type="submit" disabled={isPending} size="sm">
-            {isPending ? "Enviando..." : "Enviar"}
+            {isPending ? "Aguarde..." : "Criar"}
           </Button>
         </FormCardFooter>
       </FormCard>

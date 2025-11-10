@@ -1,17 +1,25 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "@tanstack/react-form";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { AlertTriangle, Check, Loader2, X } from "lucide-react";
 import { z } from "zod";
 
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@manylead/ui";
+import {
+  Alert,
+  AlertTitle,
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@manylead/ui";
 import { Button } from "@manylead/ui/button";
+import { Field, FieldError, FieldLabel } from "@manylead/ui/field";
 import { Input } from "@manylead/ui/input";
-import { Field, FieldLabel, FieldError } from "@manylead/ui/field";
-import { Alert, AlertTitle } from "@manylead/ui";
-import { AlertTriangle, Check, X, Loader2 } from "lucide-react";
 
 import { useTRPC } from "~/lib/trpc/react";
 
@@ -58,7 +66,9 @@ export function OnboardingClient() {
         });
       } catch (err) {
         setPending(false);
-        setError(err instanceof Error ? err.message : "Erro ao criar organização");
+        setError(
+          err instanceof Error ? err.message : "Erro ao criar organização",
+        );
       }
     },
   });
@@ -87,9 +97,10 @@ export function OnboardingClient() {
     <div className="container mx-auto flex min-h-screen items-center justify-center p-4">
       <Card className="w-full max-w-lg">
         <CardHeader>
-          <CardTitle className="text-2xl">Bem-vindo ao ManyLead!</CardTitle>
+          <CardTitle className="text-2xl">Bem vindo a Manylead</CardTitle>
           <CardDescription>
-            Vamos começar criando sua organização. Você poderá convidar membros da equipe depois.
+            Vamos começar criando sua organização. Você poderá convidar membros
+            da equipe depois.
           </CardDescription>
         </CardHeader>
         <form
@@ -103,16 +114,21 @@ export function OnboardingClient() {
             <form.Field
               name="name"
               validators={{
-                onChange: z.string().min(2, "Nome deve ter no mínimo 2 caracteres"),
+                onChange: z
+                  .string()
+                  .min(2, "Nome deve ter no mínimo 2 caracteres"),
               }}
             >
               {(field) => {
-                const isInvalid = field.state.meta.isTouched && !field.state.meta.isValid;
+                const isInvalid =
+                  field.state.meta.isTouched && !field.state.meta.isValid;
                 const slug = slugify(field.state.value);
 
                 return (
                   <Field data-invalid={isInvalid}>
-                    <FieldLabel htmlFor={field.name}>Nome da Organização</FieldLabel>
+                    <FieldLabel htmlFor={field.name}>
+                      Nome da Organização
+                    </FieldLabel>
                     <div className="relative">
                       <Input
                         id={field.name}
@@ -131,43 +147,49 @@ export function OnboardingClient() {
                         className={slug ? "pr-10" : ""}
                       />
                       {slug && (
-                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        <div className="absolute top-1/2 right-3 -translate-y-1/2">
                           {checkingAvailability && (
-                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                            <Loader2 className="text-muted-foreground h-4 w-4 animate-spin" />
                           )}
                           {!checkingAvailability && availability && (
                             <>
                               {availability.available ? (
                                 <Check className="h-4 w-4 text-green-500" />
                               ) : (
-                                <X className="h-4 w-4 text-destructive" />
+                                <X className="text-destructive h-4 w-4" />
                               )}
                             </>
                           )}
                         </div>
                       )}
                     </div>
-                    {isInvalid && <FieldError errors={field.state.meta.errors} />}
+                    {isInvalid && (
+                      <FieldError errors={field.state.meta.errors} />
+                    )}
                   </Field>
                 );
               }}
             </form.Field>
 
             {error && (
-              <Alert className="border-none bg-destructive/10">
-                <AlertTriangle className="h-4 w-4 text-destructive!" />
+              <Alert className="bg-destructive/10 border-none">
+                <AlertTriangle className="text-destructive! h-4 w-4" />
                 <AlertTitle>{error}</AlertTitle>
               </Alert>
             )}
           </CardContent>
           <CardFooter className="pt-6">
             <Button
-              disabled={pending || checkingAvailability || (availability && !availability.available)}
+              disabled={
+                pending ||
+                checkingAvailability ||
+                (availability && !availability.available)
+              }
               type="submit"
               className="w-full"
             >
               {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {pending ? "Criando organização..." : "Criar organização"}
+              {pending ? "Aguarde..." : "Criar"}
             </Button>
           </CardFooter>
         </form>

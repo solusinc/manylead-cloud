@@ -13,13 +13,17 @@ import {
   SectionTitle,
 } from "~/components/content/section";
 import Link from "next/link";
-import { CreateOrgButton } from "./create-org-button";
 
 const settings = [
   {
     title: "Geral",
     description: "Gerencie as configurações da sua organização.",
     href: "/settings/general",
+  },
+  {
+    title: "Criar Organização",
+    description: "Crie uma nova organização e comece a gerenciar sua equipe.",
+    href: "/settings/new-organization",
   },
 ];
 
@@ -33,9 +37,6 @@ export default function Page() {
             Todas as suas configurações em um só lugar.
           </SectionDescription>
         </SectionHeader>
-        <div className="mb-4">
-          <CreateOrgButton />
-        </div>
         <ActionCardGroup>
           {settings.map((setting) => (
             <Link href={setting.href} key={setting.href}>

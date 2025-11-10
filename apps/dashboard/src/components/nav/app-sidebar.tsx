@@ -1,5 +1,6 @@
 "use client";
 
+import * as React from "react";
 import {
   Inbox,
   LayoutGrid,
@@ -7,12 +8,7 @@ import {
   Settings,
   Users,
 } from "lucide-react";
-import * as React from "react";
 
-import { Kbd } from "~/components/common/kbd";
-import { NavOverview } from "~/components/nav/nav-overview";
-import { NavUser } from "~/components/nav/nav-user";
-import { OrganizationSwitcher } from "~/components/nav/organization-switcher";
 import {
   Sidebar,
   SidebarContent,
@@ -28,6 +24,11 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@manylead/ui/tooltip";
+
+import { Kbd } from "~/components/common/kbd";
+import { NavOverview } from "~/components/nav/nav-overview";
+import { NavUser } from "~/components/nav/nav-user";
+import { OrganizationSwitcher } from "~/components/nav/organization-switcher";
 
 const SIDEBAR_KEYBOARD_SHORTCUT = "[";
 
@@ -56,7 +57,7 @@ const data = {
     },
     {
       name: "Settings",
-      url: "/settings/general",
+      url: "/settings",
       icon: Settings,
     },
   ],
@@ -107,10 +108,10 @@ export function AppSidebarTrigger() {
         <TooltipContent side="right">
           <p className="mr-px inline-flex items-center">
             Toggle Sidebar{" "}
-            <Kbd className="border-muted-foreground bg-primary font-mono text-background">
+            <Kbd className="border-muted-foreground bg-primary text-background font-mono">
               ⌘
             </Kbd>
-            <Kbd className="border-muted-foreground bg-primary font-mono text-background">
+            <Kbd className="border-muted-foreground bg-primary text-background font-mono">
               {SIDEBAR_KEYBOARD_SHORTCUT}
             </Kbd>
           </p>
