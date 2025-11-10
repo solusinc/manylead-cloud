@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { redirect } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
   ChevronsUpDown,
@@ -42,6 +42,7 @@ export function NavUser() {
   const { isMobile, setOpenMobile } = useSidebar();
   const { themeMode, setTheme } = useTheme();
   const { data: session } = useSession();
+  const router = useRouter();
   const trpc = useTRPC();
 
   const { data: organization, isLoading: isLoadingOrg } = useQuery(
@@ -69,7 +70,7 @@ export function NavUser() {
     await authClient.signOut({
       fetchOptions: {
         onSuccess: () => {
-          redirect("/sign-in");
+          router.push("/sign-in");
         },
       },
     });

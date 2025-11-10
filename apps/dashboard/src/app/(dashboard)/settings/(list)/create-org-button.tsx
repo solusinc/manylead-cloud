@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { redirect } from "next/navigation";
-import { useMutation } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { Button, Input } from "@manylead/ui";
 
@@ -10,13 +10,22 @@ import { useTRPC } from "~/lib/trpc/react";
 
 export function CreateOrgButton() {
   const trpc = useTRPC();
+  const router = useRouter();
+  const queryClient = useQueryClient();
   const [name, setName] = useState("");
   const [isOpen, setIsOpen] = useState(false);
 
   const createOrg = useMutation(
     trpc.organization.create.mutationOptions({
       onSuccess: () => {
-        redirect("/overview");
+        // Invalidar queries para atualizar switcher imediatamente
+        void queryClient.invalidateQueries({
+          queryKey: trpc.organization.list.queryKey(),
+        });
+        void queryClient.invalidateQueries({
+          queryKey: trpc.organization.getCurrent.queryKey(),
+        });
+        router.push("/overview");
       },
     }),
   );

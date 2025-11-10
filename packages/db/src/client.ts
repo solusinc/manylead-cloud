@@ -13,7 +13,7 @@ import * as tenantSchema from "./schema/tenant";
  */
 export function createCatalogClient(
   connectionString?: string,
-  options?: { prepare?: boolean; timeout?: number }
+  options?: { prepare?: boolean; timeout?: number },
 ) {
   const connString = connectionString ?? process.env.DATABASE_URL;
 
@@ -22,8 +22,8 @@ export function createCatalogClient(
   }
 
   const client = postgres(connString, {
-    max: 10,
-    idle_timeout: 20,
+    max: process.env.NODE_ENV === "production" ? 20 : 30, // Mais conexões em dev
+    idle_timeout: 30,
     connect_timeout: options?.timeout ?? 10,
     // prepare: false é necessário para PgBouncer em transaction mode
     // prepare: true é necessário para suportar transações do Better Auth
@@ -53,6 +53,11 @@ export function createTenantClient(connectionString: string) {
     idle_timeout: 20,
     connect_timeout: 10,
     prepare: false,
+    // Otimizações para reduzir latência
+    max_lifetime: 60 * 30,
+    ssl: false,
+    fetch_types: false,
+    debug: false,
   });
 
   return drizzle({
@@ -73,5 +78,16 @@ export type TenantDB = ReturnType<typeof createTenantClient>;
  * Note: PgBouncer em transaction mode não suporta prepared statements,
  * então prepare: false. Better Auth detecta isso e executa operações
  * sequencialmente ao invés de usar transações.
+ *
+ * IMPORTANTE: Em Next.js dev mode, hot reload pode recriar o módulo.
+ * Usamos globalThis para preservar conexões entre reloads.
  */
-export const db: CatalogDB = createCatalogClient();
+const globalForDb = globalThis as unknown as {
+  catalogDb: CatalogDB | undefined;
+};
+
+export const db: CatalogDB = globalForDb.catalogDb ?? createCatalogClient();
+
+if (process.env.NODE_ENV !== "production") {
+  globalForDb.catalogDb = db;
+}

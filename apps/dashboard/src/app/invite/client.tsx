@@ -1,7 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
-import { redirect } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { isTRPCClientError } from "@trpc/client";
 import { useQueryStates } from "nuqs";
@@ -22,6 +22,7 @@ import { searchParamsParsers } from "./search-params";
 
 export function Client() {
   const trpc = useTRPC();
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [{ token }] = useQueryStates(searchParamsParsers);
   const { refetch: refetchSession } = authClient.useSession();
@@ -34,7 +35,7 @@ export function Client() {
       onSuccess: () => {
         // Refresh session to get new organization
         void refetchSession();
-        redirect("/overview");
+        router.push("/overview");
       },
     }),
   );

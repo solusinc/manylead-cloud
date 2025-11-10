@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { SidebarInset, SidebarProvider } from "@manylead/ui/sidebar";
 
 import { AppSidebar } from "~/components/nav/app-sidebar";
+import { OrganizationGuard } from "~/components/nav/organization-guard";
 import { auth } from "~/lib/auth/server";
 import { HydrateClient, getQueryClient, trpc } from "~/lib/trpc/server";
 
@@ -63,5 +64,10 @@ async function HydrateSidebar({ children }: { children: React.ReactNode }) {
   await queryClient.prefetchQuery(trpc.organization.getCurrent.queryOptions());
   await queryClient.prefetchQuery(trpc.organization.list.queryOptions());
 
-  return <HydrateClient>{children}</HydrateClient>;
+  return (
+    <HydrateClient>
+      <OrganizationGuard />
+      {children}
+    </HydrateClient>
+  );
 }

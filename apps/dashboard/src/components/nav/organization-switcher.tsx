@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect } from "react";
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
-import { ChevronsUpDown, Plus } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { ChevronsUpDown, Loader2, Plus } from "lucide-react";
 
 import {
   DropdownMenu,
@@ -21,13 +20,15 @@ import {
   useSidebar,
 } from "@manylead/ui/sidebar";
 
-import { authClient } from "~/lib/auth/client";
 import { useTRPC } from "~/lib/trpc/react";
 
 export function OrganizationSwitcher() {
   const { isMobile, setOpenMobile } = useSidebar();
   const trpc = useTRPC();
+  const queryClient = useQueryClient();
+  const router = useRouter();
 
+  // OrganizationGuard cuida do refetch e redirecionamento global
   const { data: organization, isLoading: isLoadingOrg } = useQuery(
     trpc.organization.getCurrent.queryOptions(),
   );
@@ -35,15 +36,12 @@ export function OrganizationSwitcher() {
     trpc.organization.list.queryOptions(),
   );
 
+  const setActiveMutation = useMutation(
+    trpc.organization.setActive.mutationOptions(),
+  );
+
   // Se não há organização ativa mas há organizações disponíveis, use a primeira
   const activeOrg = organization ?? organizations?.[0];
-
-  // Redirecionar quando não houver organização ativa
-  useEffect(() => {
-    if (!isLoadingOrg && !isLoadingOrgs && !activeOrg) {
-      redirect("/overview");
-    }
-  }, [isLoadingOrg, isLoadingOrgs, activeOrg]);
 
   if (isLoadingOrg || isLoadingOrgs) {
     return null;
@@ -53,18 +51,37 @@ export function OrganizationSwitcher() {
     return null;
   }
 
-  async function handleClick(organizationId: string) {
-    await authClient.organization.setActive({
-      organizationId,
+  function handleClick(organizationId: string) {
+    // Atualização otimista: encontrar e setar a org selecionada no cache
+    const selectedOrg = organizations?.find((org) => org.id === organizationId);
+
+    if (selectedOrg) {
+      // Atualizar cache imediatamente para UX instantânea
+      queryClient.setQueryData(
+        trpc.organization.getCurrent.queryKey(),
+        selectedOrg,
+      );
+    }
+
+    // Navegar imediatamente - usuário vê mudança instantânea
+    router.push("/overview");
+
+    // Sincronizar com servidor em background
+    void setActiveMutation.mutateAsync({ organizationId }).then(() => {
+      // Revalidar para garantir consistência
+      void queryClient.invalidateQueries({
+        queryKey: trpc.organization.getCurrent.queryKey(),
+      });
+      // Soft refresh para atualizar dados do servidor
+      router.refresh();
     });
-    redirect("/overview");
   }
 
   return (
     <SidebarMenu>
       <SidebarMenuItem>
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
+          <DropdownMenuTrigger asChild disabled={setActiveMutation.isPending}>
             <SidebarMenuButton
               size="lg"
               className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground h-14 rounded-none px-4 ring-inset group-data-[collapsible=icon]:mx-2!"
@@ -88,7 +105,11 @@ export function OrganizationSwitcher() {
                   </span>
                 </div>
               </div>
-              <ChevronsUpDown className="ml-auto" />
+              {setActiveMutation.isPending ? (
+                <Loader2 className="ml-auto animate-spin" />
+              ) : (
+                <ChevronsUpDown className="ml-auto" />
+              )}
             </SidebarMenuButton>
           </DropdownMenuTrigger>
           <DropdownMenuContent

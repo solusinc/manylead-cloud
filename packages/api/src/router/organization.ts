@@ -1,13 +1,14 @@
 import { z } from "zod";
 import slugify from "slugify";
 import { TRPCError } from "@trpc/server";
-import { eq } from "drizzle-orm";
-import { TenantDatabaseManager } from "@manylead/tenant-db";
-import { organization } from "@manylead/db";
+import { and, eq } from "drizzle-orm";
+import { TenantDatabaseManager, ActivityLogger } from "@manylead/tenant-db";
+import { member, organization } from "@manylead/db";
 
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
 const tenantManager = new TenantDatabaseManager();
+const activityLogger = new ActivityLogger();
 
 /**
  * Organization Router
@@ -50,7 +51,7 @@ export const organizationRouter = createTRPCRouter({
       }
 
       // 3. Cria a organização usando Better Auth
-      const organization = await ctx.authApi.createOrganization({
+      const createdOrg = await ctx.authApi.createOrganization({
         body: {
           name: input.name,
           slug,
@@ -58,29 +59,75 @@ export const organizationRouter = createTRPCRouter({
         headers: ctx.headers,
       });
 
-      if (!organization) {
+      if (!createdOrg) {
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Falha ao criar organização",
         });
       }
 
-      // 4. Provisiona o tenant database
-      await tenantManager.provisionTenant({
-        organizationId: organization.id,
-        slug,
-        name: input.name,
-      });
+      // SAGA PATTERN: Se provisioning falhar, fazer rollback da organização
+      let tenantProvisioned = false;
 
-      // 5. Define esta organização como ativa na sessão
-      await ctx.authApi.setActiveOrganization({
-        body: {
-          organizationId: organization.id,
-        },
-        headers: ctx.headers,
-      });
+      try {
+        // 4. Provisiona o tenant database
+        await tenantManager.provisionTenant({
+          organizationId: createdOrg.id,
+          slug,
+          name: input.name,
+        });
+        tenantProvisioned = true;
 
-      return organization;
+        // 5. Define esta organização como ativa na sessão
+        await ctx.authApi.setActiveOrganization({
+          body: {
+            organizationId: createdOrg.id,
+          },
+          headers: ctx.headers,
+        });
+
+        return createdOrg;
+      } catch (error) {
+        // LOGAR FALHA DE PROVISIONING
+        await activityLogger.logSystemError(error as Error, {
+          organizationId: createdOrg.id,
+          slug,
+          phase: tenantProvisioned ? "setActive" : "provisionTenant",
+          userId: ctx.session.user.id,
+        });
+
+        // ROLLBACK: Limpar recursos criados
+        try {
+          // Se tenant foi provisionado mas setActive falhou, deletar tenant
+          if (tenantProvisioned) {
+            await tenantManager.deleteTenant(createdOrg.id);
+          }
+
+          // Sempre deletar a organização (CASCADE deleta members automaticamente)
+          await ctx.db
+            .delete(organization)
+            .where(eq(organization.id, createdOrg.id));
+        } catch (rollbackError) {
+          // LOGAR FALHA CRÍTICA DE ROLLBACK
+          await activityLogger.logCriticalError(rollbackError as Error, {
+            organizationId: createdOrg.id,
+            slug,
+            originalError: error instanceof Error ? error.message : String(error),
+            tenantProvisioned,
+            userId: ctx.session.user.id,
+          });
+        }
+
+        // Re-lançar erro original com mensagem amigável
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message:
+            error instanceof Error
+              ? `Falha ao provisionar organização: ${error.message}`
+              : "Falha ao provisionar organização",
+          cause: error,
+        });
+      }
     }),
 
   /**
@@ -154,24 +201,23 @@ export const organizationRouter = createTRPCRouter({
 
     // Se não houver organização ativa, tenta pegar a primeira do usuário
     if (!activeOrgId) {
-      const userOrgs = await ctx.authApi.listOrganizations({
-        headers: ctx.headers,
-      });
+      // Query direta otimizada ao invés de usar Better Auth
+      const userOrgs = await ctx.db
+        .select({ id: organization.id })
+        .from(organization)
+        .innerJoin(member, eq(member.organizationId, organization.id))
+        .where(eq(member.userId, ctx.session.user.id))
+        .limit(1);
 
-      if (userOrgs.length > 0) {
-        const firstOrg = userOrgs[0];
-        if (firstOrg) {
-          // Seta a primeira organização como ativa
-          await ctx.authApi.setActiveOrganization({
-            body: {
-              organizationId: firstOrg.id,
-            },
-            headers: ctx.headers,
-          });
-          activeOrgId = firstOrg.id;
-        } else {
-          return null;
-        }
+      if (userOrgs.length > 0 && userOrgs[0]) {
+        // Seta a primeira organização como ativa
+        await ctx.authApi.setActiveOrganization({
+          body: {
+            organizationId: userOrgs[0].id,
+          },
+          headers: ctx.headers,
+        });
+        activeOrgId = userOrgs[0].id;
       } else {
         return null;
       }
@@ -188,7 +234,7 @@ export const organizationRouter = createTRPCRouter({
       .where(eq(organization.id, activeOrgId))
       .limit(1);
 
-    if (currentOrg.length === 0) {
+    if (currentOrg.length === 0 || !currentOrg[0]) {
       return null;
     }
 
@@ -199,9 +245,19 @@ export const organizationRouter = createTRPCRouter({
    * List all organizations for the current user
    */
   list: protectedProcedure.query(async ({ ctx }) => {
-    const result = await ctx.authApi.listOrganizations({
-      headers: ctx.headers,
-    });
+    // Query direta otimizada com JOIN - muito mais rápido que Better Auth
+    const result = await ctx.db
+      .select({
+        id: organization.id,
+        name: organization.name,
+        slug: organization.slug,
+        logo: organization.logo,
+        createdAt: organization.createdAt,
+        metadata: organization.metadata,
+      })
+      .from(organization)
+      .innerJoin(member, eq(member.organizationId, organization.id))
+      .where(eq(member.userId, ctx.session.user.id));
 
     return result;
   }),
@@ -242,5 +298,64 @@ export const organizationRouter = createTRPCRouter({
       }
 
       return result[0];
+    }),
+
+  /**
+   * Set active organization
+   *
+   * NOTA: Esta mutation é mantida para casos especiais (ex: aceitar convite),
+   * mas NÃO deve ser usada no OrganizationSwitcher devido à latência do Better Auth.
+   * O switcher usa atualização otimista de cache para UX instantânea.
+   */
+  setActive: protectedProcedure
+    .input(
+      z.object({
+        organizationId: z.string().min(1, "ID da organização é obrigatório"),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Verifica acesso com query otimizada
+      const userAccess = await ctx.db
+        .select({ id: organization.id })
+        .from(organization)
+        .innerJoin(member, eq(member.organizationId, organization.id))
+        .where(
+          and(
+            eq(member.userId, ctx.session.user.id),
+            eq(organization.id, input.organizationId),
+          ),
+        )
+        .limit(1);
+
+      if (userAccess.length === 0) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Você não tem acesso a esta organização",
+        });
+      }
+
+      // Define a organização como ativa na sessão do Better Auth
+      await ctx.authApi.setActiveOrganization({
+        body: {
+          organizationId: input.organizationId,
+        },
+        headers: ctx.headers,
+      });
+
+      // Busca e retorna a organização ativa
+      const activeOrg = await ctx.db
+        .select()
+        .from(organization)
+        .where(eq(organization.id, input.organizationId))
+        .limit(1);
+
+      if (activeOrg.length === 0) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Organização não encontrada",
+        });
+      }
+
+      return activeOrg[0];
     }),
 });
