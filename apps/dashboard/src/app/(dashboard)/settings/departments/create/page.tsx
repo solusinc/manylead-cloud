@@ -16,7 +16,7 @@ export default function Page() {
   const queryClient = useQueryClient();
   const router = useRouter();
 
-  const createDepartmentMutation = useMutation(
+  const createMutation = useMutation(
     trpc.departments.create.mutationOptions({
       onSuccess: () => {
         void queryClient.invalidateQueries({
@@ -34,12 +34,8 @@ export default function Page() {
           <SectionTitle>Criar Departamento</SectionTitle>
         </SectionHeader>
         <FormGeneral
-          onSubmit={async (data) => {
-            await createDepartmentMutation.mutateAsync({
-              name: data.name,
-              description: data.description ?? undefined,
-              autoAssignment: data.autoAssignment,
-            });
+          onSubmitAction={async (values) => {
+            await createMutation.mutateAsync(values);
           }}
         />
       </Section>

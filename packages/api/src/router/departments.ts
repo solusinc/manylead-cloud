@@ -4,6 +4,7 @@ import { eq, and } from "drizzle-orm";
 import {
   department,
   insertDepartmentSchema,
+  selectDepartmentSchema,
   updateDepartmentSchema,
 } from "@manylead/db";
 
@@ -36,7 +37,7 @@ export const departmentsRouter = createTRPCRouter({
       .where(eq(department.organizationId, organizationId))
       .orderBy(department.name);
 
-    return departments;
+    return departments.map((dept) => selectDepartmentSchema.parse(dept));
   }),
 
   /**
@@ -74,7 +75,7 @@ export const departmentsRouter = createTRPCRouter({
         });
       }
 
-      return dept;
+      return selectDepartmentSchema.parse(dept);
     }),
 
   /**

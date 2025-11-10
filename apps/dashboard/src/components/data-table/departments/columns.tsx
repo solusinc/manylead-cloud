@@ -39,7 +39,14 @@ export const columns: ColumnDef<Department>[] = [
       <DataTableColumnHeader column={column} title="Nome" />
     ),
     cell: ({ row }) => {
-      return <div className="font-medium">{row.getValue("name")}</div>;
+      return (
+        <a
+          href={`/settings/departments/${row.original.id}/edit`}
+          className="font-medium hover:underline"
+        >
+          {row.getValue("name")}
+        </a>
+      );
     },
     enableHiding: false,
     meta: {

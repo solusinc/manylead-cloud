@@ -29,10 +29,10 @@ const schema = z.object({
 type FormValues = z.infer<typeof schema>;
 
 export function FormGeneral({
-  onSubmit,
+  onSubmitAction,
   defaultValues,
 }: {
-  onSubmit: (values: FormValues) => Promise<void>;
+  onSubmitAction: (values: FormValues) => Promise<void>;
   defaultValues?: Partial<FormValues>;
 }) {
   const [isPending, startTransition] = useTransition();
@@ -40,7 +40,7 @@ export function FormGeneral({
   const form = useForm({
     defaultValues: {
       name: defaultValues?.name ?? "",
-      description: defaultValues?.description ?? "",
+      description: defaultValues?.description ?? undefined,
       autoAssignment: defaultValues?.autoAssignment ?? false,
     },
     onSubmit: ({ value }) => {
@@ -48,7 +48,7 @@ export function FormGeneral({
 
       startTransition(async () => {
         try {
-          const promise = onSubmit(value);
+          const promise = onSubmitAction(value);
           toast.promise(promise, {
             loading: "Salvando...",
             success: () => "Departamento salvo com sucesso",
@@ -100,9 +100,7 @@ export function FormGeneral({
             >
               {(field) => (
                 <div className="grid gap-2">
-                  <Label htmlFor={field.name}>
-                    Nome <span className="text-destructive">*</span>
-                  </Label>
+                  <Label htmlFor={field.name}>Nome</Label>
                   <Input
                     id={field.name}
                     name={field.name}
@@ -141,7 +139,7 @@ export function FormGeneral({
                   <Textarea
                     id={field.name}
                     name={field.name}
-                    value={field.state.value || ""}
+                    value={field.state.value ?? ""}
                     onBlur={field.handleBlur}
                     onChange={(e) => field.handleChange(e.target.value)}
                     placeholder="Descreva o propósito e responsabilidades deste departamento..."

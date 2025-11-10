@@ -22,7 +22,13 @@ export const workingHoursSchema = z.object({
  * Select schema
  */
 export const selectDepartmentSchema = createSelectSchema(department, {
-  workingHours: workingHoursSchema,
+  description: z
+    .string()
+    .nullish()
+    .transform((v) => (v === null ? undefined : v)),
+  workingHours: workingHoursSchema
+    .nullish()
+    .transform((v) => (v === null ? undefined : v)),
 });
 
 /**
