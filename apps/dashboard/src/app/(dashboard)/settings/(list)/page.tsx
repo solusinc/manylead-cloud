@@ -21,6 +21,23 @@ const settings = [
     href: "/settings/general",
   },
   {
+    title: "Conta",
+    description: "Gerencie suas informações pessoais e preferências.",
+    href: "/settings/account",
+  },
+  {
+    title: "Departamentos",
+    description:
+      "Organize sua equipe em setores e otimize a distribuição de conversas.",
+    href: "/settings/departments",
+  },
+  {
+    title: "Atendentes",
+    description:
+      "Gerencie sua equipe de atendimento e organize o relacionamento com seus clientes.",
+    href: "/settings/agents",
+  },
+  {
     title: "Criar Organização",
     description: "Crie uma nova organização e comece a gerenciar sua equipe.",
     href: "/settings/new-organization",

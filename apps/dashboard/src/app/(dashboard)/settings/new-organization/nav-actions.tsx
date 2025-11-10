@@ -1,5 +1,1 @@
-"use client";
-
-export function NavActions() {
-  return null;
-}
+export { NavActions } from "../nav-actions";

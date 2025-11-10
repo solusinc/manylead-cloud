@@ -1,7 +1,8 @@
 "use client";
 
 import { NavBreadcrumb } from "~/components/nav/nav-breadcrumb";
-import { Cog, Plus } from "lucide-react";
+import { Cog } from "lucide-react";
+import { SETTINGS_NAV_ITEMS } from "../settings-config";
 
 export function Breadcrumb() {
   return (
@@ -10,7 +11,7 @@ export function Breadcrumb() {
         { type: "page", label: "Configurações", icon: Cog },
         {
           type: "select",
-          items: [{ value: "new-organization", label: "Criar Organização", icon: Plus }],
+          items: SETTINGS_NAV_ITEMS,
         },
       ]}
     />

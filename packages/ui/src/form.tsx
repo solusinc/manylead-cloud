@@ -11,8 +11,9 @@ import {
   useFormState,
 } from "react-hook-form";
 
+import { Label } from "@manylead/ui/label";
+
 import { cn } from ".";
-import { Label } from "./label";
 
 const Form = FormProvider;
 

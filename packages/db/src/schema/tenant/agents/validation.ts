@@ -14,12 +14,12 @@ export const accessTypeSchema = z.enum(accessTypes);
  */
 const departmentsPermissionSchema = z.object({
   type: accessTypeSchema,
-  ids: z.array(z.string().uuid()).optional(),
+  ids: z.array(z.uuid()).optional(),
 });
 
 const channelsPermissionSchema = z.object({
   type: accessTypeSchema,
-  ids: z.array(z.string().uuid()).optional(),
+  ids: z.array(z.uuid()).optional(),
 });
 
 const permissionsSchema = z.object({

@@ -43,7 +43,7 @@ export const departmentsRouter = createTRPCRouter({
    * Get department by ID
    */
   getById: protectedProcedure
-    .input(z.object({ id: z.string().uuid() }))
+    .input(z.object({ id: z.uuid() }))
     .query(async ({ ctx, input }) => {
       const organizationId = ctx.session.session.activeOrganizationId;
 
@@ -130,7 +130,7 @@ export const departmentsRouter = createTRPCRouter({
   update: protectedProcedure
     .input(
       z.object({
-        id: z.string().uuid(),
+        id: z.uuid(),
         data: updateDepartmentSchema,
       }),
     )
@@ -199,10 +199,91 @@ export const departmentsRouter = createTRPCRouter({
     }),
 
   /**
+   * Update multiple departments
+   */
+  updateDepartments: protectedProcedure
+    .input(
+      z.object({
+        ids: z.array(z.uuid()),
+        isActive: z.boolean(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const organizationId = ctx.session.session.activeOrganizationId;
+
+      if (!organizationId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Nenhuma organização ativa",
+        });
+      }
+
+      const tenantDb = await tenantManager.getConnection(organizationId);
+
+      // Atualizar todos os departamentos
+      await Promise.all(
+        input.ids.map((id) =>
+          tenantDb
+            .update(department)
+            .set({
+              isActive: input.isActive,
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(department.id, id),
+                eq(department.organizationId, organizationId),
+              ),
+            ),
+        ),
+      );
+
+      return { success: true };
+    }),
+
+  /**
+   * Delete multiple departments
+   */
+  deleteDepartments: protectedProcedure
+    .input(
+      z.object({
+        ids: z.array(z.uuid()),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const organizationId = ctx.session.session.activeOrganizationId;
+
+      if (!organizationId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Nenhuma organização ativa",
+        });
+      }
+
+      const tenantDb = await tenantManager.getConnection(organizationId);
+
+      // Deletar todos os departamentos
+      await Promise.all(
+        input.ids.map((id) =>
+          tenantDb
+            .delete(department)
+            .where(
+              and(
+                eq(department.id, id),
+                eq(department.organizationId, organizationId),
+              ),
+            ),
+        ),
+      );
+
+      return { success: true };
+    }),
+
+  /**
    * Delete a department
    */
   delete: protectedProcedure
-    .input(z.object({ id: z.string().uuid() }))
+    .input(z.object({ id: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
       const organizationId = ctx.session.session.activeOrganizationId;
 

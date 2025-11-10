@@ -43,7 +43,7 @@ export const agentsRouter = createTRPCRouter({
    * Get agent by ID
    */
   getById: protectedProcedure
-    .input(z.object({ id: z.string().uuid() }))
+    .input(z.object({ id: z.uuid() }))
     .query(async ({ ctx, input }) => {
       const organizationId = ctx.session.session.activeOrganizationId;
 
@@ -143,7 +143,7 @@ export const agentsRouter = createTRPCRouter({
   update: protectedProcedure
     .input(
       z.object({
-        id: z.string().uuid(),
+        id: z.uuid(),
         data: updateAgentSchema,
       }),
     )
@@ -205,7 +205,7 @@ export const agentsRouter = createTRPCRouter({
    * Delete an agent
    */
   delete: protectedProcedure
-    .input(z.object({ id: z.string().uuid() }))
+    .input(z.object({ id: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
       const organizationId = ctx.session.session.activeOrganizationId;
 
@@ -244,7 +244,7 @@ export const agentsRouter = createTRPCRouter({
   updateConversationCount: protectedProcedure
     .input(
       z.object({
-        id: z.string().uuid(),
+        id: z.uuid(),
         increment: z.boolean().default(true),
       }),
     )
