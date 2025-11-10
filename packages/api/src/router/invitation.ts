@@ -1,8 +1,8 @@
-import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure, tenantManager } from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { and, eq, gte } from "drizzle-orm";
-import { invitation, organization } from "@manylead/db";
+import { invitation, organization, agent } from "@manylead/db";
 import { EmailClient } from "@manylead/emails";
 import { env } from "../env";
 
@@ -82,17 +82,56 @@ export const invitationRouter = createTRPCRouter({
 
   /**
    * Accept invitation
-   * Aceita um convite pendente
+   * Aceita um convite pendente e cria o agent automaticamente
    */
   accept: protectedProcedure
     .input(z.object({ invitationId: z.string() }))
     .mutation(async ({ ctx, input }) => {
+      // Get invitation data before accepting
+      const inv = await ctx.db
+        .select()
+        .from(invitation)
+        .where(eq(invitation.id, input.invitationId))
+        .limit(1);
+
+      if (!inv[0]) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Convite não encontrado",
+        });
+      }
+
+      const organizationId = inv[0].organizationId;
+
+      // Accept invitation (Better Auth creates member automatically)
       const result = await ctx.authApi.acceptInvitation({
         body: {
           invitationId: input.invitationId,
         },
         headers: ctx.headers,
       });
+
+      // Create agent in tenant database
+      const tenantDb = await tenantManager.getConnection(organizationId);
+
+      // Check if agent already exists
+      const [existingAgent] = await tenantDb
+        .select()
+        .from(agent)
+        .where(eq(agent.userId, ctx.session.user.id))
+        .limit(1);
+
+      if (!existingAgent) {
+        await tenantDb.insert(agent).values({
+          userId: ctx.session.user.id,
+          permissions: {
+            departments: { type: "all" },
+            channels: { type: "all" },
+          },
+          maxActiveConversations: 10,
+          isActive: true,
+        });
+      }
 
       return result;
     }),
@@ -165,6 +204,7 @@ export const invitationRouter = createTRPCRouter({
       }
 
       // Send invitation email
+      // TODO: O token de convite é válido por 1 semana (expiresAt definido pelo Better Auth)
       await emailClient.sendTeamInvitation({
         to: input.email,
         token: newInvitation.id,

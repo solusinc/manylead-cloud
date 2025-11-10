@@ -4,7 +4,9 @@ import { eq } from "drizzle-orm";
 import {
   agent,
   insertAgentSchema,
+  selectAgentSchema,
   updateAgentSchema,
+  user,
 } from "@manylead/db";
 
 import { createTRPCRouter, protectedProcedure, tenantManager } from "../trpc";
@@ -16,7 +18,7 @@ import { createTRPCRouter, protectedProcedure, tenantManager } from "../trpc";
  */
 export const agentsRouter = createTRPCRouter({
   /**
-   * List all agents for the active organization
+   * List all agents for the active organization with user data
    */
   list: protectedProcedure.query(async ({ ctx }) => {
     const organizationId = ctx.session.session.activeOrganizationId;
@@ -30,13 +32,29 @@ export const agentsRouter = createTRPCRouter({
 
     const tenantDb = await tenantManager.getConnection(organizationId);
 
-    // TODO: Adicionar join com department quando necessário
+    // Get all agents from tenant database
     const agents = await tenantDb
       .select()
       .from(agent)
       .orderBy(agent.createdAt);
 
-    return agents;
+    // Get user data from catalog database for each agent
+    const agentsWithUsers = await Promise.all(
+      agents.map(async (a) => {
+        const [userData] = await ctx.db
+          .select()
+          .from(user)
+          .where(eq(user.id, a.userId))
+          .limit(1);
+
+        return {
+          ...selectAgentSchema.parse(a),
+          user: userData ?? null,
+        };
+      }),
+    );
+
+    return agentsWithUsers;
   }),
 
   /**
