@@ -16,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@manylead/ui";
+import { Crown, Key, User } from "lucide-react";
 
 import {
   FormCard,
@@ -36,13 +37,19 @@ type FormValues = z.infer<typeof formSchema>;
 const roleLabels = {
   owner: "Proprietário",
   admin: "Admin",
-  member: "Membro",
+  member: "Operador",
 } as const;
 
 const roleDescriptions = {
-  owner: "Acesso total + financeiro",
-  admin: "Acesso total - financeiro",
-  member: "Atendimento e visualização",
+  owner: "Tem todas as permissões na ferramenta e tem acesso ao painel financeiro.",
+  admin: "Tem todas as permissões na ferramenta, porém não tem acesso ao painel financeiro.",
+  member: "É capaz de enviar mensagens para contatos e pode alterar configurações básicas que são úteis aos atendentes.",
+} as const;
+
+const roleIcons = {
+  owner: Crown,
+  admin: Key,
+  member: User,
 } as const;
 
 export function FormInviteAgent({
@@ -101,7 +108,7 @@ export function FormInviteAgent({
         <FormCardHeader>
           <FormCardTitle>Informações do Convite</FormCardTitle>
           <FormCardDescription>
-            Configure as informações do atendente que será convidado.
+            Configure as informações do membro que será convidado.
           </FormCardDescription>
         </FormCardHeader>
         <FormCardContent>
@@ -120,7 +127,7 @@ export function FormInviteAgent({
             >
               {(field) => (
                 <div className="grid gap-2 sm:col-span-2">
-                  <Label htmlFor={field.name}>Email do atendente</Label>
+                  <Label htmlFor={field.name}>Email do membro</Label>
                   <Input
                     id={field.name}
                     name={field.name}
@@ -153,21 +160,33 @@ export function FormInviteAgent({
                   >
                     <SelectTrigger id={field.name}>
                       <SelectValue>
-                        {roleLabels[field.state.value]}
+                        <div className="flex items-center gap-2">
+                          {(() => {
+                            const Icon = roleIcons[field.state.value];
+                            return <Icon className="h-4 w-4" />;
+                          })()}
+                          {roleLabels[field.state.value]}
+                        </div>
                       </SelectValue>
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="w-[calc(100vw-2rem)] sm:w-[--radix-select-trigger-width] max-w-[500px]">
                       {(Object.keys(roleLabels) as (keyof typeof roleLabels)[]).map(
-                        (role) => (
-                          <SelectItem key={role} value={role}>
-                            <div className="flex flex-col">
-                              <span className="font-medium">{roleLabels[role]}</span>
-                              <span className="text-xs text-muted-foreground">
-                                {roleDescriptions[role]}
-                              </span>
-                            </div>
-                          </SelectItem>
-                        ),
+                        (role) => {
+                          const Icon = roleIcons[role];
+                          return (
+                            <SelectItem key={role} value={role} className="py-3">
+                              <div className="flex items-start gap-2 sm:gap-3">
+                                <Icon className="mt-0.5 h-4 w-4 sm:h-5 sm:w-5 shrink-0" />
+                                <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                                  <span className="font-medium text-sm">{roleLabels[role]}</span>
+                                  <span className="text-xs text-muted-foreground leading-relaxed">
+                                    {roleDescriptions[role]}
+                                  </span>
+                                </div>
+                              </div>
+                            </SelectItem>
+                          );
+                        },
                       )}
                     </SelectContent>
                   </Select>

@@ -73,8 +73,8 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
     <QuickActions
       actions={actions}
       deleteAction={{
-        title: row.original.user?.name ?? "este atendente",
-        confirmationValue: "deletar atendente",
+        title: row.original.user?.name ?? "este membro",
+        confirmationValue: "deletar membro",
         submitAction: async () => {
           await deleteAgentMutation.mutateAsync({
             id: row.original.id,

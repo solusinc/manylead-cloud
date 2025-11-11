@@ -49,7 +49,6 @@ export function FormDepartmentUpdate() {
       <FormGeneral
         defaultValues={{
           name: department.name,
-          description: department.description,
           autoAssignment: department.autoAssignment,
         }}
         onSubmitAction={async (values) => {

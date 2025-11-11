@@ -22,6 +22,13 @@
       "when": 1762815732878,
       "tag": "0002_curly_arclight",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1762825286460,
+      "tag": "0003_chubby_namora",
+      "breakpoints": true
     }
   ]
 }

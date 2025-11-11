@@ -298,4 +298,98 @@ export const agentsRouter = createTRPCRouter({
 
       return { success: true };
     }),
+
+  /**
+   * Update agent role
+   * Only owners can change roles
+   * Cannot downgrade the last owner
+   */
+  updateRole: protectedProcedure
+    .input(
+      z.object({
+        id: z.uuid(),
+        role: z.enum(["owner", "admin", "member"]),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const organizationId = ctx.session.session.activeOrganizationId;
+
+      if (!organizationId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Nenhuma organização ativa",
+        });
+      }
+
+      const tenantDb = await tenantManager.getConnection(organizationId);
+
+      // Verificar se usuário atual é proprietário
+      const [currentUserAgent] = await tenantDb
+        .select()
+        .from(agent)
+        .where(eq(agent.userId, ctx.session.user.id))
+        .limit(1);
+
+      if (!currentUserAgent || currentUserAgent.role !== "owner") {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Apenas proprietários podem alterar cargos",
+        });
+      }
+
+      // Verificar se agent existe
+      const [existing] = await tenantDb
+        .select()
+        .from(agent)
+        .where(eq(agent.id, input.id))
+        .limit(1);
+
+      if (!existing) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Membro não encontrado",
+        });
+      }
+
+      // Se está tentando rebaixar um proprietário, verificar se não é o último
+      if (existing.role === "owner" && input.role !== "owner") {
+        const ownerCount = await tenantDb
+          .select({ count: agent.id })
+          .from(agent)
+          .where(eq(agent.role, "owner"));
+
+        if (ownerCount.length === 1) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              "Não é possível rebaixar o último proprietário. A organização precisa ter pelo menos um proprietário.",
+          });
+        }
+      }
+
+      // Atualizar role
+      const [updated] = await tenantDb
+        .update(agent)
+        .set({
+          role: input.role,
+          updatedAt: new Date(),
+        })
+        .where(eq(agent.id, input.id))
+        .returning();
+
+      // Atualizar role no catalog member também
+      await ctx.db
+        .update(member)
+        .set({
+          role: input.role,
+        })
+        .where(
+          and(
+            eq(member.userId, existing.userId),
+            eq(member.organizationId, organizationId),
+          ),
+        );
+
+      return updated;
+    }),
 });

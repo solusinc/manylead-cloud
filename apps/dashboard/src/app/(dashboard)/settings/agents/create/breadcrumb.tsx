@@ -15,11 +15,11 @@ export function Breadcrumb() {
         },
         {
           type: "link",
-          label: "Atendentes",
+          label: "Membros",
           href: "/settings/agents",
           icon: Users,
         },
-        { type: "page", label: "Convidar Atendente" },
+        { type: "page", label: "Convidar Membro" },
       ]}
     />
   );

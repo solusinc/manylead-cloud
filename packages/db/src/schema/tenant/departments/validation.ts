@@ -22,10 +22,6 @@ export const workingHoursSchema = z.object({
  * Select schema
  */
 export const selectDepartmentSchema = createSelectSchema(department, {
-  description: z
-    .string()
-    .nullish()
-    .transform((v) => (v === null ? undefined : v)),
   workingHours: workingHoursSchema
     .nullish()
     .transform((v) => (v === null ? undefined : v)),
@@ -39,7 +35,6 @@ export const insertDepartmentSchema = createInsertSchema(department, {
     .string()
     .min(1, "Nome é obrigatório")
     .max(100, "Nome deve ter no máximo 100 caracteres"),
-  description: z.string().max(1000).optional(),
   autoAssignment: z.boolean().default(false),
   workingHours: workingHoursSchema,
 });

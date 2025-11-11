@@ -32,8 +32,6 @@ export const department = pgTable(
     name: varchar("name", { length: 100 }).notNull(),
     // Ex: "Vendas", "Suporte", "Financeiro"
 
-    description: text("description"),
-
     // Configurações
     autoAssignment: boolean("auto_assignment").default(false).notNull(),
     // Se true, conversas são distribuídas automaticamente entre membros

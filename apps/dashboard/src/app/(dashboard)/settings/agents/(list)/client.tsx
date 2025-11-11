@@ -30,14 +30,14 @@ export function Client() {
     <SectionGroup>
       <Section>
         <SectionHeader>
-          <SectionTitle>Atendentes</SectionTitle>
+          <SectionTitle>Membros</SectionTitle>
           <SectionDescription>
-            Gerencie sua equipe de atendimento e suas permissões.
+            Gerencie os membros da sua equipe e suas permissões.
           </SectionDescription>
         </SectionHeader>
         <Tabs defaultValue="agents">
           <TabsList>
-            <TabsTrigger value="agents">Atendentes</TabsTrigger>
+            <TabsTrigger value="agents">Membros</TabsTrigger>
             <TabsTrigger value="pending">Pendentes</TabsTrigger>
           </TabsList>
           <TabsContent value="agents">

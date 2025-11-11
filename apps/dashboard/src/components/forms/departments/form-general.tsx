@@ -6,7 +6,7 @@ import { isTRPCClientError } from "@trpc/client";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import { Button, Input, Label, Switch, Textarea } from "@manylead/ui";
+import { Button, Input, Label, Switch } from "@manylead/ui";
 
 import {
   FormCard,
@@ -22,7 +22,6 @@ const schema = z.object({
     .string()
     .min(1, "Nome é obrigatório")
     .max(100, "Nome deve ter no máximo 100 caracteres"),
-  description: z.string().max(1000).optional(),
   autoAssignment: z.boolean(),
 });
 
@@ -40,7 +39,6 @@ export function FormGeneral({
   const form = useForm({
     defaultValues: {
       name: defaultValues?.name ?? "",
-      description: defaultValues?.description ?? undefined,
       autoAssignment: defaultValues?.autoAssignment ?? false,
     },
     onSubmit: ({ value }) => {
@@ -108,42 +106,6 @@ export function FormGeneral({
                     onBlur={field.handleBlur}
                     onChange={(e) => field.handleChange(e.target.value)}
                     placeholder="Ex: Suporte Técnico"
-                  />
-                  {field.state.meta.errors.length > 0 ? (
-                    <p className="text-destructive text-sm">
-                      {field.state.meta.errors[0]}
-                    </p>
-                  ) : null}
-                </div>
-              )}
-            </form.Field>
-
-            <form.Field
-              name="description"
-              validators={{
-                onChange: ({ value }) => {
-                  if (!value) return undefined;
-                  const result = schema.shape.description.safeParse(value);
-                  if (!result.success) {
-                    return (
-                      result.error.issues[0]?.message ?? "Erro de validação"
-                    );
-                  }
-                  return undefined;
-                },
-              }}
-            >
-              {(field) => (
-                <div className="grid gap-2">
-                  <Label htmlFor={field.name}>Descrição</Label>
-                  <Textarea
-                    id={field.name}
-                    name={field.name}
-                    value={field.state.value ?? ""}
-                    onBlur={field.handleBlur}
-                    onChange={(e) => field.handleChange(e.target.value)}
-                    placeholder="Descreva o propósito e responsabilidades deste departamento..."
-                    rows={3}
                   />
                   {field.state.meta.errors.length > 0 ? (
                     <p className="text-destructive text-sm">

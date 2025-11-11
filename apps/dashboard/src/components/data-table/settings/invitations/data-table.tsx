@@ -50,7 +50,7 @@ export function DataTable() {
           const roleLabels: Record<string, string> = {
             owner: "Proprietário",
             admin: "Admin",
-            member: "Membro",
+            member: "Operador",
           };
 
           return (

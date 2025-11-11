@@ -13,6 +13,6 @@ export const SETTINGS_NAV_ITEMS: {
   { value: "general", label: "Geral", icon: Cog },
   { value: "account", label: "Conta", icon: User },
   { value: "departments", label: "Departamentos", icon: Building2 },
-  { value: "agents", label: "Atendentes", icon: Users },
+  { value: "agents", label: "Membros", icon: Users },
   { value: "new-organization", label: "Criar Organização", icon: Plus },
 ];

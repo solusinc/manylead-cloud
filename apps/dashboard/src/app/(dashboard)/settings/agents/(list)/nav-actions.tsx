@@ -9,7 +9,7 @@ export function NavActions() {
     <div className="flex items-center gap-2 text-sm">
       <NavFeedback />
       <Button size="sm" asChild>
-        <Link href="/settings/agents/create">Convidar Atendente</Link>
+        <Link href="/settings/agents/create">Convidar Membro</Link>
       </Button>
     </div>
   );

@@ -9,6 +9,7 @@ import { ptBR } from "date-fns/locale";
 import { DataTableRowActions } from "./data-table-row-actions";
 import { TableCellDate } from "~/components/data-table/table-cell-date";
 import { Avatar, AvatarFallback, AvatarImage } from "@manylead/ui/avatar";
+import { RoleSelectCell } from "./role-select-cell";
 
 type AgentWithUser = Agent & {
   user: {
@@ -98,13 +99,7 @@ export const columns: ColumnDef<AgentWithUser>[] = [
       <DataTableColumnHeader column={column} title="Cargo" />
     ),
     cell: ({ row }) => {
-      const role = String(row.getValue("role"));
-      const roleLabels: Record<string, string> = {
-        owner: "Proprietário",
-        admin: "Admin",
-        member: "Membro",
-      };
-      return <div>{roleLabels[role] ?? role}</div>;
+      return <RoleSelectCell agent={row.original} />;
     },
     enableSorting: true,
     enableHiding: true,

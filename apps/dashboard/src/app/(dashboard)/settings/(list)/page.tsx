@@ -32,9 +32,9 @@ const settings = [
     href: "/settings/departments",
   },
   {
-    title: "Atendentes",
+    title: "Membros",
     description:
-      "Gerencie sua equipe de atendimento e organize o relacionamento com seus clientes.",
+      "Gerencie os membros da sua equipe e organize o relacionamento com seus clientes.",
     href: "/settings/agents",
   },
   {

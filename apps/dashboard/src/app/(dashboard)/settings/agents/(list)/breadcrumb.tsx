@@ -13,7 +13,7 @@ export function Breadcrumb() {
           href: "/settings",
           icon: Cog,
         },
-        { type: "page", label: "Atendentes", icon: Users },
+        { type: "page", label: "Membros", icon: Users },
       ]}
     />
   );

@@ -54,26 +54,6 @@ export const columns: ColumnDef<Department>[] = [
     },
   },
   {
-    accessorKey: "description",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Descrição" />
-    ),
-    cell: ({ row }) => {
-      const value = row.getValue("description");
-      if (typeof value === "string") {
-        return (
-          <div className="max-w-[300px] truncate text-muted-foreground">
-            {value}
-          </div>
-        );
-      }
-      return (
-        <div className="max-w-[300px] truncate text-muted-foreground">-</div>
-      );
-    },
-    enableHiding: true,
-  },
-  {
     accessorKey: "autoAssignment",
     header: "Atribuição Automática",
     cell: ({ row }) => {

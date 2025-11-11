@@ -31,7 +31,7 @@ export default function Page() {
     <SectionGroup>
       <Section>
         <SectionHeader>
-          <SectionTitle>Convidar Atendente</SectionTitle>
+          <SectionTitle>Convidar Membro</SectionTitle>
         </SectionHeader>
         <FormInviteAgent
           onSubmitAction={async (values) => {
