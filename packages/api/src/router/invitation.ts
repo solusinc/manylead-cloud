@@ -111,7 +111,7 @@ export const invitationRouter = createTRPCRouter({
         headers: ctx.headers,
       });
 
-      // Create agent in tenant database
+      // Create agent in tenant database with role from invitation
       const tenantDb = await tenantManager.getConnection(organizationId);
 
       // Check if agent already exists
@@ -124,11 +124,11 @@ export const invitationRouter = createTRPCRouter({
       if (!existingAgent) {
         await tenantDb.insert(agent).values({
           userId: ctx.session.user.id,
+          role: inv[0].role ?? "member", // Use role from invitation
           permissions: {
             departments: { type: "all" },
             channels: { type: "all" },
           },
-          maxActiveConversations: 10,
           isActive: true,
         });
       }
@@ -160,6 +160,7 @@ export const invitationRouter = createTRPCRouter({
     .input(
       z.object({
         email: z.string().email("Email inválido"),
+        role: z.enum(["owner", "admin", "member"]).default("member"),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -191,7 +192,7 @@ export const invitationRouter = createTRPCRouter({
         body: {
           email: input.email,
           organizationId: activeOrgId,
-          role: "member",
+          role: input.role,
         },
         headers: ctx.headers,
       });

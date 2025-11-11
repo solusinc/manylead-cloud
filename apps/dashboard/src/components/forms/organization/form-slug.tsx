@@ -1,5 +1,9 @@
 "use client";
 
+import { Check, Copy } from "lucide-react";
+
+import { Button } from "@manylead/ui";
+
 import {
   FormCard,
   FormCardContent,
@@ -9,9 +13,7 @@ import {
   FormCardHeader,
   FormCardTitle,
 } from "~/components/forms/form-card";
-import { Button } from "@manylead/ui";
 import { useCopyToClipboard } from "~/hooks/use-copy-to-clipboard";
-import { Check, Copy } from "lucide-react";
 
 interface FormValues {
   slug: string;
@@ -46,7 +48,7 @@ export function FormSlug({ defaultValues }: { defaultValues?: FormValues }) {
           )}
         </Button>
       </FormCardContent>
-      <FormCardFooter className="[&>:last-child]:ml-0">
+      <FormCardFooter className="*:last:ml-0">
         <FormCardFooterInfo>
           Usado ao interagir com a API. Entre em contato se precisar alterá-lo.
         </FormCardFooterInfo>

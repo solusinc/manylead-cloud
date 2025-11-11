@@ -1,16 +1,15 @@
 import type { Config } from "drizzle-kit";
 
+import { env } from "./src/env";
+
 // Use DATABASE_URL_DIRECT for migrations (direct connection to PostgreSQL)
 // Drizzle Kit needs direct access, not via PgBouncer
-if (!process.env.DATABASE_URL_DIRECT) {
-  throw new Error("Missing DATABASE_URL_DIRECT");
-}
 
 export default {
   schema: "./src/schema/catalog/index.ts",
   out: "./drizzle/catalog",
   dialect: "postgresql",
-  dbCredentials: { url: process.env.DATABASE_URL_DIRECT },
+  dbCredentials: { url: env.DATABASE_URL_DIRECT },
   casing: "snake_case",
 
   // Ignore tables created by PostgreSQL extensions

@@ -1,7 +1,6 @@
 #!/usr/bin/env tsx
 import { createInterface } from "node:readline/promises";
 import { eq } from "drizzle-orm";
-import postgres from "postgres";
 
 import { db } from "@manylead/db/client";
 import { organization, member, session, tenant } from "@manylead/db";

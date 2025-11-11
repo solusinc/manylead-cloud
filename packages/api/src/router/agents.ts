@@ -1,12 +1,13 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import {
   agent,
   insertAgentSchema,
   selectAgentSchema,
   updateAgentSchema,
   user,
+  member,
 } from "@manylead/db";
 
 import { createTRPCRouter, protectedProcedure, tenantManager } from "../trpc";
@@ -220,7 +221,7 @@ export const agentsRouter = createTRPCRouter({
     }),
 
   /**
-   * Delete an agent
+   * Delete an agent (removes from tenant agent table + catalog member table)
    */
   delete: protectedProcedure
     .input(z.object({ id: z.uuid() }))
@@ -246,64 +247,55 @@ export const agentsRouter = createTRPCRouter({
       if (!existing) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "Agent não encontrado",
+          message: "Atendente não encontrado",
         });
       }
 
-      await tenantDb.delete(agent).where(eq(agent.id, input.id));
-
-      return { success: true };
-    }),
-
-  /**
-   * Update agent conversation count
-   * Used by auto-assignment system
-   */
-  updateConversationCount: protectedProcedure
-    .input(
-      z.object({
-        id: z.uuid(),
-        increment: z.boolean().default(true),
-      }),
-    )
-    .mutation(async ({ ctx, input }) => {
-      const organizationId = ctx.session.session.activeOrganizationId;
-
-      if (!organizationId) {
+      // Não pode deletar a si mesmo
+      if (existing.userId === ctx.session.user.id) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: "Nenhuma organização ativa",
+          message: "Você não pode remover a si mesmo da organização",
         });
       }
 
-      const tenantDb = await tenantManager.getConnection(organizationId);
+      // 1. Deletar agent do tenant database
+      await tenantDb.delete(agent).where(eq(agent.id, input.id));
 
-      const [existing] = await tenantDb
+      // 2. Verificar se existe member no catalog database e deletar
+      const [memberToDelete] = await ctx.db
         .select()
-        .from(agent)
-        .where(eq(agent.id, input.id))
+        .from(member)
+        .where(
+          and(
+            eq(member.userId, existing.userId),
+            eq(member.organizationId, organizationId),
+          ),
+        )
         .limit(1);
 
-      if (!existing) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Agent não encontrado",
-        });
+      if (memberToDelete) {
+        try {
+          // Remove member usando Better Auth API
+          // IMPORTANTE: Usar member.id (não userId) como memberIdOrEmail
+          await ctx.authApi.removeMember({
+            body: {
+              memberIdOrEmail: memberToDelete.id,
+              organizationId,
+            },
+            headers: ctx.headers,
+          });
+        } catch (error) {
+          // Se o member não existir no Better Auth, não é erro crítico
+          // O agent já foi removido do tenant DB com sucesso
+          console.warn(
+            `[agents.delete] Falha ao remover member via Better Auth (memberId: ${memberToDelete.id}):`,
+            error,
+          );
+          // Não lançar erro - o agent já foi removido do tenant DB
+        }
       }
 
-      const newCount = input.increment
-        ? existing.currentActiveConversations + 1
-        : Math.max(0, existing.currentActiveConversations - 1);
-
-      const [updated] = await tenantDb
-        .update(agent)
-        .set({
-          currentActiveConversations: newCount,
-          updatedAt: new Date(),
-        })
-        .where(eq(agent.id, input.id))
-        .returning();
-
-      return updated;
+      return { success: true };
     }),
 });

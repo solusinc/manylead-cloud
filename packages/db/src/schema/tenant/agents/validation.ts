@@ -2,12 +2,13 @@ import { z } from "zod";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 
 import { agent } from "./agent";
-import { accessTypes } from "./constants";
+import { accessTypes, agentRoles } from "./constants";
 
 /**
  * Enum schemas
  */
 export const accessTypeSchema = z.enum(accessTypes);
+export const agentRoleSchema = z.enum(agentRoles);
 
 /**
  * Permission schemas
@@ -31,6 +32,7 @@ const permissionsSchema = z.object({
  * Select schema
  */
 export const selectAgentSchema = createSelectSchema(agent, {
+  role: agentRoleSchema,
   departmentId: z
     .string()
     .uuid()
@@ -44,11 +46,11 @@ export const selectAgentSchema = createSelectSchema(agent, {
  */
 export const insertAgentSchema = createInsertSchema(agent, {
   userId: z.string().min(1, "User ID é obrigatório"),
+  role: agentRoleSchema.default("member"),
   permissions: permissionsSchema.default({
     departments: { type: "all" },
     channels: { type: "all" },
   }),
-  maxActiveConversations: z.number().int().min(1).max(100).default(10),
 });
 
 /**
@@ -64,3 +66,4 @@ export type NewAgent = z.infer<typeof insertAgentSchema>;
 export type UpdateAgent = z.infer<typeof updateAgentSchema>;
 export type AgentPermissions = z.infer<typeof permissionsSchema>;
 export type AccessType = z.infer<typeof accessTypeSchema>;
+export type AgentRole = z.infer<typeof agentRoleSchema>;

@@ -15,6 +15,13 @@
       "when": 1762791773005,
       "tag": "0001_secret_typhoid_mary",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1762815732878,
+      "tag": "0002_curly_arclight",
+      "breakpoints": true
     }
   ]
 }

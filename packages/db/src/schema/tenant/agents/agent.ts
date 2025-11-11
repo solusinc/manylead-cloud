@@ -5,7 +5,6 @@ import {
   varchar,
   timestamp,
   boolean,
-  integer,
   jsonb,
   index,
 } from "drizzle-orm/pg-core";
@@ -25,6 +24,10 @@ export const agent = pgTable(
 
     userId: varchar("user_id", { length: 255 }).notNull().unique(),
     // ID do Better Auth user
+
+    role: varchar("role", { length: 50 }).notNull().default("member"),
+    // Role do agente: owner | admin | member
+    // (espelhado do Better Auth member.role para evitar cross-DB)
 
     departmentId: uuid("department_id").references(() => department.id, {
       onDelete: "set null",
@@ -48,14 +51,6 @@ export const agent = pgTable(
         channels: { type: "all" },
       })
       .notNull(),
-
-    // Configurações de atendimento
-    maxActiveConversations: integer("max_active_conversations")
-      .notNull()
-      .default(10),
-    currentActiveConversations: integer("current_active_conversations")
-      .notNull()
-      .default(0),
 
     isActive: boolean("is_active").default(true).notNull(),
 

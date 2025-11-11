@@ -7,7 +7,6 @@ import type { Agent } from "@manylead/db";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { DataTableRowActions } from "./data-table-row-actions";
-import { Badge } from "@manylead/ui/badge";
 import { TableCellDate } from "~/components/data-table/table-cell-date";
 import { Avatar, AvatarFallback, AvatarImage } from "@manylead/ui/avatar";
 
@@ -94,27 +93,18 @@ export const columns: ColumnDef<AgentWithUser>[] = [
     enableHiding: true,
   },
   {
-    accessorKey: "currentActiveConversations",
-    header: "Conversas",
+    accessorKey: "role",
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Cargo" />
+    ),
     cell: ({ row }) => {
-      const current = row.original.currentActiveConversations;
-      const max = row.original.maxActiveConversations;
-      const percentage = (current / max) * 100;
-
-      return (
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-sm">
-            {current}/{max}
-          </span>
-          {percentage >= 80 ? (
-            <Badge variant="destructive">Alto</Badge>
-          ) : percentage >= 50 ? (
-            <Badge variant="default">Médio</Badge>
-          ) : (
-            <Badge variant="secondary">Baixo</Badge>
-          )}
-        </div>
-      );
+      const role = String(row.getValue("role"));
+      const roleLabels: Record<string, string> = {
+        owner: "Proprietário",
+        admin: "Admin",
+        member: "Membro",
+      };
+      return <div>{roleLabels[role] ?? role}</div>;
     },
     enableSorting: true,
     enableHiding: true,

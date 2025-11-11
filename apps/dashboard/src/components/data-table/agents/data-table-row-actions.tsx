@@ -1,17 +1,14 @@
 "use client";
 
-import type { Row } from "@tanstack/react-table";
-import { MoreHorizontal, Pencil } from "lucide-react";
-
+import { useTRPC } from "~/lib/trpc/react";
+import { useSession } from "~/lib/auth/client";
 import type { Agent } from "@manylead/db";
-import { Button } from "@manylead/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@manylead/ui/dropdown-menu";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import type { Row } from "@tanstack/react-table";
+import { useRouter } from "next/navigation";
+import { Edit, Copy } from "lucide-react";
+import { toast } from "sonner";
+import { QuickActions } from "~/components/dropdowns/quick-actions";
 
 type AgentWithUser = Agent & {
   user: {
@@ -27,27 +24,63 @@ interface DataTableRowActionsProps {
 }
 
 export function DataTableRowActions({ row }: DataTableRowActionsProps) {
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
+  const router = useRouter();
+  const { data: session } = useSession();
+
+  const deleteAgentMutation = useMutation(
+    trpc.agents.delete.mutationOptions({
+      onSuccess: () => {
+        void queryClient.invalidateQueries({
+          queryKey: trpc.agents.list.queryKey(),
+        });
+      },
+    }),
+  );
+
+  // Não mostrar ações para o próprio usuário se ele for owner
+  const isCurrentUserOwner =
+    session && row.original.userId === session.user.id && row.original.role === "owner";
+
+  if (isCurrentUserOwner) {
+    return null;
+  }
+
+  const actions = [
+    {
+      id: "edit",
+      label: "Editar",
+      icon: Edit,
+      variant: "default" as const,
+      onClick: () => {
+        router.push(`/settings/agents/${row.original.id}/edit`);
+      },
+    },
+    {
+      id: "copy-id",
+      label: "Copiar ID",
+      icon: Copy,
+      variant: "default" as const,
+      onClick: () => {
+        void navigator.clipboard.writeText(row.original.id);
+        toast.success("ID copiado");
+      },
+    },
+  ];
+
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          className="data-[state=open]:bg-muted flex h-8 w-8 p-0"
-        >
-          <MoreHorizontal className="h-4 w-4" />
-          <span className="sr-only">Abrir menu</span>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-40">
-        <DropdownMenuItem asChild>
-          <a href={`/settings/agents/${row.original.id}/edit`}>
-            <Pencil className="mr-2 h-4 w-4" />
-            Editar
-          </a>
-        </DropdownMenuItem>
-        <DropdownMenuSeparator />
-        {/* TODO: Adicionar ação de deletar quando necessário */}
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <QuickActions
+      actions={actions}
+      deleteAction={{
+        title: row.original.user?.name ?? "este atendente",
+        confirmationValue: "deletar atendente",
+        submitAction: async () => {
+          await deleteAgentMutation.mutateAsync({
+            id: row.original.id,
+          });
+        },
+      }}
+    />
   );
 }

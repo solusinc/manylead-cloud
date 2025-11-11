@@ -3,6 +3,8 @@ import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { eq } from "drizzle-orm";
 import postgres from "postgres";
 import * as catalogSchema from "@manylead/db";
+import { join, dirname } from "path";
+import { fileURLToPath } from "url";
 
 import { databaseHost, tenant } from "@manylead/db";
 import type { Tenant } from "@manylead/db";
@@ -20,6 +22,11 @@ import type {
   MigrationResult,
   ProvisionTenantParams,
 } from "./types";
+import { env } from "./env";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const TENANT_MIGRATIONS_PATH = join(__dirname, "..", "drizzle", "tenant");
 
 export class TenantDatabaseManager {
   private catalogDb;
@@ -27,8 +34,7 @@ export class TenantDatabaseManager {
   private activityLogger: ActivityLogger;
 
   constructor(catalogConnectionString?: string) {
-    const connString =
-      catalogConnectionString ?? process.env.DATABASE_URL_DIRECT;
+    const connString = catalogConnectionString ?? env.DATABASE_URL_DIRECT;
 
     if (!connString) {
       throw new Error("Missing catalog database connection string");
@@ -45,6 +51,18 @@ export class TenantDatabaseManager {
 
   async provisionTenant(params: ProvisionTenantParams): Promise<Tenant> {
     const startTime = Date.now();
+
+    // TODO FASE-3: Mover provisionamento para worker/background job
+    // Benefícios:
+    // - Não bloqueia request HTTP (evita timeout em provisioning lento)
+    // - Melhor UX: usuário vê progresso em tempo real
+    // - Retry automático em caso de falha
+    // - Monitoramento e observabilidade melhores
+    // Implementação sugerida:
+    // - Criar queue (BullMQ ou similar)
+    // - Status "provisioning" -> websocket/polling na UI
+    // - Worker processa: CREATE DB -> migrations -> extensions -> update status "active"
+    // - UI recebe notificação quando pronto
 
     if (!isValidSlug(params.slug)) {
       throw new Error(`Invalid slug: ${params.slug}`);
@@ -87,12 +105,8 @@ export class TenantDatabaseManager {
       host = result[0];
     }
 
-    const postgresUser = process.env.POSTGRES_USER ?? "postgres";
-    const postgresPassword = process.env.POSTGRES_PASSWORD;
-
-    if (!postgresPassword) {
-      throw new Error("Missing POSTGRES_PASSWORD");
-    }
+    const postgresUser = env.POSTGRES_USER;
+    const postgresPassword = env.POSTGRES_PASSWORD;
 
     const connectionString = buildConnectionString({
       host: host.host,
@@ -158,9 +172,9 @@ export class TenantDatabaseManager {
       await tenantClient.unsafe("CREATE EXTENSION IF NOT EXISTS pg_partman");
       await tenantClient.unsafe("CREATE EXTENSION IF NOT EXISTS dblink");
 
-      // TODO FASE-2: Rodar migrations quando tiver schema tenant
-      // const tenantDb = drizzle(tenantClient);
-      // await migrate(tenantDb, { migrationsFolder: "drizzle/tenant" });
+      // Rodar migrations do tenant
+      const tenantDb = drizzle(tenantClient);
+      await migrate(tenantDb, { migrationsFolder: TENANT_MIGRATIONS_PATH });
 
       await tenantClient.end();
 
@@ -260,7 +274,7 @@ export class TenantDatabaseManager {
       });
 
       const db = drizzle(client);
-      await migrate(db, { migrationsFolder: "drizzle/tenant" });
+      await migrate(db, { migrationsFolder: TENANT_MIGRATIONS_PATH });
       await client.end();
 
       const duration = Date.now() - startTime;
@@ -475,12 +489,8 @@ export class TenantDatabaseManager {
       throw new Error(`Tenant not found: ${organizationId}`);
     }
 
-    const postgresUser = process.env.POSTGRES_USER;
-    const postgresPassword = process.env.POSTGRES_PASSWORD;
-
-    if (!postgresUser || !postgresPassword) {
-      throw new Error("Missing POSTGRES_USER or POSTGRES_PASSWORD");
-    }
+    const postgresUser = env.POSTGRES_USER;
+    const postgresPassword = env.POSTGRES_PASSWORD;
 
     // Logar ANTES de deletar (senão viola foreign key)
     await this.activityLogger.logTenantDeleted(

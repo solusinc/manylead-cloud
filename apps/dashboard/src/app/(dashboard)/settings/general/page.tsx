@@ -10,9 +10,9 @@ import {
   SectionTitle,
 } from "~/components/content/section";
 import { FormCardGroup } from "~/components/forms/form-card";
-import { FormMembers } from "~/components/forms/settings/form-members";
-import { FormOrganization } from "~/components/forms/settings/form-organization";
-import { FormSlug } from "~/components/forms/settings/form-slug";
+import { FormMembers } from "~/components/forms/members/form-invite";
+import { FormOrganization } from "~/components/forms/organization/form-general";
+import { FormSlug } from "~/components/forms/organization/form-slug";
 import { useTRPC } from "~/lib/trpc/react";
 
 export default function Page() {

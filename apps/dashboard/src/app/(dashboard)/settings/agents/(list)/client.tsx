@@ -13,6 +13,8 @@ import { AgentDataTableToolbar } from "~/components/data-table/agents/data-table
 import { DataTable } from "~/components/ui/data-table/data-table";
 import { DataTableSkeleton } from "~/components/ui/data-table/data-table-skeleton";
 import { DataTablePaginationSimple } from "~/components/ui/data-table/data-table-pagination";
+import { DataTable as InvitationsDataTable } from "~/components/data-table/settings/invitations/data-table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@manylead/ui";
 import { useTRPC } from "~/lib/trpc/react";
 import { useQuery } from "@tanstack/react-query";
 import type { ColumnFiltersState, SortingState } from "@tanstack/react-table";
@@ -33,27 +35,36 @@ export function Client() {
             Gerencie sua equipe de atendimento e suas permissões.
           </SectionDescription>
         </SectionHeader>
-      </Section>
-      <Section>
-        {isLoading ? (
-          <DataTableSkeleton rows={5} />
-        ) : agents ? (
-          <DataTable
-            columns={columns}
-            data={agents}
-            actionBar={AgentDataTableActionBar}
-            toolbarComponent={AgentDataTableToolbar}
-            paginationComponent={DataTablePaginationSimple}
-            columnFilters={columnFilters}
-            setColumnFilters={setColumnFilters}
-            sorting={sorting}
-            setSorting={setSorting}
-            defaultColumnVisibility={{
-              email: false,
-              createdAt: false,
-            }}
-          />
-        ) : null}
+        <Tabs defaultValue="agents">
+          <TabsList>
+            <TabsTrigger value="agents">Atendentes</TabsTrigger>
+            <TabsTrigger value="pending">Pendentes</TabsTrigger>
+          </TabsList>
+          <TabsContent value="agents">
+            {isLoading ? (
+              <DataTableSkeleton rows={5} />
+            ) : agents ? (
+              <DataTable
+                columns={columns}
+                data={agents}
+                actionBar={AgentDataTableActionBar}
+                toolbarComponent={AgentDataTableToolbar}
+                paginationComponent={DataTablePaginationSimple}
+                columnFilters={columnFilters}
+                setColumnFilters={setColumnFilters}
+                sorting={sorting}
+                setSorting={setSorting}
+                defaultColumnVisibility={{
+                  email: false,
+                  createdAt: false,
+                }}
+              />
+            ) : null}
+          </TabsContent>
+          <TabsContent value="pending">
+            <InvitationsDataTable />
+          </TabsContent>
+        </Tabs>
       </Section>
     </SectionGroup>
   );

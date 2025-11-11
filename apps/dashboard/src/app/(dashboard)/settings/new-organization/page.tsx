@@ -11,7 +11,7 @@ import {
   SectionTitle,
 } from "~/components/content/section";
 import { FormCardGroup } from "~/components/forms/form-card";
-import { FormCreateOrganization } from "~/components/forms/settings/form-create-organization";
+import { FormCreateOrganization } from "~/components/forms/organization/form-create";
 import { useTRPC } from "~/lib/trpc/react";
 
 export default function Page() {

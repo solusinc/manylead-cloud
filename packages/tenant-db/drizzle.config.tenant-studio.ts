@@ -1,5 +1,7 @@
 import type { Config } from "drizzle-kit";
 
+import { env } from "./src/env";
+
 /**
  * Tenant Studio Configuration
  *
@@ -16,12 +18,8 @@ if (!tenantDbName) {
 	);
 }
 
-if (!process.env.DATABASE_URL_DIRECT) {
-	throw new Error("Missing DATABASE_URL_DIRECT");
-}
-
 // Replace database name in connection string
-const baseUrl = process.env.DATABASE_URL_DIRECT;
+const baseUrl = env.DATABASE_URL_DIRECT;
 const urlParts = baseUrl.split("/");
 urlParts[urlParts.length - 1] = tenantDbName;
 const tenantUrl = urlParts.join("/");

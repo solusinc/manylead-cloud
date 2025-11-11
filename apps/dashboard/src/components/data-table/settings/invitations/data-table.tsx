@@ -40,34 +40,38 @@ export function DataTable() {
           <TableHead>Email</TableHead>
           <TableHead>Cargo</TableHead>
           <TableHead>Criado em</TableHead>
-          <TableHead>Expira em</TableHead>
-          <TableHead>Aceito em</TableHead>
           <TableHead>
             <span className="sr-only">Ações</span>
           </TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
-        {invitations.map((item) => (
-          <TableRow key={item.id}>
-            <TableCell>{item.email}</TableCell>
-            <TableCell>{item.role}</TableCell>
-            <TableCell>{formatDate(item.createdAt)}</TableCell>
-            <TableCell>{formatDate(item.expiresAt)}</TableCell>
-            <TableCell>-</TableCell>
-            <TableCell>
-              <div className="flex justify-end">
-                <QuickActions
-                  deleteAction={{
-                    title: "Convite",
-                    submitAction: async () =>
-                      deleteInvitationMutation.mutateAsync({ id: item.id }),
-                  }}
-                />
-              </div>
-            </TableCell>
-          </TableRow>
-        ))}
+        {invitations.map((item) => {
+          const roleLabels: Record<string, string> = {
+            owner: "Proprietário",
+            admin: "Admin",
+            member: "Membro",
+          };
+
+          return (
+            <TableRow key={item.id}>
+              <TableCell>{item.email}</TableCell>
+              <TableCell>{roleLabels[item.role ?? "member"] ?? item.role}</TableCell>
+              <TableCell>{formatDate(item.createdAt)}</TableCell>
+              <TableCell>
+                <div className="flex justify-end">
+                  <QuickActions
+                    deleteAction={{
+                      title: "Convite",
+                      submitAction: async () =>
+                        deleteInvitationMutation.mutateAsync({ id: item.id }),
+                    }}
+                  />
+                </div>
+              </TableCell>
+            </TableRow>
+          );
+        })}
       </TableBody>
     </Table>
   );

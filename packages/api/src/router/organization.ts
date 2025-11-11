@@ -3,7 +3,7 @@ import slugify from "slugify";
 import { TRPCError } from "@trpc/server";
 import { and, eq } from "drizzle-orm";
 import { TenantDatabaseManager, ActivityLogger } from "@manylead/tenant-db";
-import { member, organization } from "@manylead/db";
+import { member, organization, agent } from "@manylead/db";
 
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
@@ -77,6 +77,18 @@ export const organizationRouter = createTRPCRouter({
           name: input.name,
         });
         tenantProvisioned = true;
+
+        // 4.5. Cria agent para o owner (creator da organização)
+        const tenantDb = await tenantManager.getConnection(createdOrg.id);
+        await tenantDb.insert(agent).values({
+          userId: ctx.session.user.id,
+          role: "owner",
+          permissions: {
+            departments: { type: "all" },
+            channels: { type: "all" },
+          },
+          isActive: true,
+        });
 
         // 5. Define esta organização como ativa na sessão
         await ctx.authApi.setActiveOrganization({
@@ -227,14 +239,64 @@ export const organizationRouter = createTRPCRouter({
       return null;
     }
 
-    // Busca a organização ativa
+    // Busca a organização ativa E verifica se o usuário ainda é member
+    // IMPORTANTE: Usa INNER JOIN para garantir que só retorna se o usuário for member
     const currentOrg = await ctx.db
-      .select()
+      .select({
+        id: organization.id,
+        name: organization.name,
+        slug: organization.slug,
+        logo: organization.logo,
+        createdAt: organization.createdAt,
+        metadata: organization.metadata,
+      })
       .from(organization)
-      .where(eq(organization.id, activeOrgId))
+      .innerJoin(member, eq(member.organizationId, organization.id))
+      .where(
+        and(
+          eq(organization.id, activeOrgId),
+          eq(member.userId, ctx.session.user.id),
+        ),
+      )
       .limit(1);
 
+    // Se não achou, significa que o usuário foi removido da org
+    // Limpar activeOrganizationId e tentar pegar outra org
     if (currentOrg.length === 0 || !currentOrg[0]) {
+      // Tentar pegar outra organização do usuário
+      const otherOrgs = await ctx.db
+        .select({ id: organization.id })
+        .from(organization)
+        .innerJoin(member, eq(member.organizationId, organization.id))
+        .where(eq(member.userId, ctx.session.user.id))
+        .limit(1);
+
+      if (otherOrgs.length > 0 && otherOrgs[0]) {
+        // Setar outra organização como ativa
+        await ctx.authApi.setActiveOrganization({
+          body: {
+            organizationId: otherOrgs[0].id,
+          },
+          headers: ctx.headers,
+        });
+
+        // Buscar a nova org ativa
+        const newOrg = await ctx.db
+          .select({
+            id: organization.id,
+            name: organization.name,
+            slug: organization.slug,
+            logo: organization.logo,
+            createdAt: organization.createdAt,
+            metadata: organization.metadata,
+          })
+          .from(organization)
+          .where(eq(organization.id, otherOrgs[0].id))
+          .limit(1);
+
+        return newOrg[0] ?? null;
+      }
+
       return null;
     }
 
