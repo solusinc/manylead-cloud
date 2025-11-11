@@ -35,6 +35,7 @@ import {
   DataTableActionBarSelection,
 } from "~/components/ui/data-table/data-table-action-bar";
 import { useTRPC } from "~/lib/trpc/react";
+import { usePermissions } from "~/lib/permissions";
 
 const ACTIVE = [
   { label: "ativo", value: true },
@@ -54,6 +55,12 @@ export function DepartmentDataTableActionBar({
   const rows = table.getFilteredSelectedRowModel().rows;
   const trpc = useTRPC();
   const queryClient = useQueryClient();
+  const { can } = usePermissions();
+
+  // Não mostrar action bar se não tiver permissão
+  if (!can("manage", "Department")) {
+    return null;
+  }
 
   const deleteDepartmentsMutation = useMutation(
     trpc.departments.deleteDepartments.mutationOptions({

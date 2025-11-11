@@ -10,6 +10,7 @@ import { DataTableRowActions } from "./data-table-row-actions";
 import { TableCellDate } from "~/components/data-table/table-cell-date";
 import { Avatar, AvatarFallback, AvatarImage } from "@manylead/ui/avatar";
 import { RoleSelectCell } from "./role-select-cell";
+import { usePermissions } from "~/lib/permissions";
 
 type AgentWithUser = Agent & {
   user: {
@@ -19,6 +20,34 @@ type AgentWithUser = Agent & {
     image: string | null;
   } | null;
 };
+
+function AgentNameCell({ agent }: { agent: AgentWithUser }) {
+  const { can } = usePermissions();
+  const user = agent.user;
+
+  if (!user) return <div className="text-muted-foreground">-</div>;
+
+  return (
+    <div className="flex items-center gap-2">
+      <Avatar className="h-8 w-8">
+        <AvatarImage src={user.image ?? undefined} alt={user.name} />
+        <AvatarFallback>
+          {user.name.charAt(0).toUpperCase()}
+        </AvatarFallback>
+      </Avatar>
+      {can("manage", "Agent") ? (
+        <a
+          href={`/settings/agents/${agent.id}/edit`}
+          className="font-medium hover:underline"
+        >
+          {user.name}
+        </a>
+      ) : (
+        <span className="font-medium">{user.name}</span>
+      )}
+    </div>
+  );
+}
 
 export const columns: ColumnDef<AgentWithUser>[] = [
   {
@@ -50,25 +79,7 @@ export const columns: ColumnDef<AgentWithUser>[] = [
       <DataTableColumnHeader column={column} title="Nome" />
     ),
     cell: ({ row }) => {
-      const user = row.original.user;
-      if (!user) return <div className="text-muted-foreground">-</div>;
-
-      return (
-        <div className="flex items-center gap-2">
-          <Avatar className="h-8 w-8">
-            <AvatarImage src={user.image ?? undefined} alt={user.name} />
-            <AvatarFallback>
-              {user.name.charAt(0).toUpperCase()}
-            </AvatarFallback>
-          </Avatar>
-          <a
-            href={`/settings/agents/${row.original.id}/edit`}
-            className="font-medium hover:underline"
-          >
-            {user.name}
-          </a>
-        </div>
-      );
+      return <AgentNameCell agent={row.original} />;
     },
     enableHiding: false,
     meta: {

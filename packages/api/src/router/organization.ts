@@ -5,7 +5,7 @@ import { and, eq } from "drizzle-orm";
 import { TenantDatabaseManager, ActivityLogger } from "@manylead/tenant-db";
 import { member, organization, agent } from "@manylead/db";
 
-import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure, adminProcedure } from "../trpc";
 
 const tenantManager = new TenantDatabaseManager();
 const activityLogger = new ActivityLogger();
@@ -327,7 +327,7 @@ export const organizationRouter = createTRPCRouter({
   /**
    * Update organization name
    */
-  updateName: protectedProcedure
+  updateName: adminProcedure
     .input(
       z.object({
         name: z.string().min(2, "Nome deve ter no mínimo 2 caracteres"),

@@ -1,13 +1,17 @@
+"use client";
+
 import { QuickActions } from "~/components/dropdowns/quick-actions";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@manylead/ui";
 import { formatDate } from "~/lib/formatter";
 import { useTRPC } from "~/lib/trpc/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useSession } from "~/lib/auth/client";
+import { usePermissions } from "~/lib/permissions";
 
 export function DataTable() {
   const trpc = useTRPC();
   const { data: session } = useSession();
+  const { can } = usePermissions();
   const { data: members, refetch } = useQuery(trpc.member.list.queryOptions());
   const deleteMemberMutation = useMutation(
     trpc.member.delete.mutationOptions({
@@ -34,7 +38,7 @@ export function DataTable() {
         {members.map((item) => {
           const isOwner = item.role === "owner";
           const isCurrentUser = session?.user.id === item.user.id;
-          const canDelete = !isOwner && !isCurrentUser;
+          const canDelete = can("manage", "Agent") && !isOwner && !isCurrentUser;
 
           return (
             <TableRow key={item.user.id}>

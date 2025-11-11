@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { Edit, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { QuickActions } from "~/components/dropdowns/quick-actions";
+import { usePermissions } from "~/lib/permissions";
 
 type AgentWithUser = Agent & {
   user: {
@@ -28,6 +29,7 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
   const queryClient = useQueryClient();
   const router = useRouter();
   const { data: session } = useSession();
+  const { can } = usePermissions();
 
   const deleteAgentMutation = useMutation(
     trpc.agents.delete.mutationOptions({
@@ -38,6 +40,11 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
       },
     }),
   );
+
+  // Não mostrar ações se não tiver permissão
+  if (!can("manage", "Agent")) {
+    return null;
+  }
 
   // Não mostrar ações para o próprio usuário se ele for owner
   const isCurrentUserOwner =

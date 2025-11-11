@@ -18,14 +18,14 @@ export function OrganizationGuard() {
     ...trpc.organization.getCurrent.queryOptions(),
     refetchInterval: 30000,
     refetchOnWindowFocus: true,
-    staleTime: 0,
+    staleTime: 10000, // Considera dados frescos por 10s
   });
 
   const { data: organizations, isLoading: isLoadingOrgs } = useQuery({
     ...trpc.organization.list.queryOptions(),
     refetchInterval: 30000,
     refetchOnWindowFocus: true,
-    staleTime: 0,
+    staleTime: 10000, // Considera dados frescos por 10s
   });
 
   useEffect(() => {

@@ -9,6 +9,12 @@ catalogs:
     '@better-auth/cli':
       specifier: 1.4.0-beta.9
       version: 1.4.0-beta.9
+    '@casl/ability':
+      specifier: 6.7.3
+      version: 6.7.3
+    '@casl/react':
+      specifier: 5.0.0
+      version: 5.0.0
     '@eslint/js':
       specifier: ^9.38.0
       version: 9.39.1
@@ -112,6 +118,9 @@ importers:
 
   apps/dashboard:
     dependencies:
+      '@casl/react':
+        specifier: 'catalog:'
+        version: 5.0.0(@casl/ability@6.7.3)(react@19.2.0)
       '@manylead/api':
         specifier: workspace:*
         version: link:../../packages/api
@@ -121,6 +130,9 @@ importers:
       '@manylead/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@manylead/permissions':
+        specifier: workspace:*
+        version: link:../../packages/permissions
       '@manylead/ui':
         specifier: workspace:*
         version: link:../../packages/ui
@@ -251,6 +263,9 @@ importers:
       '@manylead/emails':
         specifier: workspace:*
         version: link:../emails
+      '@manylead/permissions':
+        specifier: workspace:*
+        version: link:../permissions
       '@manylead/tenant-db':
         specifier: workspace:*
         version: link:../tenant-db
@@ -435,6 +450,34 @@ importers:
       react:
         specifier: 19.2.0
         version: 19.2.0
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+
+  packages/permissions:
+    dependencies:
+      '@casl/ability':
+        specifier: 'catalog:'
+        version: 6.7.3
+    devDependencies:
+      '@manylead/eslint-config':
+        specifier: workspace:*
+        version: link:../../tooling/eslint
+      '@manylead/prettier-config':
+        specifier: workspace:*
+        version: link:../../tooling/prettier
+      '@manylead/tsconfig':
+        specifier: workspace:*
+        version: link:../../tooling/typescript
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.19.0
+      eslint:
+        specifier: 'catalog:'
+        version: 9.39.1(jiti@2.6.1)
+      prettier:
+        specifier: 'catalog:'
+        version: 3.6.2
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
@@ -944,6 +987,15 @@ packages:
 
   '@better-fetch/fetch@1.1.18':
     resolution: {integrity: sha512-rEFOE1MYIsBmoMJtQbl32PGHHXuG2hDxvEd7rUHE0vCBoFQVSDqaVs9hkZEtHCxRoY+CljXKFCOuJ8uxqw1LcA==}
+
+  '@casl/ability@6.7.3':
+    resolution: {integrity: sha512-A4L28Ko+phJAsTDhRjzCOZWECQWN2jzZnJPnROWWHjJpyMq1h7h9ZqjwS2WbIUa3Z474X1ZPSgW0f1PboZGC0A==}
+
+  '@casl/react@5.0.0':
+    resolution: {integrity: sha512-jiwr6uOBnQA7h0gs+RJIbFVF24Dw6JLiUPL4pfU0OEjWSJFCcYBz6RPU21XNciWL6xwFDOds81cHosuElxfdmw==}
+    peerDependencies:
+      '@casl/ability': ^4.0.0 || ^5.1.0 || ^6.0.0
+      react: ^17.0.0 || ^18.0.0 || ^19.0.0
 
   '@chevrotain/cst-dts-gen@10.5.0':
     resolution: {integrity: sha512-lhmC/FyqQ2o7pGK4Om+hzuDrm9rhFYIJ/AXoQBeongmn870Xeb0L6oGEiuR8nohFNL5sMaQEJWCxr1oIVIVXrw==}
@@ -3689,6 +3741,18 @@ packages:
   '@typescript-eslint/visitor-keys@8.46.3':
     resolution: {integrity: sha512-uk574k8IU0rOF/AjniX8qbLSGURJVUCeM5e4MIMKBFFi8weeiLrG1fyQejyLXQpRZbU/1BuQasleV/RfHC3hHg==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
+
+  '@ucast/core@1.10.2':
+    resolution: {integrity: sha512-ons5CwXZ/51wrUPfoduC+cO7AS1/wRb0ybpQJ9RrssossDxVy4t49QxWoWgfBDvVKsz9VXzBk9z0wqTdZ+Cq8g==}
+
+  '@ucast/js@3.0.4':
+    resolution: {integrity: sha512-TgG1aIaCMdcaEyckOZKQozn1hazE0w90SVdlpIJ/er8xVumE11gYAtSbw/LBeUnA4fFnFWTcw3t6reqseeH/4Q==}
+
+  '@ucast/mongo2js@1.4.0':
+    resolution: {integrity: sha512-vR9RJ3BHlkI3RfKJIZFdVktxWvBCQRiSTeJSWN9NPxP5YJkpfXvcBWAMLwvyJx4HbB+qib5/AlSDEmQiuQyx2w==}
+
+  '@ucast/mongo@2.4.3':
+    resolution: {integrity: sha512-XcI8LclrHWP83H+7H2anGCEeDq0n+12FU2mXCTz6/Tva9/9ddK/iacvvhCyW6cijAAOILmt0tWplRyRhVyZLsA==}
 
   '@vercel/postgres@0.10.0':
     resolution: {integrity: sha512-fSD23DxGND40IzSkXjcFcxr53t3Tiym59Is0jSYIFpG4/0f0KO9SGtcp1sXiebvPaGe7N/tU05cH4yt2S6/IPg==}
@@ -7407,6 +7471,15 @@ snapshots:
 
   '@better-fetch/fetch@1.1.18': {}
 
+  '@casl/ability@6.7.3':
+    dependencies:
+      '@ucast/mongo2js': 1.4.0
+
+  '@casl/react@5.0.0(@casl/ability@6.7.3)(react@19.2.0)':
+    dependencies:
+      '@casl/ability': 6.7.3
+      react: 19.2.0
+
   '@chevrotain/cst-dts-gen@10.5.0':
     dependencies:
       '@chevrotain/gast': 10.5.0
@@ -10239,6 +10312,22 @@ snapshots:
     dependencies:
       '@typescript-eslint/types': 8.46.3
       eslint-visitor-keys: 4.2.1
+
+  '@ucast/core@1.10.2': {}
+
+  '@ucast/js@3.0.4':
+    dependencies:
+      '@ucast/core': 1.10.2
+
+  '@ucast/mongo2js@1.4.0':
+    dependencies:
+      '@ucast/core': 1.10.2
+      '@ucast/js': 3.0.4
+      '@ucast/mongo': 2.4.3
+
+  '@ucast/mongo@2.4.3':
+    dependencies:
+      '@ucast/core': 1.10.2
 
   '@vercel/postgres@0.10.0':
     dependencies:

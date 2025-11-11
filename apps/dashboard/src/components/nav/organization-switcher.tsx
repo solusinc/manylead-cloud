@@ -21,12 +21,14 @@ import {
 } from "@manylead/ui/sidebar";
 
 import { useTRPC } from "~/lib/trpc/react";
+import { usePermissions } from "~/lib/permissions";
 
 export function OrganizationSwitcher() {
   const { isMobile, setOpenMobile } = useSidebar();
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const router = useRouter();
+  const { can } = usePermissions();
 
   // OrganizationGuard cuida do refetch e redirecionamento global
   const { data: organization, isLoading: isLoadingOrg } = useQuery(
@@ -138,15 +140,19 @@ export function OrganizationSwitcher() {
                 </span>
               </DropdownMenuItem>
             ))}
-            <DropdownMenuSeparator />
-            <DropdownMenuItem className="gap-2 p-2" asChild>
-              <Link href="/settings/general">
-                <Plus />
-                <div className="font-inter text-muted-foreground tracking-tight">
-                  Adicionar membro
-                </div>
-              </Link>
-            </DropdownMenuItem>
+            {can("manage", "Agent") && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="gap-2 p-2" asChild>
+                  <Link href="/settings/agents">
+                    <Plus />
+                    <div className="font-inter text-muted-foreground tracking-tight">
+                      Adicionar membro
+                    </div>
+                  </Link>
+                </DropdownMenuItem>
+              </>
+            )}
           </DropdownMenuContent>
         </DropdownMenu>
       </SidebarMenuItem>

@@ -13,9 +13,11 @@
     "with-env": "dotenv -e ../../.env --"
   },
   "dependencies": {
+    "@casl/react": "catalog:",
     "@manylead/api": "workspace:*",
     "@manylead/auth": "workspace:*",
     "@manylead/db": "workspace:*",
+    "@manylead/permissions": "workspace:*",
     "@manylead/ui": "workspace:*",
     "@radix-ui/react-dropdown-menu": "2.1.15",
     "@radix-ui/react-select": "2.2.5",

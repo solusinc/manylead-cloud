@@ -1,4 +1,9 @@
-import { createTRPCRouter, protectedProcedure, tenantManager } from "../trpc";
+import {
+  createTRPCRouter,
+  protectedProcedure,
+  adminProcedure,
+  tenantManager,
+} from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import { and, eq, gte } from "drizzle-orm";
@@ -155,8 +160,9 @@ export const invitationRouter = createTRPCRouter({
 
   /**
    * Create a new invitation and send email
+   * Only admins and owners can create invitations (enforced by adminProcedure)
    */
-  create: protectedProcedure
+  create: adminProcedure
     .input(
       z.object({
         email: z.string().email("Email inválido"),
@@ -226,7 +232,7 @@ export const invitationRouter = createTRPCRouter({
   /**
    * List all pending invitations for the active organization
    */
-  list: protectedProcedure.query(async ({ ctx }) => {
+  list: adminProcedure.query(async ({ ctx }) => {
     const activeOrgId = ctx.session.session.activeOrganizationId;
 
     if (!activeOrgId) {
@@ -252,8 +258,9 @@ export const invitationRouter = createTRPCRouter({
 
   /**
    * Delete an invitation
+   * Only admins and owners can delete invitations (enforced by adminProcedure)
    */
-  delete: protectedProcedure
+  delete: adminProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const activeOrgId = ctx.session.session.activeOrganizationId;

@@ -35,15 +35,18 @@ import {
 } from "@manylead/ui/sidebar";
 import { useTheme } from "@manylead/ui/theme";
 
-import { authClient, useSession } from "~/lib/auth/client";
+import { authClient } from "~/lib/auth/client";
 import { useTRPC } from "~/lib/trpc/react";
+import { usePermissions } from "~/lib/permissions";
+import { useServerSession } from "~/components/providers/session-provider";
 
 export function NavUser() {
   const { isMobile, setOpenMobile } = useSidebar();
   const { themeMode, setTheme } = useTheme();
-  const { data: session } = useSession();
+  const session = useServerSession();
   const router = useRouter();
   const trpc = useTRPC();
+  const { can } = usePermissions();
 
   const { data: organization, isLoading: isLoadingOrg } = useQuery(
     trpc.organization.getCurrent.queryOptions(),
@@ -59,7 +62,7 @@ export function NavUser() {
     return null;
   }
 
-  if (!session?.user || !activeOrg) {
+  if (!activeOrg) {
     return null;
   }
 
@@ -174,15 +177,17 @@ export function NavUser() {
                   </DropdownMenuSubContent>
                 </DropdownMenuPortal>
               </DropdownMenuSub>
-              <DropdownMenuItem asChild>
-                <Link
-                  href="/settings/billing"
-                  onClick={() => setOpenMobile(false)}
-                >
-                  <CreditCard />
-                  Faturamento
-                </Link>
-              </DropdownMenuItem>
+              {can("read", "Billing") && (
+                <DropdownMenuItem asChild>
+                  <Link
+                    href="/settings/billing"
+                    onClick={() => setOpenMobile(false)}
+                  >
+                    <CreditCard />
+                    Faturamento
+                  </Link>
+                </DropdownMenuItem>
+              )}
             </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem

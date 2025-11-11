@@ -8,6 +8,7 @@ import type { Row } from "@tanstack/react-table";
 import { useRouter } from "next/navigation";
 import { Edit, Copy } from "lucide-react";
 import { toast } from "sonner";
+import { usePermissions } from "~/lib/permissions";
 
 interface DataTableRowActionsProps {
   row: Row<Department>;
@@ -17,6 +18,7 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const router = useRouter();
+  const { can } = usePermissions();
 
   const deleteDepartmentMutation = useMutation(
     trpc.departments.delete.mutationOptions({
@@ -27,6 +29,11 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
       },
     }),
   );
+
+  // Não mostrar ações se não tiver permissão
+  if (!can("manage", "Department")) {
+    return null;
+  }
 
   const actions = [
     {

@@ -1,28 +1,28 @@
+import { dirname, join } from "path";
+import { fileURLToPath } from "url";
+import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
-import { eq } from "drizzle-orm";
 import postgres from "postgres";
-import * as catalogSchema from "@manylead/db";
-import { join, dirname } from "path";
-import { fileURLToPath } from "url";
 
-import { databaseHost, tenant } from "@manylead/db";
 import type { Tenant } from "@manylead/db";
+import * as catalogSchema from "@manylead/db";
+import { databaseHost, tenant } from "@manylead/db";
 
-import { ActivityLogger } from "./activity-logger";
-import {
-  buildConnectionString,
-  generateDatabaseName,
-  isValidSlug,
-  retryWithBackoff,
-} from "./utils";
 import type {
   HealthCheckResult,
   MigrateAllOptions,
   MigrationResult,
   ProvisionTenantParams,
 } from "./types";
+import { ActivityLogger } from "./activity-logger";
 import { env } from "./env";
+import {
+  buildConnectionString,
+  generateDatabaseName,
+  isValidSlug,
+  retryWithBackoff,
+} from "./utils";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -33,19 +33,67 @@ export class TenantDatabaseManager {
   private catalogClient;
   private activityLogger: ActivityLogger;
 
+  // TODO: Implementar cache distribuído com Redis para query results
+  //
+  // ESTRATÉGIA ATUAL (in-memory Map):
+  // - ✅ Funciona bem em single-instance (380ms em cache hit)
+  // - ❌ Não compartilha cache entre múltiplas instâncias do Node.js
+  // - ❌ Perde cache em restart/deploy
+  // - ❌ Limitado pela memória RAM de uma única máquina
+  //
+  // ESTRATÉGIA FUTURA (Redis):
+  // - ✅ Cache distribuído entre todas as instâncias
+  // - ✅ Persiste entre deploys
+  // - ✅ Suporta TTL e invalidação granular
+  // - ✅ Redução esperada: ~95% (380ms → ~50ms em warm cache)
+  //
+  // QUANDO IMPLEMENTAR:
+  // - Ao escalar horizontalmente (múltiplas instâncias do Node.js)
+  // - Quando frequência de deploy causar muitos cache misses
+  //
+  // IMPLEMENTAÇÃO SUGERIDA:
+  // 1. Cache de conexões (connection pooling) - mantém Map atual
+  // 2. Cache de query results (tenant metadata, agents, etc) - novo com Redis
+  //    - Key: `tenant:${organizationId}:metadata`
+  //    - Value: JSON serializado do tenant record
+  //    - TTL: 5-10 minutos
+  // 3. Cache invalidation:
+  //    - On tenant update/delete: invalidar chave específica
+  //    - On agent role change: invalidar queries relacionadas
+  // 4. Fallback strategy: Redis down → bypass cache, query DB directly
+  //
+  // LIBS SUGERIDAS:
+  // - ioredis (cliente Redis robusto)
+  // - @vercel/kv (se usar Vercel, abstração sobre Redis)
+  //
+  // Connection pool cache: organizationId -> { client, db, connectionString }
+  private connectionCache = new Map<
+    string,
+    {
+      client: ReturnType<typeof postgres>;
+      db: ReturnType<typeof drizzle>;
+      connectionString: string;
+    }
+  >();
+
   constructor(catalogConnectionString?: string) {
-    const connString = catalogConnectionString ?? env.DATABASE_URL_DIRECT;
+    // Use PgBouncer by default for better connection pooling
+    const connString = catalogConnectionString ?? env.DATABASE_URL;
 
     if (!connString) {
       throw new Error("Missing catalog database connection string");
     }
 
     this.catalogClient = postgres(connString, {
-      max: 5,
+      max: 10,
+      idle_timeout: 300, // Keep connections alive for 5 minutes
+      connect_timeout: 10,
+      max_lifetime: 60 * 30, // 30 minutes
       prepare: false,
     });
 
     this.catalogDb = drizzle(this.catalogClient, { schema: catalogSchema });
+    // ActivityLogger should also use PgBouncer
     this.activityLogger = new ActivityLogger(connString);
   }
 
@@ -108,9 +156,14 @@ export class TenantDatabaseManager {
     const postgresUser = env.POSTGRES_USER;
     const postgresPassword = env.POSTGRES_PASSWORD;
 
+    // Use PgBouncer port (6432) if available for tenant databases
+    // PgBouncer is configured with wildcard (*) to accept any database dynamically
+    const hasPgBouncer = host.capabilities?.features?.includes("pgbouncer");
+    const connectionPort = hasPgBouncer ? 6432 : host.port;
+
     const connectionString = buildConnectionString({
       host: host.host,
-      port: host.port,
+      port: connectionPort,
       database: dbName,
       user: postgresUser,
       password: postgresPassword,
@@ -210,11 +263,27 @@ export class TenantDatabaseManager {
   }
 
   async getConnection(organizationId: string) {
+    const startTotal = Date.now();
+
+    // Check cache first
+    const cached = this.connectionCache.get(organizationId);
+    if (cached) {
+      console.log(
+        `[TenantManager] ✅ CACHE HIT for ${organizationId} (${Date.now() - startTotal}ms)`,
+      );
+      return cached.db;
+    }
+
+    console.log(`[TenantManager] ❌ CACHE MISS for ${organizationId}`);
+
+    // Cache miss - fetch tenant info and create connection
+    const startQuery = Date.now();
     const result = await this.catalogDb
       .select()
       .from(tenant)
       .where(eq(tenant.organizationId, organizationId))
       .limit(1);
+    console.log(`[TenantManager] Catalog query: ${Date.now() - startQuery}ms`);
 
     const tenantRecord = result[0];
 
@@ -228,12 +297,36 @@ export class TenantDatabaseManager {
       );
     }
 
+    console.log(
+      `[TenantManager] Creating connection to ${tenantRecord.databaseName} via ${tenantRecord.port === 6432 ? "PgBouncer" : "PostgreSQL direct"}`,
+    );
+
+    // Create new connection with pooling
+    const startConnect = Date.now();
     const client = postgres(tenantRecord.connectionString, {
-      max: 3,
+      max: 10, // Pool size for better concurrency
+      idle_timeout: 300, // Keep connections alive for 5 minutes (was 20s)
+      connect_timeout: 10, // Connection timeout
+      max_lifetime: 60 * 30, // Max connection lifetime: 30 minutes
       prepare: false,
     });
 
-    return drizzle(client);
+    const db = drizzle(client);
+    console.log(
+      `[TenantManager] Connection created: ${Date.now() - startConnect}ms`,
+    );
+
+    // Cache the connection
+    this.connectionCache.set(organizationId, {
+      client,
+      db,
+      connectionString: tenantRecord.connectionString,
+    });
+
+    console.log(
+      `[TenantManager] ⏱️  TOTAL getConnection: ${Date.now() - startTotal}ms`,
+    );
+    return db;
   }
 
   async getTenantBySlug(slug: string): Promise<Tenant | null> {
@@ -414,9 +507,10 @@ export class TenantDatabaseManager {
         canConnect: true,
         databaseExists: true,
         extensions,
-        schemaVersion: typeof tenantRecord.metadata?.schemaVersion === "string"
-          ? tenantRecord.metadata.schemaVersion
-          : undefined,
+        schemaVersion:
+          typeof tenantRecord.metadata?.schemaVersion === "string"
+            ? tenantRecord.metadata.schemaVersion
+            : undefined,
       };
     } catch (error) {
       return {
@@ -442,10 +536,22 @@ export class TenantDatabaseManager {
     tenantId: string,
     status: "provisioning" | "active" | "suspended" | "deleted" | "failed",
   ): Promise<void> {
+    // Get tenant to find organizationId for cache invalidation
+    const tenantRecord = await this.getTenantById(tenantId);
+
     await this.catalogDb
       .update(tenant)
       .set({ status })
       .where(eq(tenant.id, tenantId));
+
+    // Invalidate cache if tenant is no longer active
+    if (status !== "active" && tenantRecord) {
+      const cached = this.connectionCache.get(tenantRecord.organizationId);
+      if (cached) {
+        await cached.client.end();
+        this.connectionCache.delete(tenantRecord.organizationId);
+      }
+    }
   }
 
   async deleteTenant(organizationId: string): Promise<void> {
@@ -459,6 +565,13 @@ export class TenantDatabaseManager {
 
     if (!tenantRecord) {
       throw new Error(`Tenant not found: ${organizationId}`);
+    }
+
+    // Invalidate cache
+    const cached = this.connectionCache.get(organizationId);
+    if (cached) {
+      await cached.client.end();
+      this.connectionCache.delete(organizationId);
     }
 
     // Soft delete - marca como deleted mas mantém database físico
@@ -487,6 +600,13 @@ export class TenantDatabaseManager {
 
     if (!tenantRecord) {
       throw new Error(`Tenant not found: ${organizationId}`);
+    }
+
+    // Invalidate cache
+    const cached = this.connectionCache.get(organizationId);
+    if (cached) {
+      await cached.client.end();
+      this.connectionCache.delete(organizationId);
     }
 
     const postgresUser = env.POSTGRES_USER;
@@ -522,6 +642,12 @@ export class TenantDatabaseManager {
   }
 
   async close(): Promise<void> {
+    // Close all cached tenant connections
+    for (const [orgId, cached] of this.connectionCache.entries()) {
+      await cached.client.end();
+      this.connectionCache.delete(orgId);
+    }
+
     await this.catalogClient.end();
     await this.activityLogger.close();
   }

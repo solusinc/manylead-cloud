@@ -149,6 +149,105 @@ export const protectedProcedure = t.procedure
  * Use this to get tenant database connections in your routers.
  * Better Auth organization plugin handles organization data in catalog DB.
  * This manager provides access to isolated tenant databases.
+ *
+ * IMPORTANT: In Next.js dev mode, hot reload can recreate the module.
+ * We use globalThis to preserve the connection cache across reloads.
  */
-const _tenantManager = new TenantDatabaseManager();
-export { _tenantManager as tenantManager };
+const globalForTenant = globalThis as unknown as {
+  tenantManager: TenantDatabaseManager | undefined;
+};
+
+export const tenantManager: TenantDatabaseManager =
+  globalForTenant.tenantManager ?? new TenantDatabaseManager();
+
+if (process.env.NODE_ENV !== "production") {
+  globalForTenant.tenantManager = tenantManager;
+}
+
+/**
+ * 4. AUTHORIZATION PROCEDURES
+ *
+ * These procedures add role-based and permission-based authorization
+ * on top of authentication. They automatically inject ability and agent
+ * into the context.
+ */
+import { withAbility, requireRole } from "./middleware/authorization";
+
+/**
+ * Helper to create authorization procedures without type inference issues
+ */
+function createAuthProcedure() {
+  return protectedProcedure.use(async ({ ctx, next }) => {
+    const newCtx = await withAbility(ctx);
+    return next({ ctx: newCtx });
+  });
+}
+
+function createRoleProcedure(role: "owner" | "admin" | "member") {
+  return protectedProcedure.use(async ({ ctx, next }) => {
+    const newCtx = await requireRole(role)(ctx);
+    return next({ ctx: newCtx });
+  });
+}
+
+/**
+ * Authorized procedure
+ *
+ * Injects ability and agent into context. Use this when you need
+ * to check permissions dynamically in your resolver.
+ *
+ * @example
+ * ```ts
+ * authorizedProcedure.query(({ ctx }) => {
+ *   if (ctx.ability.can('read', 'Agent')) {
+ *     // ...
+ *   }
+ * })
+ * ```
+ */
+export const authorizedProcedure = createAuthProcedure();
+
+/**
+ * Owner-only procedure
+ *
+ * Only users with 'owner' role can access. Automatically enforced.
+ *
+ * @example
+ * ```ts
+ * ownerProcedure.mutation(({ ctx }) => {
+ *   // ctx.agent.role is guaranteed to be 'owner'
+ * })
+ * ```
+ */
+export const ownerProcedure = createRoleProcedure("owner");
+
+/**
+ * Admin procedure (admin + owner)
+ *
+ * Users with 'admin' or 'owner' role can access.
+ * Uses role hierarchy: owner > admin > member
+ *
+ * @example
+ * ```ts
+ * adminProcedure.mutation(({ ctx }) => {
+ *   // ctx.agent.role is 'admin' or 'owner'
+ * })
+ * ```
+ */
+export const adminProcedure = createRoleProcedure("admin");
+
+/**
+ * Member procedure (all authenticated users)
+ *
+ * Any authenticated member of the organization can access.
+ * This is essentially the same as authorizedProcedure but
+ * explicitly requires 'member' role (lowest in hierarchy).
+ *
+ * @example
+ * ```ts
+ * memberProcedure.query(({ ctx }) => {
+ *   // ctx.agent exists and has at least 'member' role
+ * })
+ * ```
+ */
+export const memberProcedure = createRoleProcedure("member");

@@ -1,5 +1,5 @@
 {
-  "name": "@manylead/api",
+  "name": "@manylead/permissions",
   "private": true,
   "type": "module",
   "exports": {
@@ -15,25 +15,16 @@
     "dev": "tsc",
     "format": "prettier --check . --ignore-path ../../.gitignore",
     "lint": "eslint --flag unstable_native_nodejs_ts_config",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit --emitDeclarationOnly false"
   },
   "dependencies": {
-    "@manylead/auth": "workspace:*",
-    "@manylead/db": "workspace:*",
-    "@manylead/emails": "workspace:*",
-    "@manylead/permissions": "workspace:*",
-    "@manylead/tenant-db": "workspace:*",
-    "@t3-oss/env-core": "catalog:",
-    "@trpc/server": "catalog:",
-    "drizzle-orm": "^0.44.7",
-    "slugify": "^1.6.6",
-    "superjson": "2.2.3",
-    "zod": "catalog:"
+    "@casl/ability": "catalog:"
   },
   "devDependencies": {
     "@manylead/eslint-config": "workspace:*",
     "@manylead/prettier-config": "workspace:*",
     "@manylead/tsconfig": "workspace:*",
+    "@types/node": "catalog:",
     "eslint": "catalog:",
     "prettier": "catalog:",
     "typescript": "catalog:"

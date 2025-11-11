@@ -8,7 +8,12 @@ import {
   updateDepartmentSchema,
 } from "@manylead/db";
 
-import { createTRPCRouter, protectedProcedure, tenantManager } from "../trpc";
+import {
+  createTRPCRouter,
+  protectedProcedure,
+  adminProcedure,
+  tenantManager,
+} from "../trpc";
 
 /**
  * Departments Router
@@ -19,7 +24,7 @@ export const departmentsRouter = createTRPCRouter({
   /**
    * List all departments for the active organization
    */
-  list: protectedProcedure.query(async ({ ctx }) => {
+  list: adminProcedure.query(async ({ ctx }) => {
     const organizationId = ctx.session.session.activeOrganizationId;
 
     if (!organizationId) {
@@ -43,29 +48,16 @@ export const departmentsRouter = createTRPCRouter({
   /**
    * Get department by ID
    */
-  getById: protectedProcedure
+  getById: adminProcedure
     .input(z.object({ id: z.uuid() }))
     .query(async ({ ctx, input }) => {
-      const organizationId = ctx.session.session.activeOrganizationId;
+      // ctx.tenantDb já está disponível via adminProcedure
+      // organizationId já foi validado pelo middleware
 
-      if (!organizationId) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Nenhuma organização ativa",
-        });
-      }
-
-      const tenantDb = await tenantManager.getConnection(organizationId);
-
-      const [dept] = await tenantDb
+      const [dept] = await ctx.tenantDb
         .select()
         .from(department)
-        .where(
-          and(
-            eq(department.id, input.id),
-            eq(department.organizationId, organizationId),
-          ),
-        )
+        .where(eq(department.id, input.id))
         .limit(1);
 
       if (!dept) {
@@ -80,8 +72,9 @@ export const departmentsRouter = createTRPCRouter({
 
   /**
    * Create a new department
+   * Only admins and owners can create departments (enforced by adminProcedure)
    */
-  create: protectedProcedure
+  create: adminProcedure
     .input(insertDepartmentSchema.omit({ organizationId: true }))
     .mutation(async ({ ctx, input }) => {
       const organizationId = ctx.session.session.activeOrganizationId;
@@ -127,8 +120,9 @@ export const departmentsRouter = createTRPCRouter({
 
   /**
    * Update a department
+   * Only admins and owners can update departments (enforced by adminProcedure)
    */
-  update: protectedProcedure
+  update: adminProcedure
     .input(
       z.object({
         id: z.uuid(),
@@ -201,8 +195,9 @@ export const departmentsRouter = createTRPCRouter({
 
   /**
    * Update multiple departments
+   * Only admins and owners can update departments (enforced by adminProcedure)
    */
-  updateDepartments: protectedProcedure
+  updateDepartments: adminProcedure
     .input(
       z.object({
         ids: z.array(z.uuid()),
@@ -244,8 +239,9 @@ export const departmentsRouter = createTRPCRouter({
 
   /**
    * Delete multiple departments
+   * Only admins and owners can delete departments (enforced by adminProcedure)
    */
-  deleteDepartments: protectedProcedure
+  deleteDepartments: adminProcedure
     .input(
       z.object({
         ids: z.array(z.uuid()),
@@ -282,8 +278,9 @@ export const departmentsRouter = createTRPCRouter({
 
   /**
    * Delete a department
+   * Only admins and owners can delete departments (enforced by adminProcedure)
    */
-  delete: protectedProcedure
+  delete: adminProcedure
     .input(z.object({ id: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
       const organizationId = ctx.session.session.activeOrganizationId;

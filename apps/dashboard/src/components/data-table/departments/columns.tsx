@@ -9,6 +9,24 @@ import { ptBR } from "date-fns/locale";
 import { DataTableRowActions } from "./data-table-row-actions";
 import { Badge } from "@manylead/ui/badge";
 import { TableCellDate } from "~/components/data-table/table-cell-date";
+import { usePermissions } from "~/lib/permissions";
+
+function DepartmentNameCell({ departmentId, name }: { departmentId: string; name: string }) {
+  const { can } = usePermissions();
+
+  if (can("manage", "Department")) {
+    return (
+      <a
+        href={`/settings/departments/${departmentId}/edit`}
+        className="font-medium hover:underline"
+      >
+        {name}
+      </a>
+    );
+  }
+
+  return <span className="font-medium">{name}</span>;
+}
 
 export const columns: ColumnDef<Department>[] = [
   {
@@ -40,12 +58,10 @@ export const columns: ColumnDef<Department>[] = [
     ),
     cell: ({ row }) => {
       return (
-        <a
-          href={`/settings/departments/${row.original.id}/edit`}
-          className="font-medium hover:underline"
-        >
-          {row.getValue("name")}
-        </a>
+        <DepartmentNameCell
+          departmentId={row.original.id}
+          name={row.getValue("name")}
+        />
       );
     },
     enableHiding: false,

@@ -1,3 +1,5 @@
+"use client";
+
 import {
   EmptyStateContainer,
   EmptyStateDescription,
@@ -8,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { formatDate } from "~/lib/formatter";
 import { useTRPC } from "~/lib/trpc/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { usePermissions } from "~/lib/permissions";
 
 export function DataTable() {
   const trpc = useTRPC();
@@ -19,6 +22,7 @@ export function DataTable() {
       onSuccess: () => refetch(),
     }),
   );
+  const { can } = usePermissions();
 
   if (!invitations) return null;
 
@@ -60,13 +64,15 @@ export function DataTable() {
               <TableCell>{formatDate(item.createdAt)}</TableCell>
               <TableCell>
                 <div className="flex justify-end">
-                  <QuickActions
-                    deleteAction={{
-                      title: "Convite",
-                      submitAction: async () =>
-                        deleteInvitationMutation.mutateAsync({ id: item.id }),
-                    }}
-                  />
+                  {can("manage", "Agent") && (
+                    <QuickActions
+                      deleteAction={{
+                        title: "Convite",
+                        submitAction: async () =>
+                          deleteInvitationMutation.mutateAsync({ id: item.id }),
+                      }}
+                    />
+                  )}
                 </div>
               </TableCell>
             </TableRow>

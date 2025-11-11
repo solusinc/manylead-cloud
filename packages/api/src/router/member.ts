@@ -4,13 +4,13 @@ import { z } from "zod";
 
 import { member, session, user } from "@manylead/db";
 
-import { createTRPCRouter, protectedProcedure } from "../trpc";
+import { createTRPCRouter, protectedProcedure, ownerProcedure, adminProcedure } from "../trpc";
 
 export const memberRouter = createTRPCRouter({
   /**
    * List all members of the active organization
    */
-  list: protectedProcedure.query(async ({ ctx }) => {
+  list: adminProcedure.query(async ({ ctx }) => {
     const activeOrgId = ctx.session.session.activeOrganizationId;
 
     if (!activeOrgId) {
@@ -42,10 +42,10 @@ export const memberRouter = createTRPCRouter({
 
   /**
    * Remove a member from the organization
-   * Only owners can remove members
+   * Only admins and owners can remove members (enforced by adminProcedure)
    * Cannot remove yourself
    */
-  delete: protectedProcedure
+  delete: adminProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const activeOrgId = ctx.session.session.activeOrganizationId;
@@ -54,32 +54,6 @@ export const memberRouter = createTRPCRouter({
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "Nenhuma organização ativa encontrada",
-        });
-      }
-
-      // Check current user's role
-      const currentUserMember = await ctx.db
-        .select()
-        .from(member)
-        .where(
-          and(
-            eq(member.userId, ctx.session.user.id),
-            eq(member.organizationId, activeOrgId),
-          ),
-        )
-        .limit(1);
-
-      if (!currentUserMember[0]) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Você não é membro desta organização",
-        });
-      }
-
-      if (currentUserMember[0].role !== "owner") {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "Apenas proprietários podem remover membros",
         });
       }
 
