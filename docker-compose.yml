@@ -1,0 +1,111 @@
+name: manylead
+
+services:
+  postgres:
+    build:
+      context: ./docker/postgres
+      dockerfile: Dockerfile
+    container_name: manylead-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 9osrvzdkyq3k6svk
+      POSTGRES_DB: manylead_catalog
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    container_name: manylead-pgbouncer
+    environment:
+      DATABASE_URL: postgresql://postgres:9osrvzdkyq3k6svk@postgres:5432/*
+      AUTH_TYPE: scram-sha-256
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: 10000
+      DEFAULT_POOL_SIZE: 25
+      RESERVE_POOL_SIZE: 5
+      MAX_DB_CONNECTIONS: 100
+      LISTEN_PORT: 6432
+    ports:
+      - "6432:6432"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "localhost", "-p", "6432"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: manylead-redis
+    command: redis-server --requirepass g9jmz27jvxrv7m0p
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # server:
+  #   build:
+  #     context: .
+  #     dockerfile: apps/server/Dockerfile
+  #   container_name: manylead-server
+  #   environment:
+  #     NODE_ENV: production
+  #     SERVER_PORT: 3002
+  #     DATABASE_URL: postgresql://postgres:9osrvzdkyq3k6svk@pgbouncer:6432/manylead_catalog
+  #     DATABASE_URL_DIRECT: postgresql://postgres:9osrvzdkyq3k6svk@postgres:5432/manylead_catalog
+  #     POSTGRES_USER: postgres
+  #     POSTGRES_PASSWORD: 9osrvzdkyq3k6svk
+  #     REDIS_URL: redis://default:g9jmz27jvxrv7m0p@redis:6379
+  #     SOCKET_IO_CORS_ORIGIN: http://localhost:3000
+  #     AUTH_SECRET: 826d25521e01b3626bf8409af2c896ce92721fb13d3a61d3ba5ab7c8fc7cbe49
+  #     BETTER_AUTH_URL: http://localhost:3000
+  #   ports:
+  #     - "3002:3002"
+  #     - "3003:3003"
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     pgbouncer:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+
+  # worker:
+  #   build:
+  #     context: .
+  #     dockerfile: apps/worker/Dockerfile
+  #   container_name: manylead-worker
+  #   environment:
+  #     NODE_ENV: production
+  #     DATABASE_URL: postgresql://postgres:9osrvzdkyq3k6svk@pgbouncer:6432/manylead_catalog
+  #     DATABASE_URL_DIRECT: postgresql://postgres:9osrvzdkyq3k6svk@postgres:5432/manylead_catalog
+  #     POSTGRES_USER: postgres
+  #     POSTGRES_PASSWORD: 9osrvzdkyq3k6svk
+  #     REDIS_URL: redis://default:g9jmz27jvxrv7m0p@redis:6379
+  #     WORKER_CONCURRENCY: 5
+  #     TENANT_MIGRATIONS_PATH: /app/packages/tenant-db/drizzle/tenant
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     pgbouncer:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:

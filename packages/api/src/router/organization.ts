@@ -29,16 +29,12 @@ export const organizationRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const startTotal = Date.now();
-
       // 1. Gera slug a partir do nome
-      const startSlug = Date.now();
       const slug = slugify(input.name, {
         lower: true,
         strict: true,
         locale: "pt",
       });
-      console.log(`[organization.init] Slug generation: ${Date.now() - startSlug}ms`);
 
       if (!slug || slug.length < 2) {
         throw new TRPCError({
@@ -49,9 +45,7 @@ export const organizationRouter = createTRPCRouter({
       }
 
       // 2. Verifica se já existe tenant com esse slug
-      const startCheckTenant = Date.now();
       const existingTenant = await tenantManager.getTenantBySlug(slug);
-      console.log(`[organization.init] Check existing tenant: ${Date.now() - startCheckTenant}ms`);
 
       if (existingTenant) {
         throw new TRPCError({
@@ -61,7 +55,6 @@ export const organizationRouter = createTRPCRouter({
       }
 
       // 3. Cria a organização usando Better Auth
-      const startCreateOrg = Date.now();
       const createdOrg = await ctx.authApi.createOrganization({
         body: {
           name: input.name,
@@ -69,7 +62,6 @@ export const organizationRouter = createTRPCRouter({
         },
         headers: ctx.headers,
       });
-      console.log(`[organization.init] Create organization (Better Auth): ${Date.now() - startCreateOrg}ms`);
 
       if (!createdOrg) {
         throw new TRPCError({
@@ -79,16 +71,13 @@ export const organizationRouter = createTRPCRouter({
       }
 
       // 4. Define esta organização como ativa na sessão
-      const startSetActive = Date.now();
       await ctx.authApi.setActiveOrganization({
         body: {
           organizationId: createdOrg.id,
         },
         headers: ctx.headers,
       });
-      console.log(`[organization.init] Set active organization: ${Date.now() - startSetActive}ms`);
 
-      console.log(`[organization.init] ⏱️  TOTAL: ${Date.now() - startTotal}ms`);
       return createdOrg;
     }),
 

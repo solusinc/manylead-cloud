@@ -20,10 +20,11 @@ RUN git clone https://github.com/citusdata/pg_cron.git /tmp/pg_cron \
     && cd / \
     && rm -rf /tmp/pg_cron
 
-# Install pgvector
+# Install pgvector (with proper architecture detection)
 RUN git clone --branch v0.8.0 https://github.com/pgvector/pgvector.git /tmp/pgvector \
     && cd /tmp/pgvector \
-    && make \
+    && make clean \
+    && make OPTFLAGS="" \
     && make install \
     && cd / \
     && rm -rf /tmp/pgvector

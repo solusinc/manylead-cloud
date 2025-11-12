@@ -25,18 +25,21 @@ type FormValues = z.infer<typeof schema>;
 
 export function FormCreateOrganization({
   onSubmit,
+  disabled: externalDisabled,
   ...props
 }: Omit<React.ComponentProps<"form">, "onSubmit"> & {
   onSubmit: (values: FormValues) => Promise<void>;
+  disabled?: boolean;
 }) {
   const [isPending, startTransition] = useTransition();
+  const disabled = externalDisabled || isPending;
 
   const form = useForm({
     defaultValues: {
       name: "",
     },
     onSubmit: ({ value }) => {
-      if (isPending) return;
+      if (disabled) return;
 
       startTransition(async () => {
         try {
@@ -100,6 +103,7 @@ export function FormCreateOrganization({
                   onBlur={field.handleBlur}
                   onChange={(e) => field.handleChange(e.target.value)}
                   placeholder="Ex: Minha Empresa"
+                  disabled={disabled}
                 />
                 {field.state.meta.errors.length > 0 ? (
                   <p className="text-destructive text-sm">
@@ -111,8 +115,8 @@ export function FormCreateOrganization({
           </form.Field>
         </FormCardContent>
         <FormCardFooter>
-          <Button type="submit" disabled={isPending} size="sm">
-            {isPending ? "Aguarde..." : "Criar"}
+          <Button type="submit" disabled={disabled} size="sm">
+            {disabled ? "Aguarde..." : "Criar"}
           </Button>
         </FormCardFooter>
       </FormCard>

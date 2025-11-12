@@ -27,6 +27,7 @@
     "generate:tenant": "pnpm with-env drizzle-kit generate --config=drizzle.config.tenant.ts",
     "migrate": "pnpm with-env tsx src/migrate.ts",
     "seed": "pnpm with-env tsx src/seed.ts",
+    "seed:local": "pnpm with-env tsx src/seed-local.ts",
     "push": "pnpm with-env drizzle-kit push",
     "push:tenant": "pnpm with-env drizzle-kit push --config=drizzle.config.tenant.ts",
     "studio": "pnpm with-env drizzle-kit studio",

@@ -69,28 +69,22 @@ export function OnboardingClient() {
 
       try {
         // PASSO 1: Inicializar organização (RÁPIDO ~1-2s)
-        console.log("[Onboarding] Step 1: Initializing organization...");
         const org = await initOrganization.mutateAsync({
           name: value.name,
         });
 
-        console.log("[Onboarding] Organization initialized:", org.id);
         setOrganizationId(org.id);
 
         // PASSO 2: Conectar Socket.io ANTES de provisionar
-        console.log("[Onboarding] Step 2: Connecting to Socket.io...");
         socket.connect(org.id);
 
         // Aguardar um pouco para garantir que o socket conectou
         await new Promise((resolve) => setTimeout(resolve, 500));
 
         // PASSO 3: Provisionar tenant (dispara job e retorna imediatamente)
-        console.log("[Onboarding] Step 3: Starting tenant provisioning...");
         await provisionTenant.mutateAsync({
           organizationId: org.id,
         });
-
-        console.log("[Onboarding] Provisioning started! Listening to Socket.io...");
       } catch (err) {
         setPending(false);
         setIsProvisioning(false);
@@ -115,10 +109,7 @@ export function OnboardingClient() {
   // Redirecionar quando provisioning completar via Socket.io
   useEffect(() => {
     if (socket.isComplete && isProvisioning) {
-      console.log("[Onboarding] Provisioning complete!");
-
       const timer = setTimeout(() => {
-        console.log("[Onboarding] Redirecting to /overview");
         window.location.href = "/overview";
       }, 2000);
 

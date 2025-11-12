@@ -16,11 +16,21 @@ RUN bun install --production --ignore-scripts && \
 
 # Stage 3: Runtime
 FROM debian:bullseye-slim AS runtime
+
+# Copy compiled binary
 COPY \
     --from=build \
     --chown=1000:1000 \
     --chmod=555 \
     --link \
     "/app/apps/worker/worker" "/bin/"
+
+# Copy tenant migrations (required for drizzle migrator)
+COPY \
+    --from=build \
+    --chown=1000:1000 \
+    --link \
+    "/app/packages/tenant-db/drizzle" "/app/packages/tenant-db/drizzle"
+
 USER 1000:1000
 ENTRYPOINT ["/bin/worker"]

@@ -1,5 +1,3 @@
-import { dirname, join } from "path";
-import { fileURLToPath } from "url";
 import { Queue } from "bullmq";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
@@ -27,9 +25,8 @@ import {
   retryWithBackoff,
 } from "./utils";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const TENANT_MIGRATIONS_PATH = join(__dirname, "..", "drizzle", "tenant");
+// Migrations path from env (supports both local dev and Docker)
+const TENANT_MIGRATIONS_PATH = env.TENANT_MIGRATIONS_PATH;
 
 export class TenantDatabaseManager {
   private catalogDb;
@@ -80,23 +77,13 @@ export class TenantDatabaseManager {
       connectTimeout: 10000, // 10 second timeout for initial connection
       retryStrategy: (times) => {
         const delay = Math.min(times * 50, 2000);
-        console.log(`[TenantManager] Retrying Redis connection in ${delay}ms...`);
         return delay;
       },
     });
 
-    // Log Redis connection events for debugging
-    redisConnection.on("connect", () => {
-      console.log("[TenantManager] Redis connected for BullMQ");
-    });
-    redisConnection.on("ready", () => {
-      console.log("[TenantManager] Redis ready for BullMQ");
-    });
+    // Log only errors
     redisConnection.on("error", (error) => {
       console.error("[TenantManager] Redis connection error:", error);
-    });
-    redisConnection.on("close", () => {
-      console.log("[TenantManager] Redis connection closed");
     });
 
     this.tenantProvisioningQueue = new Queue(env.QUEUE_TENANT_PROVISIONING, {
@@ -184,7 +171,7 @@ export class TenantDatabaseManager {
         connectionString,
         databaseHostId: host.id,
         host: host.host,
-        port: host.port,
+        port: connectionPort, // Use connection port (6432 if PgBouncer, host.port otherwise)
         region: host.region,
         tier: params.tier ?? "shared",
         status: "provisioning",
@@ -203,9 +190,6 @@ export class TenantDatabaseManager {
       newTenant.slug,
       params.metadata,
     );
-
-    console.log("[TenantManager] ⏱️  About to enqueue job...");
-    const queueAddStart = Date.now();
 
     // Enfileirar job para processar provisionamento
     const job = await this.tenantProvisioningQueue.add(
@@ -232,9 +216,6 @@ export class TenantDatabaseManager {
       },
     );
 
-    const queueAddDuration = Date.now() - queueAddStart;
-    console.log(`[TenantManager] ⏱️  Job enqueued in ${queueAddDuration}ms - jobId: ${job.id}`);
-
     // Atualizar provisioning_details com jobId
     await this.catalogDb
       .update(tenant)
@@ -254,7 +235,9 @@ export class TenantDatabaseManager {
   /**
    * Busca tenant por organization ID
    */
-  async getTenantByOrganization(organizationId: string): Promise<Tenant | null> {
+  async getTenantByOrganization(
+    organizationId: string,
+  ): Promise<Tenant | null> {
     const result = await this.catalogDb
       .select()
       .from(tenant)
@@ -297,7 +280,9 @@ export class TenantDatabaseManager {
 
       const host = hostResult[0];
       if (!host) {
-        throw new Error(`Database host not found: ${existingTenant.databaseHostId}`);
+        throw new Error(
+          `Database host not found: ${existingTenant.databaseHostId}`,
+        );
       }
 
       const adminConnString = buildConnectionString({
@@ -311,7 +296,9 @@ export class TenantDatabaseManager {
       const adminClient = postgres(adminConnString, { max: 1 });
 
       // Criar banco de dados físico
-      await adminClient.unsafe(`CREATE DATABASE "${existingTenant.databaseName}"`);
+      await adminClient.unsafe(
+        `CREATE DATABASE "${existingTenant.databaseName}"`,
+      );
       await adminClient.end();
 
       const tenantClient = postgres(existingTenant.connectionString, {
@@ -363,14 +350,10 @@ export class TenantDatabaseManager {
   }
 
   async getConnection(organizationId: string) {
-    const startTotal = Date.now();
-
     // Check cache first
     const cached = this.connectionCache.get(organizationId);
     if (cached) {
-      console.log(
-        `[TenantManager] ✅ CACHE HIT for ${organizationId} (${Date.now() - startTotal}ms)`,
-      );
+      console.log(`[TenantManager] ✅ Memory cache HIT for ${organizationId}`);
       return cached.db;
     }
 
@@ -380,31 +363,23 @@ export class TenantDatabaseManager {
     let tenantRecord = await this.tenantCache.get(organizationId);
 
     if (tenantRecord) {
-      console.log(
-        `[TenantManager] ✅ Redis cache HIT for ${organizationId} (${Date.now() - startTotal}ms)`,
-      );
+      console.log(`[TenantManager] ✅ Redis cache HIT for ${organizationId}`);
     } else {
       console.log(`[TenantManager] ❌ Redis cache MISS for ${organizationId}`);
 
       // Redis cache miss - query catalog database
-      const startQuery = Date.now();
       const result = await this.catalogDb
         .select()
         .from(tenant)
         .where(eq(tenant.organizationId, organizationId))
         .limit(1);
-      console.log(
-        `[TenantManager] Catalog query: ${Date.now() - startQuery}ms`,
-      );
 
       tenantRecord = result[0] ?? null;
 
       // Save to Redis cache for next time
       if (tenantRecord) {
         await this.tenantCache.set(organizationId, tenantRecord);
-        console.log(
-          `[TenantManager] ✅ Saved to Redis cache for ${organizationId}`,
-        );
+        console.log(`[TenantManager] ✅ Saved to Redis cache for ${organizationId}`);
       }
     }
 
@@ -423,7 +398,6 @@ export class TenantDatabaseManager {
     );
 
     // Create new connection with pooling
-    const startConnect = Date.now();
     const client = postgres(tenantRecord.connectionString, {
       max: 10, // Pool size for better concurrency
       idle_timeout: 300, // Keep connections alive for 5 minutes (was 20s)
@@ -433,9 +407,6 @@ export class TenantDatabaseManager {
     });
 
     const db = drizzle(client);
-    console.log(
-      `[TenantManager] Connection created: ${Date.now() - startConnect}ms`,
-    );
 
     // Cache the connection
     this.connectionCache.set(organizationId, {
@@ -444,9 +415,6 @@ export class TenantDatabaseManager {
       connectionString: tenantRecord.connectionString,
     });
 
-    console.log(
-      `[TenantManager] ⏱️  TOTAL getConnection: ${Date.now() - startTotal}ms`,
-    );
     return db;
   }
 

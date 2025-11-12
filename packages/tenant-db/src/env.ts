@@ -12,6 +12,8 @@ export const env = createEnv({
     NODE_ENV: z
       .enum(["development", "production", "test"])
       .default("development"),
+    // Migrations path (for Docker/compiled binaries)
+    TENANT_MIGRATIONS_PATH: z.string().min(1),
   },
   runtimeEnv: {
     DATABASE_URL: process.env.DATABASE_URL,
@@ -21,5 +23,6 @@ export const env = createEnv({
     REDIS_URL: process.env.REDIS_URL,
     QUEUE_TENANT_PROVISIONING: process.env.QUEUE_TENANT_PROVISIONING,
     NODE_ENV: process.env.NODE_ENV,
+    TENANT_MIGRATIONS_PATH: process.env.TENANT_MIGRATIONS_PATH,
   },
 });

@@ -58,7 +58,8 @@
     "POSTGRES_USER",
     "QUEUE_TENANT_PROVISIONING",
     "REDIS_URL",
-    "RESEND_API_KEY"
+    "RESEND_API_KEY",
+    "TENANT_MIGRATIONS_PATH"
   ],
   "globalPassThroughEnv": ["NODE_ENV", "CI", "npm_lifecycle_event"]
 }

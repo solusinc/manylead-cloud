@@ -104,8 +104,6 @@ export const agentsRouter = createTRPCRouter({
   getByUserId: protectedProcedure
     .input(z.object({ userId: z.string(), organizationId: z.string().optional() }))
     .query(async ({ ctx, input }) => {
-      const startTotal = Date.now();
-
       // Se está buscando agent de outro usuário, precisa ser admin/owner
       if (input.userId !== ctx.session.user.id) {
         // Verificar se o usuário atual é member da org e pegar seu role
@@ -160,19 +158,14 @@ export const agentsRouter = createTRPCRouter({
         organizationId = userOrgs[0].id;
       }
 
-      const startGetConn = Date.now();
       const tenantDb = await tenantManager.getConnection(organizationId);
-      console.log(`[agents.getByUserId] getConnection: ${Date.now() - startGetConn}ms`);
 
-      const startQuery = Date.now();
       const [agentRecord] = await tenantDb
         .select()
         .from(agent)
         .where(eq(agent.userId, input.userId))
         .limit(1);
-      console.log(`[agents.getByUserId] Query: ${Date.now() - startQuery}ms`);
 
-      console.log(`[agents.getByUserId] ⏱️  TOTAL: ${Date.now() - startTotal}ms`);
       return agentRecord ?? null;
     }),
 
