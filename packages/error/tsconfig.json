@@ -1,0 +1,12 @@
+{
+  "extends": "@manylead/tsconfig/compiled-package.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM"]
+  },
+  "include": [
+    "src"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}

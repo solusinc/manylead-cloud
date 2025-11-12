@@ -21,6 +21,12 @@ export function initAuth<
     emailAndPassword: {
       enabled: true,
     },
+    session: {
+      cookieCache: {
+        enabled: true,
+        maxAge: 5 * 60, // Cache session for 5 minutes (reduces DB queries)
+      },
+    },
     plugins: [
       organization({
         allowUserToCreateOrganization: true,

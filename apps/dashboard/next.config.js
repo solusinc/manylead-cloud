@@ -16,6 +16,9 @@ const config = {
     "@manylead/ui",
   ],
 
+  /** Exclude server-only packages from client bundle */
+  serverExternalPackages: ["ioredis", "bullmq"],
+
   /** We already do linting and typechecking as separate tasks in CI */
   typescript: { ignoreBuildErrors: true },
 

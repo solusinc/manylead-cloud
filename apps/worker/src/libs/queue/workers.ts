@@ -1,0 +1,87 @@
+import { Worker } from "bullmq";
+import { env } from "~/env";
+import { getRedisClient } from "~/libs/cache/redis";
+import { logger } from "~/libs/utils/logger";
+import {
+  processTenantProvisioning,
+  type TenantProvisioningJobData,
+} from "~/workers/tenant-provisioning";
+
+/**
+ * Create and configure all BullMQ workers
+ */
+export function createWorkers(): Worker[] {
+  const connection = getRedisClient();
+  const workers: Worker[] = [];
+
+  /**
+   * Tenant Provisioning Worker
+   */
+  logger.info(`Creating worker for queue: ${env.QUEUE_TENANT_PROVISIONING}`);
+
+  const tenantProvisioningWorker = new Worker<TenantProvisioningJobData>(
+    env.QUEUE_TENANT_PROVISIONING,
+    async (job) => {
+      return await processTenantProvisioning(job);
+    },
+    {
+      connection,
+      concurrency: env.WORKER_CONCURRENCY,
+      autorun: true,
+    },
+  );
+
+  // Event listeners for tenant provisioning worker
+  tenantProvisioningWorker.on("ready", () => {
+    logger.info(
+      { queueName: env.QUEUE_TENANT_PROVISIONING },
+      "Worker ready",
+    );
+  });
+
+  tenantProvisioningWorker.on("error", (err) => {
+    logger.error(
+      { queueName: env.QUEUE_TENANT_PROVISIONING, error: err.message },
+      "Worker error",
+    );
+  });
+
+  tenantProvisioningWorker.on("completed", (job) => {
+    logger.info(
+      { jobId: job.id, queueName: env.QUEUE_TENANT_PROVISIONING },
+      "Job completed",
+    );
+  });
+
+  tenantProvisioningWorker.on("failed", (job, err) => {
+    logger.error(
+      {
+        jobId: job?.id,
+        queueName: env.QUEUE_TENANT_PROVISIONING,
+        error: err.message,
+      },
+      "Job failed",
+    );
+  });
+
+  tenantProvisioningWorker.on("progress", (job, progress) => {
+    logger.debug(
+      {
+        jobId: job.id,
+        queueName: env.QUEUE_TENANT_PROVISIONING,
+        progress,
+      },
+      "Job progress",
+    );
+  });
+
+  logger.info(`Worker created for queue: ${env.QUEUE_TENANT_PROVISIONING}`);
+  workers.push(tenantProvisioningWorker);
+
+  /**
+   * TODO (FASE 4): Add Tenant Migration Worker
+   * const tenantMigrationWorker = new Worker(...)
+   */
+
+  return workers;
+}

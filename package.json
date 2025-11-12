@@ -14,7 +14,9 @@
     "db:push": "turbo -F @manylead/db push",
     "db:studio": "turbo -F @manylead/db studio",
     "dev": "turbo watch dev --continue",
-    "dev:next": "turbo watch dev -F @manylead/nextjs...",
+    "dev:dashboard": "turbo watch dev -F @manylead/dashboard...",
+    "dev:server": "pnpm -F @manylead/server dev",
+    "dev:worker": "pnpm -F @manylead/worker dev",
     "format": "turbo run format --continue -- --cache --cache-location .cache/.prettiercache",
     "format:fix": "turbo run format --continue -- --write --cache --cache-location .cache/.prettiercache",
     "lint": "turbo run lint --continue -- --cache --cache-location .cache/.eslintcache",
@@ -27,7 +29,7 @@
   "devDependencies": {
     "@manylead/prettier-config": "workspace:*",
     "@turbo/gen": "^2.5.8",
-    "dotenv-cli": "^10.0.0",
+    "dotenv-cli": "11.0.0",
     "prettier": "catalog:",
     "turbo": "^2.5.8",
     "typescript": "catalog:"

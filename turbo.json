@@ -46,16 +46,19 @@
     }
   },
   "globalEnv": [
-    "DATABASE_URL",
-    "DATABASE_URL_DIRECT",
-    "POSTGRES_USER",
-    "POSTGRES_PASSWORD",
     "AUTH_REDIRECT_PROXY_URL",
     "AUTH_SECRET",
-    "NEXT_PUBLIC_SENTRY_DSN",
-    "RESEND_API_KEY",
+    "DATABASE_URL",
+    "DATABASE_URL_DIRECT",
     "NEXT_PUBLIC_APP_URL",
-    "PORT"
+    "NEXT_PUBLIC_SENTRY_DSN",
+    "NEXT_PUBLIC_SOCKET_URL",
+    "PORT",
+    "POSTGRES_PASSWORD",
+    "POSTGRES_USER",
+    "QUEUE_TENANT_PROVISIONING",
+    "REDIS_URL",
+    "RESEND_API_KEY"
   ],
   "globalPassThroughEnv": ["NODE_ENV", "CI", "npm_lifecycle_event"]
 }

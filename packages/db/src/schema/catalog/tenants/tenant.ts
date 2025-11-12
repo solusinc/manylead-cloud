@@ -60,6 +60,23 @@ export const tenant = pgTable(
       .default("provisioning"),
     provisionedAt: timestamp("provisioned_at"),
 
+    // Provisioning Details (para acompanhamento assíncrono)
+    provisioningDetails: jsonb("provisioning_details").$type<{
+      jobId?: string;
+      progress?: number;
+      currentStep?: string;
+      steps?: Array<{
+        name: string;
+        status: "pending" | "in_progress" | "completed" | "failed";
+        startedAt?: string;
+        completedAt?: string;
+        error?: string;
+      }>;
+      startedAt?: string;
+      completedAt?: string;
+      error?: string;
+    }>(),
+
     // Metadata
     metadata: jsonb("metadata").$type<{
       schemaVersion?: string;

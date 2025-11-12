@@ -1,11 +1,12 @@
-import { z } from "zod";
-import slugify from "slugify";
 import { TRPCError } from "@trpc/server";
 import { and, eq } from "drizzle-orm";
-import { TenantDatabaseManager, ActivityLogger } from "@manylead/tenant-db";
-import { member, organization, agent } from "@manylead/db";
+import slugify from "slugify";
+import { z } from "zod";
 
-import { createTRPCRouter, protectedProcedure, adminProcedure } from "../trpc";
+import { member, organization } from "@manylead/db";
+import { ActivityLogger, TenantDatabaseManager } from "@manylead/tenant-db";
+
+import { adminProcedure, createTRPCRouter, protectedProcedure } from "../trpc";
 
 const tenantManager = new TenantDatabaseManager();
 const activityLogger = new ActivityLogger();
@@ -18,7 +19,133 @@ const activityLogger = new ActivityLogger();
  */
 export const organizationRouter = createTRPCRouter({
   /**
-   * Create a new organization and provision tenant database
+   * Initialize a new organization (fast - just creates org record)
+   * Use this to get the orgId quickly, then call provision()
+   */
+  init: protectedProcedure
+    .input(
+      z.object({
+        name: z.string().min(2, "Nome deve ter no mínimo 2 caracteres"),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const startTotal = Date.now();
+
+      // 1. Gera slug a partir do nome
+      const startSlug = Date.now();
+      const slug = slugify(input.name, {
+        lower: true,
+        strict: true,
+        locale: "pt",
+      });
+      console.log(`[organization.init] Slug generation: ${Date.now() - startSlug}ms`);
+
+      if (!slug || slug.length < 2) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "Não foi possível gerar um identificador válido a partir do nome",
+        });
+      }
+
+      // 2. Verifica se já existe tenant com esse slug
+      const startCheckTenant = Date.now();
+      const existingTenant = await tenantManager.getTenantBySlug(slug);
+      console.log(`[organization.init] Check existing tenant: ${Date.now() - startCheckTenant}ms`);
+
+      if (existingTenant) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: `Já existe uma organização com o identificador '${slug}'. Por favor, escolha outro nome.`,
+        });
+      }
+
+      // 3. Cria a organização usando Better Auth
+      const startCreateOrg = Date.now();
+      const createdOrg = await ctx.authApi.createOrganization({
+        body: {
+          name: input.name,
+          slug,
+        },
+        headers: ctx.headers,
+      });
+      console.log(`[organization.init] Create organization (Better Auth): ${Date.now() - startCreateOrg}ms`);
+
+      if (!createdOrg) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Falha ao criar organização",
+        });
+      }
+
+      // 4. Define esta organização como ativa na sessão
+      const startSetActive = Date.now();
+      await ctx.authApi.setActiveOrganization({
+        body: {
+          organizationId: createdOrg.id,
+        },
+        headers: ctx.headers,
+      });
+      console.log(`[organization.init] Set active organization: ${Date.now() - startSetActive}ms`);
+
+      console.log(`[organization.init] ⏱️  TOTAL: ${Date.now() - startTotal}ms`);
+      return createdOrg;
+    }),
+
+  /**
+   * Provision tenant database for an organization (async background job)
+   * Call this AFTER init() and connecting to Socket.io
+   */
+  provision: protectedProcedure
+    .input(
+      z.object({
+        organizationId: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      // 1. Buscar organização
+      const org = await ctx.authApi.listOrganizations({
+        headers: ctx.headers,
+      });
+
+      const organization = org.find((o) => o.id === input.organizationId);
+      if (!organization) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Organização não encontrada",
+        });
+      }
+
+      try {
+        // 2. Provisiona o tenant database de forma ASSÍNCRONA
+        // Isso enfileira um job no BullMQ e retorna imediatamente
+        await tenantManager.provisionTenantAsync({
+          organizationId: organization.id,
+          slug: organization.slug,
+          name: organization.name,
+          ownerId: ctx.session.user.id,
+        });
+
+        return { success: true };
+      } catch (error) {
+        await activityLogger.logSystemError(error as Error, {
+          organizationId: organization.id,
+          slug: organization.slug,
+          phase: "provisionTenantAsync",
+        });
+
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message:
+            error instanceof Error
+              ? error.message
+              : "Erro ao provisionar tenant",
+        });
+      }
+    }),
+
+  /**
+   * Create a new organization and provision tenant database (LEGACY - mantido para compatibilidade)
    */
   create: protectedProcedure
     .input(
@@ -37,7 +164,8 @@ export const organizationRouter = createTRPCRouter({
       if (!slug || slug.length < 2) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: "Não foi possível gerar um identificador válido a partir do nome",
+          message:
+            "Não foi possível gerar um identificador válido a partir do nome",
         });
       }
 
@@ -66,29 +194,20 @@ export const organizationRouter = createTRPCRouter({
         });
       }
 
-      // SAGA PATTERN: Se provisioning falhar, fazer rollback da organização
-      let tenantProvisioned = false;
-
       try {
-        // 4. Provisiona o tenant database
-        await tenantManager.provisionTenant({
+        // 4. Provisiona o tenant database de forma ASSÍNCRONA
+        // Isso enfileira um job no BullMQ e retorna imediatamente
+        // O worker processará o job e publicará eventos via Socket.io
+        await tenantManager.provisionTenantAsync({
           organizationId: createdOrg.id,
           slug,
           name: input.name,
+          ownerId: ctx.session.user.id, // Owner agent will be created by worker
         });
-        tenantProvisioned = true;
 
-        // 4.5. Cria agent para o owner (creator da organização)
-        const tenantDb = await tenantManager.getConnection(createdOrg.id);
-        await tenantDb.insert(agent).values({
-          userId: ctx.session.user.id,
-          role: "owner",
-          permissions: {
-            departments: { type: "all" },
-            channels: { type: "all" },
-          },
-          isActive: true,
-        });
+        // NOTA: O tenant está com status "provisioning"
+        // A criação do agent será feita automaticamente pelo worker quando o tenant estiver "active"
+        // O dashboard irá receber eventos em tempo real via Socket.io
 
         // 5. Define esta organização como ativa na sessão
         await ctx.authApi.setActiveOrganization({
@@ -104,18 +223,16 @@ export const organizationRouter = createTRPCRouter({
         await activityLogger.logSystemError(error as Error, {
           organizationId: createdOrg.id,
           slug,
-          phase: tenantProvisioned ? "setActive" : "provisionTenant",
+          phase: "provisionTenantAsync",
           userId: ctx.session.user.id,
         });
 
         // ROLLBACK: Limpar recursos criados
         try {
-          // Se tenant foi provisionado mas setActive falhou, deletar tenant
-          if (tenantProvisioned) {
-            await tenantManager.deleteTenant(createdOrg.id);
-          }
+          // Deletar tenant record (job ainda pode estar na fila, mas não será processado)
+          await tenantManager.deleteTenant(createdOrg.id);
 
-          // Sempre deletar a organização (CASCADE deleta members automaticamente)
+          // Deletar a organização (CASCADE deleta members automaticamente)
           await ctx.db
             .delete(organization)
             .where(eq(organization.id, createdOrg.id));
@@ -124,8 +241,8 @@ export const organizationRouter = createTRPCRouter({
           await activityLogger.logCriticalError(rollbackError as Error, {
             organizationId: createdOrg.id,
             slug,
-            originalError: error instanceof Error ? error.message : String(error),
-            tenantProvisioned,
+            originalError:
+              error instanceof Error ? error.message : String(error),
             userId: ctx.session.user.id,
           });
         }

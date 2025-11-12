@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import { useForm } from "@tanstack/react-form";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { AlertTriangle, Check, Loader2, X } from "lucide-react";
@@ -21,33 +20,40 @@ import { Button } from "@manylead/ui/button";
 import { Field, FieldError, FieldLabel } from "@manylead/ui/field";
 import { Input } from "@manylead/ui/input";
 
+import { useProvisioningSocket } from "~/hooks/use-provisioning-socket";
 import { useTRPC } from "~/lib/trpc/react";
 
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "") // Remove acentos
-    .replace(/[^a-z0-9]+/g, "-") // Substitui caracteres especiais por -
-    .replace(/^-+|-+$/g, ""); // Remove - do início e fim
-}
-
 export function OnboardingClient() {
-  const router = useRouter();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [nameInput, setNameInput] = useState("");
   const [debouncedName, setDebouncedName] = useState("");
+  const [isProvisioning, setIsProvisioning] = useState(false);
+  const [organizationId, setOrganizationId] = useState<string | null>(null);
   const trpc = useTRPC();
 
-  const createOrganization = useMutation(
-    trpc.organization.create.mutationOptions({
-      onSuccess: () => {
-        router.push("/overview");
-      },
+  // Socket.io para progresso em tempo real
+  const socket = useProvisioningSocket();
+
+  // Step 1: Initialize organization (fast ~1-2s)
+  const initOrganization = useMutation(
+    trpc.organization.init.mutationOptions({
       onError: (err) => {
         setPending(false);
+        setIsProvisioning(false);
         setError(err.message || "Erro ao criar organização");
+      },
+    }),
+  );
+
+  // Step 2: Provision tenant (async background job)
+  const provisionTenant = useMutation(
+    trpc.organization.provision.mutationOptions({
+      onError: (err) => {
+        setPending(false);
+        setIsProvisioning(false);
+        socket.disconnect();
+        setError(err.message || "Erro ao provisionar tenant");
       },
     }),
   );
@@ -59,13 +65,37 @@ export function OnboardingClient() {
     onSubmit: async ({ value }) => {
       setError(null);
       setPending(true);
+      setIsProvisioning(true);
 
       try {
-        await createOrganization.mutateAsync({
+        // PASSO 1: Inicializar organização (RÁPIDO ~1-2s)
+        console.log("[Onboarding] Step 1: Initializing organization...");
+        const org = await initOrganization.mutateAsync({
           name: value.name,
         });
+
+        console.log("[Onboarding] Organization initialized:", org.id);
+        setOrganizationId(org.id);
+
+        // PASSO 2: Conectar Socket.io ANTES de provisionar
+        console.log("[Onboarding] Step 2: Connecting to Socket.io...");
+        socket.connect(org.id);
+
+        // Aguardar um pouco para garantir que o socket conectou
+        await new Promise((resolve) => setTimeout(resolve, 500));
+
+        // PASSO 3: Provisionar tenant (dispara job e retorna imediatamente)
+        console.log("[Onboarding] Step 3: Starting tenant provisioning...");
+        await provisionTenant.mutateAsync({
+          organizationId: org.id,
+        });
+
+        console.log("[Onboarding] Provisioning started! Listening to Socket.io...");
       } catch (err) {
         setPending(false);
+        setIsProvisioning(false);
+        setOrganizationId(null);
+        socket.disconnect();
         setError(
           err instanceof Error ? err.message : "Erro ao criar organização",
         );
@@ -82,6 +112,20 @@ export function OnboardingClient() {
     return () => clearTimeout(timer);
   }, [nameInput]);
 
+  // Redirecionar quando provisioning completar via Socket.io
+  useEffect(() => {
+    if (socket.isComplete && isProvisioning) {
+      console.log("[Onboarding] Provisioning complete!");
+
+      const timer = setTimeout(() => {
+        console.log("[Onboarding] Redirecting to /overview");
+        window.location.href = "/overview";
+      }, 2000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [socket.isComplete, isProvisioning]);
+
   // Verificar disponibilidade da organização
   const { data: availability, isLoading: checkingAvailability } = useQuery(
     trpc.organization.checkOrganizationAvailability.queryOptions(
@@ -92,6 +136,18 @@ export function OnboardingClient() {
       },
     ),
   );
+
+  // Determinar o progresso atual
+  const currentProgress = isProvisioning
+    ? (socket.progress ?? {
+        progress: 1,
+        currentStep: "connecting",
+        message:
+          pending && !organizationId
+            ? "Criando organização..."
+            : "Conectando ao servidor...",
+      })
+    : null;
 
   return (
     <div className="container mx-auto flex min-h-screen items-center justify-center p-4">
@@ -122,7 +178,7 @@ export function OnboardingClient() {
               {(field) => {
                 const isInvalid =
                   field.state.meta.isTouched && !field.state.meta.isValid;
-                const slug = slugify(field.state.value);
+                const showAvailabilityIndicator = field.state.value.length >= 2;
 
                 return (
                   <Field data-invalid={isInvalid}>
@@ -144,9 +200,9 @@ export function OnboardingClient() {
                         disabled={pending}
                         aria-invalid={isInvalid}
                         autoComplete="organization"
-                        className={slug ? "pr-10" : ""}
+                        className={showAvailabilityIndicator ? "pr-10" : ""}
                       />
-                      {slug && (
+                      {showAvailabilityIndicator && (
                         <div className="absolute top-1/2 right-3 -translate-y-1/2">
                           {checkingAvailability && (
                             <Loader2 className="text-muted-foreground h-4 w-4 animate-spin" />
@@ -177,6 +233,29 @@ export function OnboardingClient() {
                 <AlertTitle>{error}</AlertTitle>
               </Alert>
             )}
+
+            {/* Mostrar progresso abaixo do form quando estiver provisionando */}
+            {isProvisioning && currentProgress && (
+              <div className="space-y-3">
+                <div className="space-y-2">
+                  <p className="text-muted-foreground text-sm">
+                    {currentProgress.message}
+                  </p>
+                  <div className="bg-secondary h-2 w-full overflow-hidden rounded-full">
+                    <div
+                      className="bg-primary h-full transition-all duration-300"
+                      style={{ width: `${currentProgress.progress}%` }}
+                    />
+                  </div>
+                </div>
+                {socket.error && (
+                  <Alert className="bg-destructive/10 border-none">
+                    <AlertTriangle className="text-destructive! h-4 w-4" />
+                    <AlertTitle>{socket.error.error}</AlertTitle>
+                  </Alert>
+                )}
+              </div>
+            )}
           </CardContent>
           <CardFooter className="pt-6">
             <Button
@@ -189,7 +268,11 @@ export function OnboardingClient() {
               className="w-full"
             >
               {pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {pending ? "Aguarde..." : "Criar"}
+              {socket.isComplete
+                ? "Redirecionando..."
+                : pending
+                  ? "Aguarde..."
+                  : "Criar"}
             </Button>
           </CardFooter>
         </form>

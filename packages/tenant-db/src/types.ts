@@ -4,6 +4,7 @@ export interface ProvisionTenantParams {
   organizationId: string;
   slug: string;
   name: string;
+  ownerId?: string; // userId do owner (usado apenas em provisionTenantAsync)
   databaseHostId?: string;
   tier?: "shared" | "dedicated" | "enterprise";
   metadata?: Record<string, unknown>;

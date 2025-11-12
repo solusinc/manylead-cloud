@@ -1,0 +1,12 @@
+{
+  "extends": "@manylead/tsconfig/base.json",
+  "include": ["src", "*.ts", "**/*.ts"],
+  "compilerOptions": {
+    "allowJs": true,
+    "types": ["bun-types"],
+    "baseUrl": ".",
+    "paths": {
+      "~/*": ["src/*"]
+    }
+  }
+}

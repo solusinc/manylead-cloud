@@ -81,15 +81,19 @@ async function main() {
     console.log(`   ✅ Organization created: ${org.id}`);
     console.log("");
 
-    // Step 2: Provisionar tenant database
+    // Step 2: Provisionar tenant database (async + complete)
     console.log("🏗️  Step 2/2: Provisioning tenant database...");
 
-    const tenant = await manager.provisionTenant({
+    // Criar tenant record
+    await manager.provisionTenantAsync({
       organizationId: org.id,
       slug: org.slug,
       name: org.name,
       tier,
     });
+
+    // Completar o provisioning físico (CREATE DATABASE + migrations)
+    const tenant = await manager.completeTenantProvisioning(org.id);
 
     console.log("   ✅ Tenant database provisioned!");
     console.log("");

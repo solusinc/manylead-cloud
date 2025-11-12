@@ -1,8 +1,10 @@
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
+import { Queue } from "bullmq";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
+import Redis from "ioredis";
 import postgres from "postgres";
 
 import type { Tenant } from "@manylead/db";
@@ -16,6 +18,7 @@ import type {
   ProvisionTenantParams,
 } from "./types";
 import { ActivityLogger } from "./activity-logger";
+import { TenantCache } from "./cache/tenant-cache";
 import { env } from "./env";
 import {
   buildConnectionString,
@@ -32,41 +35,9 @@ export class TenantDatabaseManager {
   private catalogDb;
   private catalogClient;
   private activityLogger: ActivityLogger;
+  private tenantProvisioningQueue: Queue;
+  private tenantCache: TenantCache;
 
-  // TODO: Implementar cache distribuído com Redis para query results
-  //
-  // ESTRATÉGIA ATUAL (in-memory Map):
-  // - ✅ Funciona bem em single-instance (380ms em cache hit)
-  // - ❌ Não compartilha cache entre múltiplas instâncias do Node.js
-  // - ❌ Perde cache em restart/deploy
-  // - ❌ Limitado pela memória RAM de uma única máquina
-  //
-  // ESTRATÉGIA FUTURA (Redis):
-  // - ✅ Cache distribuído entre todas as instâncias
-  // - ✅ Persiste entre deploys
-  // - ✅ Suporta TTL e invalidação granular
-  // - ✅ Redução esperada: ~95% (380ms → ~50ms em warm cache)
-  //
-  // QUANDO IMPLEMENTAR:
-  // - Ao escalar horizontalmente (múltiplas instâncias do Node.js)
-  // - Quando frequência de deploy causar muitos cache misses
-  //
-  // IMPLEMENTAÇÃO SUGERIDA:
-  // 1. Cache de conexões (connection pooling) - mantém Map atual
-  // 2. Cache de query results (tenant metadata, agents, etc) - novo com Redis
-  //    - Key: `tenant:${organizationId}:metadata`
-  //    - Value: JSON serializado do tenant record
-  //    - TTL: 5-10 minutos
-  // 3. Cache invalidation:
-  //    - On tenant update/delete: invalidar chave específica
-  //    - On agent role change: invalidar queries relacionadas
-  // 4. Fallback strategy: Redis down → bypass cache, query DB directly
-  //
-  // LIBS SUGERIDAS:
-  // - ioredis (cliente Redis robusto)
-  // - @vercel/kv (se usar Vercel, abstração sobre Redis)
-  //
-  // Connection pool cache: organizationId -> { client, db, connectionString }
   private connectionCache = new Map<
     string,
     {
@@ -95,23 +66,58 @@ export class TenantDatabaseManager {
     this.catalogDb = drizzle(this.catalogClient, { schema: catalogSchema });
     // ActivityLogger should also use PgBouncer
     this.activityLogger = new ActivityLogger(connString);
+
+    // Initialize BullMQ queue for async provisioning
+    // PERFORMANCE OPTIMIZATION for high-latency networks:
+    // - enableAutoPipelining: Automatically batches commands into pipelines
+    //   reducing network roundtrips from 5-10× to 1× per operation
+    // - keepAlive: Maintains TCP connection alive, avoiding reconnection overhead
+    const redisConnection = new Redis(env.REDIS_URL, {
+      maxRetriesPerRequest: null, // BullMQ requires null for blocking commands
+      lazyConnect: false, // Connect immediately
+      enableAutoPipelining: true, // CRITICAL: Batches commands automatically
+      keepAlive: 30000, // Keep TCP connection alive for 30 seconds
+      connectTimeout: 10000, // 10 second timeout for initial connection
+      retryStrategy: (times) => {
+        const delay = Math.min(times * 50, 2000);
+        console.log(`[TenantManager] Retrying Redis connection in ${delay}ms...`);
+        return delay;
+      },
+    });
+
+    // Log Redis connection events for debugging
+    redisConnection.on("connect", () => {
+      console.log("[TenantManager] Redis connected for BullMQ");
+    });
+    redisConnection.on("ready", () => {
+      console.log("[TenantManager] Redis ready for BullMQ");
+    });
+    redisConnection.on("error", (error) => {
+      console.error("[TenantManager] Redis connection error:", error);
+    });
+    redisConnection.on("close", () => {
+      console.log("[TenantManager] Redis connection closed");
+    });
+
+    this.tenantProvisioningQueue = new Queue(env.QUEUE_TENANT_PROVISIONING, {
+      connection: redisConnection,
+    });
+
+    // Initialize Redis-based tenant cache
+    this.tenantCache = new TenantCache(redisConnection);
   }
 
-  async provisionTenant(params: ProvisionTenantParams): Promise<Tenant> {
-    const startTime = Date.now();
-
-    // TODO FASE-3: Mover provisionamento para worker/background job
-    // Benefícios:
-    // - Não bloqueia request HTTP (evita timeout em provisioning lento)
-    // - Melhor UX: usuário vê progresso em tempo real
-    // - Retry automático em caso de falha
-    // - Monitoramento e observabilidade melhores
-    // Implementação sugerida:
-    // - Criar queue (BullMQ ou similar)
-    // - Status "provisioning" -> websocket/polling na UI
-    // - Worker processa: CREATE DB -> migrations -> extensions -> update status "active"
-    // - UI recebe notificação quando pronto
-
+  /**
+   * Provisiona um tenant de forma assíncrona usando BullMQ
+   *
+   * Este método:
+   * 1. Cria o registro do tenant com status "provisioning"
+   * 2. Enfileira um job no BullMQ para processar o provisioning
+   * 3. Retorna imediatamente (não bloqueia)
+   *
+   * O worker processa o job e atualiza o status para "active" quando pronto
+   */
+  async provisionTenantAsync(params: ProvisionTenantParams): Promise<Tenant> {
     if (!isValidSlug(params.slug)) {
       throw new Error(`Invalid slug: ${params.slug}`);
     }
@@ -156,8 +162,6 @@ export class TenantDatabaseManager {
     const postgresUser = env.POSTGRES_USER;
     const postgresPassword = env.POSTGRES_PASSWORD;
 
-    // Use PgBouncer port (6432) if available for tenant databases
-    // PgBouncer is configured with wildcard (*) to accept any database dynamically
     const hasPgBouncer = host.capabilities?.features?.includes("pgbouncer");
     const connectionPort = hasPgBouncer ? 6432 : host.port;
 
@@ -169,6 +173,7 @@ export class TenantDatabaseManager {
       password: postgresPassword,
     });
 
+    // Criar registro do tenant com status "provisioning"
     const result = await this.catalogDb
       .insert(tenant)
       .values({
@@ -199,7 +204,102 @@ export class TenantDatabaseManager {
       params.metadata,
     );
 
+    console.log("[TenantManager] ⏱️  About to enqueue job...");
+    const queueAddStart = Date.now();
+
+    // Enfileirar job para processar provisionamento
+    const job = await this.tenantProvisioningQueue.add(
+      "provision-tenant",
+      {
+        organizationId: params.organizationId,
+        organizationName: params.name,
+        organizationSlug: params.slug,
+        ownerId: params.ownerId ?? "", // userId do owner (será criado o agent)
+      },
+      {
+        attempts: 3,
+        backoff: {
+          type: "exponential",
+          delay: 2000,
+        },
+        removeOnComplete: {
+          count: 100,
+          age: 24 * 3600, // Keep for 24 hours
+        },
+        removeOnFail: {
+          count: 500,
+        },
+      },
+    );
+
+    const queueAddDuration = Date.now() - queueAddStart;
+    console.log(`[TenantManager] ⏱️  Job enqueued in ${queueAddDuration}ms - jobId: ${job.id}`);
+
+    // Atualizar provisioning_details com jobId
+    await this.catalogDb
+      .update(tenant)
+      .set({
+        provisioningDetails: {
+          jobId: job.id,
+          progress: 0,
+          currentStep: "queued",
+          startedAt: new Date().toISOString(),
+        },
+      })
+      .where(eq(tenant.id, newTenant.id));
+
+    return newTenant;
+  }
+
+  /**
+   * Busca tenant por organization ID
+   */
+  async getTenantByOrganization(organizationId: string): Promise<Tenant | null> {
+    const result = await this.catalogDb
+      .select()
+      .from(tenant)
+      .where(eq(tenant.organizationId, organizationId))
+      .limit(1);
+
+    return result[0] ?? null;
+  }
+
+  /**
+   * Completa o provisioning físico de um tenant (CREATE DATABASE + migrations)
+   *
+   * Este método é chamado pelo worker após o tenant record já ter sido criado
+   * pelo provisionTenantAsync()
+   */
+  async completeTenantProvisioning(organizationId: string): Promise<Tenant> {
+    const startTime = Date.now();
+
+    // Buscar tenant existente
+    const existingTenant = await this.getTenantByOrganization(organizationId);
+
+    if (!existingTenant) {
+      throw new Error(`Tenant not found for organization ${organizationId}`);
+    }
+
+    if (existingTenant.status === "active") {
+      return existingTenant;
+    }
+
     try {
+      const postgresUser = env.POSTGRES_USER;
+      const postgresPassword = env.POSTGRES_PASSWORD;
+
+      // Buscar host do tenant
+      const hostResult = await this.catalogDb
+        .select()
+        .from(databaseHost)
+        .where(eq(databaseHost.id, existingTenant.databaseHostId))
+        .limit(1);
+
+      const host = hostResult[0];
+      if (!host) {
+        throw new Error(`Database host not found: ${existingTenant.databaseHostId}`);
+      }
+
       const adminConnString = buildConnectionString({
         host: host.host,
         port: host.port,
@@ -210,17 +310,16 @@ export class TenantDatabaseManager {
 
       const adminClient = postgres(adminConnString, { max: 1 });
 
-      await adminClient.unsafe(`CREATE DATABASE "${dbName}"`);
+      // Criar banco de dados físico
+      await adminClient.unsafe(`CREATE DATABASE "${existingTenant.databaseName}"`);
       await adminClient.end();
 
-      const tenantClient = postgres(connectionString, {
+      const tenantClient = postgres(existingTenant.connectionString, {
         max: 1,
         prepare: false,
       });
 
-      // Criar extensões disponíveis no servidor
-      // NOTA: pg_cron só pode ser criado no database configurado em cron.database_name (manylead_catalog)
-      // Para jobs agendados nos tenants, use pg_cron no catalog + dblink
+      // Criar extensões
       await tenantClient.unsafe("CREATE EXTENSION IF NOT EXISTS vector");
       await tenantClient.unsafe("CREATE EXTENSION IF NOT EXISTS pg_partman");
       await tenantClient.unsafe("CREATE EXTENSION IF NOT EXISTS dblink");
@@ -231,31 +330,32 @@ export class TenantDatabaseManager {
 
       await tenantClient.end();
 
+      // Atualizar status para active
       await this.catalogDb
         .update(tenant)
         .set({
           status: "active",
           provisionedAt: new Date(),
         })
-        .where(eq(tenant.id, newTenant.id));
+        .where(eq(tenant.id, existingTenant.id));
 
       const duration = Date.now() - startTime;
       await this.activityLogger.logTenantProvisioned(
-        newTenant.id,
-        dbName,
+        existingTenant.id,
+        existingTenant.databaseName,
         duration,
       );
 
-      return { ...newTenant, status: "active", provisionedAt: new Date() };
+      return { ...existingTenant, status: "active", provisionedAt: new Date() };
     } catch (error) {
       await this.catalogDb
         .update(tenant)
         .set({ status: "failed" })
-        .where(eq(tenant.id, newTenant.id));
+        .where(eq(tenant.id, existingTenant.id));
 
       await this.activityLogger.logSystemError(error as Error, {
-        tenantId: newTenant.id,
-        slug: params.slug,
+        tenantId: existingTenant.id,
+        slug: existingTenant.slug,
       });
 
       throw error;
@@ -274,18 +374,39 @@ export class TenantDatabaseManager {
       return cached.db;
     }
 
-    console.log(`[TenantManager] ❌ CACHE MISS for ${organizationId}`);
+    console.log(`[TenantManager] ❌ Memory cache MISS for ${organizationId}`);
 
-    // Cache miss - fetch tenant info and create connection
-    const startQuery = Date.now();
-    const result = await this.catalogDb
-      .select()
-      .from(tenant)
-      .where(eq(tenant.organizationId, organizationId))
-      .limit(1);
-    console.log(`[TenantManager] Catalog query: ${Date.now() - startQuery}ms`);
+    // Try Redis cache (distributed)
+    let tenantRecord = await this.tenantCache.get(organizationId);
 
-    const tenantRecord = result[0];
+    if (tenantRecord) {
+      console.log(
+        `[TenantManager] ✅ Redis cache HIT for ${organizationId} (${Date.now() - startTotal}ms)`,
+      );
+    } else {
+      console.log(`[TenantManager] ❌ Redis cache MISS for ${organizationId}`);
+
+      // Redis cache miss - query catalog database
+      const startQuery = Date.now();
+      const result = await this.catalogDb
+        .select()
+        .from(tenant)
+        .where(eq(tenant.organizationId, organizationId))
+        .limit(1);
+      console.log(
+        `[TenantManager] Catalog query: ${Date.now() - startQuery}ms`,
+      );
+
+      tenantRecord = result[0] ?? null;
+
+      // Save to Redis cache for next time
+      if (tenantRecord) {
+        await this.tenantCache.set(organizationId, tenantRecord);
+        console.log(
+          `[TenantManager] ✅ Saved to Redis cache for ${organizationId}`,
+        );
+      }
+    }
 
     if (!tenantRecord) {
       throw new Error(`Tenant not found: ${organizationId}`);
@@ -551,6 +672,8 @@ export class TenantDatabaseManager {
         await cached.client.end();
         this.connectionCache.delete(tenantRecord.organizationId);
       }
+      // Invalidate Redis cache
+      await this.tenantCache.invalidate(tenantRecord.organizationId);
     }
   }
 
@@ -573,6 +696,8 @@ export class TenantDatabaseManager {
       await cached.client.end();
       this.connectionCache.delete(organizationId);
     }
+    // Invalidate Redis cache
+    await this.tenantCache.invalidate(organizationId);
 
     // Soft delete - marca como deleted mas mantém database físico
     await this.catalogDb
@@ -608,6 +733,8 @@ export class TenantDatabaseManager {
       await cached.client.end();
       this.connectionCache.delete(organizationId);
     }
+    // Invalidate Redis cache
+    await this.tenantCache.invalidate(organizationId);
 
     const postgresUser = env.POSTGRES_USER;
     const postgresPassword = env.POSTGRES_PASSWORD;
@@ -648,6 +775,7 @@ export class TenantDatabaseManager {
       this.connectionCache.delete(orgId);
     }
 
+    await this.tenantProvisioningQueue.close();
     await this.catalogClient.end();
     await this.activityLogger.close();
   }
