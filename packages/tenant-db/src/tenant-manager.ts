@@ -7,7 +7,7 @@ import postgres from "postgres";
 
 import type { Tenant } from "@manylead/db";
 import * as catalogSchema from "@manylead/db";
-import { databaseHost, tenant } from "@manylead/db";
+import { databaseHost, organization, tenant } from "@manylead/db";
 
 import type {
   HealthCheckResult,
@@ -649,12 +649,26 @@ export class TenantDatabaseManager {
     // Invalidate Redis cache
     await this.tenantCache.invalidate(organizationId);
 
-    // Soft delete - marca como deleted mas mantém database físico
+    // Soft delete - marca como deleted, renomeia slug e name para liberar constraint UNIQUE
+    const timestamp = Date.now();
+
+    // 1. Renomear organização no Better Auth (liberar constraint UNIQUE de slug)
+    await this.catalogDb
+      .update(organization)
+      .set({
+        slug: `${tenantRecord.slug}-deleted-${timestamp}`,
+        name: `${tenantRecord.name} (deleted)`,
+      })
+      .where(eq(organization.id, organizationId));
+
+    // 2. Soft delete do tenant
     await this.catalogDb
       .update(tenant)
       .set({
         status: "deleted",
         deletedAt: new Date(),
+        slug: `${tenantRecord.slug}-deleted-${timestamp}`,
+        name: `${tenantRecord.name} (deleted)`,
       })
       .where(eq(tenant.id, tenantRecord.id));
 

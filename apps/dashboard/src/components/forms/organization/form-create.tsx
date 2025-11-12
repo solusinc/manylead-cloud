@@ -26,10 +26,12 @@ type FormValues = z.infer<typeof schema>;
 export function FormCreateOrganization({
   onSubmit,
   disabled: externalDisabled,
+  children,
   ...props
 }: Omit<React.ComponentProps<"form">, "onSubmit"> & {
   onSubmit: (values: FormValues) => Promise<void>;
   disabled?: boolean;
+  children?: React.ReactNode;
 }) {
   const [isPending, startTransition] = useTransition();
   const disabled = externalDisabled || isPending;
@@ -43,22 +45,14 @@ export function FormCreateOrganization({
 
       startTransition(async () => {
         try {
-          const promise = onSubmit(value);
-          toast.promise(promise, {
-            loading: "Aguarde...",
-            success: () => "Organização criada com sucesso",
-            error: (error) => {
-              if (isTRPCClientError(error)) {
-                return error.message;
-              }
-              return "Falha ao criar organização";
-            },
-          });
-          await promise;
-          // Reset form after success
-          form.reset();
+          await onSubmit(value);
         } catch (error) {
-          console.error(error);
+          // Erro já é tratado no componente pai
+          if (isTRPCClientError(error)) {
+            toast.error(error.message);
+          } else {
+            toast.error("Falha ao criar organização");
+          }
         }
       });
     },
@@ -114,6 +108,7 @@ export function FormCreateOrganization({
             )}
           </form.Field>
         </FormCardContent>
+        {children}
         <FormCardFooter>
           <Button type="submit" disabled={disabled} size="sm">
             {disabled ? "Aguarde..." : "Criar"}

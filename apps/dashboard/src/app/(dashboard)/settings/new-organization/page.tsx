@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle } from "lucide-react";
+import { toast } from "sonner";
 
 import { Alert, AlertTitle } from "@manylead/ui";
 
@@ -54,6 +55,9 @@ export default function Page() {
   // Redirecionar quando provisioning completar via Socket.io
   useEffect(() => {
     if (socket.isComplete && isProvisioning) {
+      // Mostrar toast de sucesso
+      toast.success("Organização criada com sucesso!");
+
       // Invalidar queries para atualizar switcher
       void queryClient.invalidateQueries({
         queryKey: trpc.organization.list.queryKey(),
@@ -125,36 +129,36 @@ export default function Page() {
               }
             }}
             disabled={isProvisioning}
-          />
+          >
+            {/* Mostrar progresso quando estiver provisionando */}
+            {isProvisioning && currentProgress && (
+              <div className="space-y-3 px-4 pb-4">
+                <div className="space-y-2">
+                  <p className="text-muted-foreground text-sm">
+                    {currentProgress.message}
+                  </p>
+                  <div className="bg-secondary h-2 w-full overflow-hidden rounded-full">
+                    <div
+                      className="bg-primary h-full transition-all duration-300"
+                      style={{ width: `${currentProgress.progress}%` }}
+                    />
+                  </div>
+                </div>
+                {socket.error && (
+                  <Alert className="bg-destructive/10 border-none">
+                    <AlertTriangle className="text-destructive! h-4 w-4" />
+                    <AlertTitle>{socket.error.error}</AlertTitle>
+                  </Alert>
+                )}
+              </div>
+            )}
+          </FormCreateOrganization>
 
           {error && (
             <Alert className="bg-destructive/10 border-none mt-4">
               <AlertTriangle className="text-destructive! h-4 w-4" />
               <AlertTitle>{error}</AlertTitle>
             </Alert>
-          )}
-
-          {/* Mostrar progresso quando estiver provisionando */}
-          {isProvisioning && currentProgress && (
-            <div className="space-y-3 mt-4">
-              <div className="space-y-2">
-                <p className="text-muted-foreground text-sm">
-                  {currentProgress.message}
-                </p>
-                <div className="bg-secondary h-2 w-full overflow-hidden rounded-full">
-                  <div
-                    className="bg-primary h-full transition-all duration-300"
-                    style={{ width: `${currentProgress.progress}%` }}
-                  />
-                </div>
-              </div>
-              {socket.error && (
-                <Alert className="bg-destructive/10 border-none">
-                  <AlertTriangle className="text-destructive! h-4 w-4" />
-                  <AlertTitle>{socket.error.error}</AlertTitle>
-                </Alert>
-              )}
-            </div>
           )}
         </FormCardGroup>
       </Section>

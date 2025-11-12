@@ -1,9 +1,9 @@
 import { TRPCError } from "@trpc/server";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import slugify from "slugify";
 import { z } from "zod";
 
-import { member, organization } from "@manylead/db";
+import { member, organization, session, tenant } from "@manylead/db";
 import { ActivityLogger, TenantDatabaseManager } from "@manylead/tenant-db";
 
 import { adminProcedure, createTRPCRouter, protectedProcedure } from "../trpc";
@@ -29,12 +29,18 @@ export const organizationRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      // 1. Limitar a 3 organizações por usuário
+      // 1. Limitar a 3 organizações por usuário (excluindo deletadas)
       const userOrgsCount = await ctx.db
         .select({ id: organization.id })
         .from(organization)
         .innerJoin(member, eq(member.organizationId, organization.id))
-        .where(eq(member.userId, ctx.session.user.id));
+        .leftJoin(tenant, eq(tenant.organizationId, organization.id))
+        .where(
+          and(
+            eq(member.userId, ctx.session.user.id),
+            isNull(tenant.deletedAt), // Não contar organizações deletadas
+          ),
+        );
 
       if (userOrgsCount.length >= 3) {
         throw new TRPCError({
@@ -157,12 +163,18 @@ export const organizationRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      // 1. Limitar a 3 organizações por usuário
+      // 1. Limitar a 3 organizações por usuário (excluindo deletadas)
       const userOrgsCount = await ctx.db
         .select({ id: organization.id })
         .from(organization)
         .innerJoin(member, eq(member.organizationId, organization.id))
-        .where(eq(member.userId, ctx.session.user.id));
+        .leftJoin(tenant, eq(tenant.organizationId, organization.id))
+        .where(
+          and(
+            eq(member.userId, ctx.session.user.id),
+            isNull(tenant.deletedAt), // Não contar organizações deletadas
+          ),
+        );
 
       if (userOrgsCount.length >= 3) {
         throw new TRPCError({
@@ -345,14 +357,20 @@ export const organizationRouter = createTRPCRouter({
   getCurrent: protectedProcedure.query(async ({ ctx }) => {
     let activeOrgId = ctx.session.session.activeOrganizationId;
 
-    // Se não houver organização ativa, tenta pegar a primeira do usuário
+    // Se não houver organização ativa, tenta pegar a primeira do usuário (excluindo deletadas)
     if (!activeOrgId) {
       // Query direta otimizada ao invés de usar Better Auth
       const userOrgs = await ctx.db
         .select({ id: organization.id })
         .from(organization)
         .innerJoin(member, eq(member.organizationId, organization.id))
-        .where(eq(member.userId, ctx.session.user.id))
+        .leftJoin(tenant, eq(tenant.organizationId, organization.id))
+        .where(
+          and(
+            eq(member.userId, ctx.session.user.id),
+            isNull(tenant.deletedAt), // Excluir organizações deletadas
+          ),
+        )
         .limit(1);
 
       if (userOrgs.length > 0 && userOrgs[0]) {
@@ -373,7 +391,7 @@ export const organizationRouter = createTRPCRouter({
       return null;
     }
 
-    // Busca a organização ativa E verifica se o usuário ainda é member
+    // Busca a organização ativa E verifica se o usuário ainda é member (excluindo deletadas)
     // IMPORTANTE: Usa INNER JOIN para garantir que só retorna se o usuário for member
     const currentOrg = await ctx.db
       .select({
@@ -386,10 +404,12 @@ export const organizationRouter = createTRPCRouter({
       })
       .from(organization)
       .innerJoin(member, eq(member.organizationId, organization.id))
+      .leftJoin(tenant, eq(tenant.organizationId, organization.id))
       .where(
         and(
           eq(organization.id, activeOrgId),
           eq(member.userId, ctx.session.user.id),
+          isNull(tenant.deletedAt), // Excluir organizações deletadas
         ),
       )
       .limit(1);
@@ -442,6 +462,7 @@ export const organizationRouter = createTRPCRouter({
    */
   list: protectedProcedure.query(async ({ ctx }) => {
     // Query direta otimizada com JOIN - muito mais rápido que Better Auth
+    // Filtra organizações deletadas (tenant.deletedAt IS NULL)
     const result = await ctx.db
       .select({
         id: organization.id,
@@ -453,7 +474,13 @@ export const organizationRouter = createTRPCRouter({
       })
       .from(organization)
       .innerJoin(member, eq(member.organizationId, organization.id))
-      .where(eq(member.userId, ctx.session.user.id));
+      .leftJoin(tenant, eq(tenant.organizationId, organization.id))
+      .where(
+        and(
+          eq(member.userId, ctx.session.user.id),
+          isNull(tenant.deletedAt), // Filtra organizações deletadas
+        ),
+      );
 
     return result;
   }),
@@ -554,4 +581,73 @@ export const organizationRouter = createTRPCRouter({
 
       return activeOrg[0];
     }),
+
+  /**
+   * Delete organization (soft delete)
+   * Only owners can delete the organization
+   */
+  delete: protectedProcedure.mutation(async ({ ctx }) => {
+    const activeOrgId = ctx.session.session.activeOrganizationId;
+
+    if (!activeOrgId) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Nenhuma organização ativa encontrada",
+      });
+    }
+
+    // Verificar se o usuário é owner
+    const [currentMember] = await ctx.db
+      .select({ role: member.role })
+      .from(member)
+      .where(
+        and(
+          eq(member.userId, ctx.session.user.id),
+          eq(member.organizationId, activeOrgId),
+        ),
+      )
+      .limit(1);
+
+    if (!currentMember || currentMember.role !== "owner") {
+      throw new TRPCError({
+        code: "FORBIDDEN",
+        message: "Apenas proprietários podem deletar a organização",
+      });
+    }
+
+    // Soft delete: marca tenant como deleted (mantém database por 30 dias)
+    await tenantManager.deleteTenant(activeOrgId);
+
+    // Buscar outras organizações do usuário (excluindo deletadas e a atual)
+    const otherOrgs = await ctx.db
+      .select({ id: organization.id })
+      .from(organization)
+      .innerJoin(member, eq(member.organizationId, organization.id))
+      .leftJoin(tenant, eq(tenant.organizationId, organization.id))
+      .where(
+        and(
+          eq(member.userId, ctx.session.user.id),
+          isNull(tenant.deletedAt), // Excluir organizações deletadas
+        ),
+      )
+      .limit(1);
+
+    // Se tiver outra org, setar como ativa
+    if (otherOrgs.length > 0 && otherOrgs[0]) {
+      await ctx.authApi.setActiveOrganization({
+        body: {
+          organizationId: otherOrgs[0].id,
+        },
+        headers: ctx.headers,
+      });
+    } else {
+      // Não tem outras orgs, limpar activeOrganizationId manualmente
+      await ctx.db
+        .update(session)
+        .set({ activeOrganizationId: null })
+        .where(eq(session.userId, ctx.session.user.id));
+    }
+
+    return { success: true };
+  }),
 });
