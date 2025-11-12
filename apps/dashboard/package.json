@@ -33,7 +33,7 @@
     "class-variance-authority": "^0.7.1",
     "date-fns": "^4.1.0",
     "lucide-react": "catalog:",
-    "next": "^16.0.0",
+    "next": "^16.0.2",
     "next-themes": "catalog:",
     "nuqs": "catalog:",
     "react": "catalog:react19",

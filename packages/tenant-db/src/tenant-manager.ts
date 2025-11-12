@@ -35,15 +35,6 @@ export class TenantDatabaseManager {
   private tenantProvisioningQueue: Queue;
   private tenantCache: TenantCache;
 
-  private connectionCache = new Map<
-    string,
-    {
-      client: ReturnType<typeof postgres>;
-      db: ReturnType<typeof drizzle>;
-      connectionString: string;
-    }
-  >();
-
   constructor(catalogConnectionString?: string) {
     // Use PgBouncer by default for better connection pooling
     const connString = catalogConnectionString ?? env.DATABASE_URL;
@@ -52,12 +43,14 @@ export class TenantDatabaseManager {
       throw new Error("Missing catalog database connection string");
     }
 
+    // PgBouncer transaction mode: need VERY few connections per instance
+    // PgBouncer reuses connections efficiently, so max: 2-3 is enough
     this.catalogClient = postgres(connString, {
-      max: 10,
-      idle_timeout: 300, // Keep connections alive for 5 minutes
+      max: 3, // Small pool - PgBouncer handles the real pooling
+      idle_timeout: 20, // Short timeout - PgBouncer manages connection lifecycle
       connect_timeout: 10,
-      max_lifetime: 60 * 30, // 30 minutes
-      prepare: false,
+      max_lifetime: null, // No limit - let PgBouncer recycle connections
+      prepare: false, // Required for PgBouncer transaction mode
     });
 
     this.catalogDb = drizzle(this.catalogClient, { schema: catalogSchema });
@@ -350,15 +343,6 @@ export class TenantDatabaseManager {
   }
 
   async getConnection(organizationId: string) {
-    // Check cache first
-    const cached = this.connectionCache.get(organizationId);
-    if (cached) {
-      console.log(`[TenantManager] ✅ Memory cache HIT for ${organizationId}`);
-      return cached.db;
-    }
-
-    console.log(`[TenantManager] ❌ Memory cache MISS for ${organizationId}`);
-
     // Try Redis cache (distributed)
     let tenantRecord = await this.tenantCache.get(organizationId);
 
@@ -397,25 +381,18 @@ export class TenantDatabaseManager {
       `[TenantManager] Creating connection to ${tenantRecord.databaseName} via ${tenantRecord.port === 6432 ? "PgBouncer" : "PostgreSQL direct"}`,
     );
 
-    // Create new connection with pooling
+    // Create new postgres client (lightweight wrapper, not a real TCP connection)
+    // PgBouncer handles connection pooling centrally
+    // Small pool size: PgBouncer reuses connections efficiently across all app instances
     const client = postgres(tenantRecord.connectionString, {
-      max: 10, // Pool size for better concurrency
-      idle_timeout: 300, // Keep connections alive for 5 minutes (was 20s)
-      connect_timeout: 10, // Connection timeout
-      max_lifetime: 60 * 30, // Max connection lifetime: 30 minutes
-      prepare: false,
+      max: 2, // Small pool - PgBouncer does the real pooling
+      idle_timeout: 20,
+      connect_timeout: 10,
+      max_lifetime: null,
+      prepare: false, // Required for PgBouncer transaction mode
     });
 
-    const db = drizzle(client);
-
-    // Cache the connection
-    this.connectionCache.set(organizationId, {
-      client,
-      db,
-      connectionString: tenantRecord.connectionString,
-    });
-
-    return db;
+    return drizzle(client);
   }
 
   async getTenantBySlug(slug: string): Promise<Tenant | null> {
@@ -633,14 +610,8 @@ export class TenantDatabaseManager {
       .set({ status })
       .where(eq(tenant.id, tenantId));
 
-    // Invalidate cache if tenant is no longer active
+    // Invalidate Redis cache if tenant is no longer active
     if (status !== "active" && tenantRecord) {
-      const cached = this.connectionCache.get(tenantRecord.organizationId);
-      if (cached) {
-        await cached.client.end();
-        this.connectionCache.delete(tenantRecord.organizationId);
-      }
-      // Invalidate Redis cache
       await this.tenantCache.invalidate(tenantRecord.organizationId);
     }
   }
@@ -658,12 +629,6 @@ export class TenantDatabaseManager {
       throw new Error(`Tenant not found: ${organizationId}`);
     }
 
-    // Invalidate cache
-    const cached = this.connectionCache.get(organizationId);
-    if (cached) {
-      await cached.client.end();
-      this.connectionCache.delete(organizationId);
-    }
     // Invalidate Redis cache
     await this.tenantCache.invalidate(organizationId);
 
@@ -695,12 +660,6 @@ export class TenantDatabaseManager {
       throw new Error(`Tenant not found: ${organizationId}`);
     }
 
-    // Invalidate cache
-    const cached = this.connectionCache.get(organizationId);
-    if (cached) {
-      await cached.client.end();
-      this.connectionCache.delete(organizationId);
-    }
     // Invalidate Redis cache
     await this.tenantCache.invalidate(organizationId);
 
@@ -737,12 +696,6 @@ export class TenantDatabaseManager {
   }
 
   async close(): Promise<void> {
-    // Close all cached tenant connections
-    for (const [orgId, cached] of this.connectionCache.entries()) {
-      await cached.client.end();
-      this.connectionCache.delete(orgId);
-    }
-
     await this.tenantProvisioningQueue.close();
     await this.catalogClient.end();
     await this.activityLogger.close();
