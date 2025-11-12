@@ -54,28 +54,14 @@ export function OrganizationSwitcher() {
   }
 
   function handleClick(organizationId: string) {
-    // Atualização otimista: encontrar e setar a org selecionada no cache
-    const selectedOrg = organizations?.find((org) => org.id === organizationId);
-
-    if (selectedOrg) {
-      // Atualizar cache imediatamente para UX instantânea
-      queryClient.setQueryData(
-        trpc.organization.getCurrent.queryKey(),
-        selectedOrg,
-      );
-    }
-
-    // Navegar imediatamente - usuário vê mudança instantânea
-    router.push("/overview");
-
-    // Sincronizar com servidor em background
+    // Sincronizar com servidor e AGUARDAR (UX honesta)
     void setActiveMutation.mutateAsync({ organizationId }).then(() => {
-      // Revalidar para garantir consistência
+      // Invalidar queries para forçar refetch
       void queryClient.invalidateQueries({
         queryKey: trpc.organization.getCurrent.queryKey(),
       });
-      // Soft refresh para atualizar dados do servidor
-      router.refresh();
+      // Navegar DEPOIS que mudou no backend
+      router.push("/overview");
     });
   }
 
@@ -130,6 +116,7 @@ export function OrganizationSwitcher() {
                   void handleClick(org.id);
                   setOpenMobile(false);
                 }}
+                disabled={setActiveMutation.isPending}
                 className="gap-2 p-2"
               >
                 <span className="truncate">

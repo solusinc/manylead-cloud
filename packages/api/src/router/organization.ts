@@ -29,7 +29,21 @@ export const organizationRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      // 1. Gera slug a partir do nome
+      // 1. Limitar a 3 organizações por usuário
+      const userOrgsCount = await ctx.db
+        .select({ id: organization.id })
+        .from(organization)
+        .innerJoin(member, eq(member.organizationId, organization.id))
+        .where(eq(member.userId, ctx.session.user.id));
+
+      if (userOrgsCount.length >= 3) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Você atingiu o limite máximo de 3 organizações por conta.",
+        });
+      }
+
+      // 2. Gera slug a partir do nome
       const slug = slugify(input.name, {
         lower: true,
         strict: true,
@@ -44,7 +58,7 @@ export const organizationRouter = createTRPCRouter({
         });
       }
 
-      // 2. Verifica se já existe tenant com esse slug
+      // 3. Verifica se já existe tenant com esse slug
       const existingTenant = await tenantManager.getTenantBySlug(slug);
 
       if (existingTenant) {
@@ -143,7 +157,21 @@ export const organizationRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      // 1. Gera slug a partir do nome
+      // 1. Limitar a 3 organizações por usuário
+      const userOrgsCount = await ctx.db
+        .select({ id: organization.id })
+        .from(organization)
+        .innerJoin(member, eq(member.organizationId, organization.id))
+        .where(eq(member.userId, ctx.session.user.id));
+
+      if (userOrgsCount.length >= 3) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Você atingiu o limite máximo de 3 organizações por conta.",
+        });
+      }
+
+      // 2. Gera slug a partir do nome
       const slug = slugify(input.name, {
         lower: true,
         strict: true,
@@ -158,7 +186,7 @@ export const organizationRouter = createTRPCRouter({
         });
       }
 
-      // 2. Verifica se já existe tenant com esse slug
+      // 3. Verifica se já existe tenant com esse slug
       const existingTenant = await tenantManager.getTenantBySlug(slug);
       if (existingTenant) {
         throw new TRPCError({

@@ -35,6 +35,11 @@ export class TenantDatabaseManager {
   private tenantProvisioningQueue: Queue;
   private tenantCache: TenantCache;
 
+  // Singleton cache: one postgres client per unique connection string
+  // Prevents memory leak from creating unlimited client objects
+  // With max 3 orgs per user, RAM impact is negligible (~50KB per client)
+  private clientCache = new Map<string, ReturnType<typeof postgres>>();
+
   constructor(catalogConnectionString?: string) {
     // Use PgBouncer by default for better connection pooling
     const connString = catalogConnectionString ?? env.DATABASE_URL;
@@ -381,16 +386,28 @@ export class TenantDatabaseManager {
       `[TenantManager] Creating connection to ${tenantRecord.databaseName} via ${tenantRecord.port === 6432 ? "PgBouncer" : "PostgreSQL direct"}`,
     );
 
-    // Create new postgres client (lightweight wrapper, not a real TCP connection)
-    // PgBouncer handles connection pooling centrally
-    // Small pool size: PgBouncer reuses connections efficiently across all app instances
-    const client = postgres(tenantRecord.connectionString, {
-      max: 2, // Small pool - PgBouncer does the real pooling
-      idle_timeout: 20,
-      connect_timeout: 10,
-      max_lifetime: null,
-      prepare: false, // Required for PgBouncer transaction mode
-    });
+    // Singleton pattern: reuse client if already exists for this connection string
+    // Prevents memory leak from creating unlimited client objects
+    let client = this.clientCache.get(tenantRecord.connectionString);
+
+    if (!client) {
+      console.log(
+        `[TenantManager] 🆕 Creating new postgres client for ${tenantRecord.databaseName}`,
+      );
+
+      // Create new postgres client (lightweight wrapper, not a real TCP connection)
+      // PgBouncer handles connection pooling centrally
+      // Small pool size: PgBouncer reuses connections efficiently across all app instances
+      client = postgres(tenantRecord.connectionString, {
+        max: 2, // Small pool - PgBouncer does the real pooling
+        idle_timeout: 20,
+        connect_timeout: 10,
+        max_lifetime: null,
+        prepare: false, // Required for PgBouncer transaction mode
+      });
+
+      this.clientCache.set(tenantRecord.connectionString, client);
+    }
 
     return drizzle(client);
   }
@@ -696,6 +713,12 @@ export class TenantDatabaseManager {
   }
 
   async close(): Promise<void> {
+    // Close all cached tenant clients
+    for (const client of this.clientCache.values()) {
+      await client.end({ timeout: 5 });
+    }
+    this.clientCache.clear();
+
     await this.tenantProvisioningQueue.close();
     await this.catalogClient.end();
     await this.activityLogger.close();

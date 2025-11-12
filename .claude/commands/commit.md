@@ -4,7 +4,7 @@ description: Cria um commit seguindo o padrão Conventional Commits do projeto
 
 # Git Commit
 
-Você deve criar um commit seguindo rigorosamente as regras definidas em `@COMMIT_PROMPT.md`.
+Você deve criar um commit seguindo rigorosamente as regras definidas em `@COMMIT_PROMPT.md` (arquivo na raiz do projeto).
 
 ## Passos obrigatórios:
 
@@ -13,7 +13,7 @@ Você deve criar um commit seguindo rigorosamente as regras definidas em `@COMMI
    - Execute `git diff` para ver as mudanças em detalhe
 
 2. **Ler as regras de commit:**
-   - Leia `@COMMIT_PROMPT.md` para entender as regras do projeto
+   - Leia `@COMMIT_PROMPT.md` (arquivo na raiz) para entender as regras do projeto
 
 3. **Analisar as mudanças:**
    - Identifique o tipo correto de commit (feat, fix, chore, refactor, etc.)
