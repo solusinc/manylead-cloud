@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { member, session, user } from "@manylead/db";
 
-import { createTRPCRouter, protectedProcedure, ownerProcedure, adminProcedure } from "../trpc";
+import { adminProcedure, createTRPCRouter } from "../trpc";
 
 export const memberRouter = createTRPCRouter({
   /**

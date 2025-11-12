@@ -1,6 +1,7 @@
-import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { eq, and } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
+import { z } from "zod";
+
 import {
   department,
   insertDepartmentSchema,
@@ -8,12 +9,7 @@ import {
   updateDepartmentSchema,
 } from "@manylead/db";
 
-import {
-  createTRPCRouter,
-  protectedProcedure,
-  adminProcedure,
-  tenantManager,
-} from "../trpc";
+import { adminProcedure, createTRPCRouter, tenantManager } from "../trpc";
 
 /**
  * Departments Router
