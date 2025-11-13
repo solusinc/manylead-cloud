@@ -68,9 +68,9 @@ export function FormDepartmentAccess({
     >
       <FormCard>
         <FormCardHeader>
-          <FormCardTitle>Acesso aos Departamentos</FormCardTitle>
+          <FormCardTitle>Acesso aos departamentos</FormCardTitle>
           <FormCardDescription>
-            Defina quais departamentos este membro poderá acessar.
+            Defina quais departamentos este usuário poderá acessar.
           </FormCardDescription>
         </FormCardHeader>
         <FormCardContent>

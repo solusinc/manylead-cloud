@@ -13,7 +13,7 @@ export function NavActions() {
       <NavFeedback />
       {can("manage", "Department") && (
         <Button size="sm" asChild>
-          <Link href="/settings/departments/create">Criar Departamento</Link>
+          <Link href="/settings/departments/create">Criar departamento</Link>
         </Button>
       )}
     </div>

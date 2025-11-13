@@ -31,7 +31,7 @@ export default function Page() {
     <SectionGroup>
       <Section>
         <SectionHeader>
-          <SectionTitle>Criar Departamento</SectionTitle>
+          <SectionTitle>Criar departamento</SectionTitle>
         </SectionHeader>
         <FormGeneral
           onSubmitAction={async (values) => {

@@ -23,8 +23,8 @@ export function NavActions() {
         void queryClient.invalidateQueries({
           queryKey: trpc.agents.list.queryKey(),
         });
-        if (pathname.includes(`/settings/agents/${id}`)) {
-          router.push("/settings/agents");
+        if (pathname.includes(`/settings/users/${id}`)) {
+          router.push("/settings/users");
         }
       },
     }),
@@ -39,8 +39,8 @@ export function NavActions() {
         <QuickActions
           actions={[]}
           deleteAction={{
-            title: "Membro",
-            confirmationValue: "deletar membro",
+            title: "Usuário",
+            confirmationValue: "deletar usuário",
             submitAction: async () => {
               await deleteAgentMutation.mutateAsync({
                 id,

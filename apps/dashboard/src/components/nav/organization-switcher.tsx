@@ -131,10 +131,10 @@ export function OrganizationSwitcher() {
               <>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem className="gap-2 p-2" asChild>
-                  <Link href="/settings/agents">
+                  <Link href="/settings/users">
                     <Plus />
                     <div className="font-inter text-muted-foreground tracking-tight">
-                      Adicionar membro
+                      Adicionar usuário
                     </div>
                   </Link>
                 </DropdownMenuItem>

@@ -13,7 +13,7 @@ export function NavActions() {
       <NavFeedback />
       {can("manage", "Agent") && (
         <Button size="sm" asChild>
-          <Link href="/settings/agents/create">Convidar Membro</Link>
+          <Link href="/settings/users/create">Convidar usuário</Link>
         </Button>
       )}
     </div>

@@ -16,7 +16,7 @@ export function Breadcrumb() {
           label: "Departamentos",
           href: "/settings/departments",
         },
-        { type: "page", label: "Criar Departamento" },
+        { type: "page", label: "Criar departamento" },
       ]}
     />
   );

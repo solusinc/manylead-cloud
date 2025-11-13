@@ -30,14 +30,14 @@ export function Client() {
     <SectionGroup>
       <Section>
         <SectionHeader>
-          <SectionTitle>Membros</SectionTitle>
+          <SectionTitle>Usuários</SectionTitle>
           <SectionDescription>
-            Gerencie os membros da sua equipe e suas permissões.
+            Adicione usuários à sua conta, defina permissões de acesso e acompanhe quem está online.
           </SectionDescription>
         </SectionHeader>
         <Tabs defaultValue="agents">
           <TabsList>
-            <TabsTrigger value="agents">Membros</TabsTrigger>
+            <TabsTrigger value="agents">Usuários</TabsTrigger>
             <TabsTrigger value="pending">Pendentes</TabsTrigger>
           </TabsList>
           <TabsContent value="agents">

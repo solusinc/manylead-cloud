@@ -37,7 +37,7 @@ function AgentNameCell({ agent }: { agent: AgentWithUser }) {
       </Avatar>
       {can("manage", "Agent") ? (
         <a
-          href={`/settings/agents/${agent.id}/edit`}
+          href={`/settings/users/${agent.id}/edit`}
           className="font-medium hover:underline"
         >
           {user.name}

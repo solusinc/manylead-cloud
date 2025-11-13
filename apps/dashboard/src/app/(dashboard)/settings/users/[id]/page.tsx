@@ -6,5 +6,5 @@ export default async function Page({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  redirect(`/settings/agents/${id}/edit`);
+  redirect(`/settings/users/${id}/edit`);
 }

@@ -22,7 +22,7 @@ export default function Page() {
         void queryClient.invalidateQueries({
           queryKey: trpc.invitation.list.queryKey(),
         });
-        router.push("/settings/agents");
+        router.push("/settings/users");
       },
     }),
   );
@@ -31,23 +31,22 @@ export default function Page() {
     <SectionGroup>
       <Section>
         <SectionHeader>
-          <SectionTitle>Convidar Membro</SectionTitle>
+          <SectionTitle>Convidar usuário</SectionTitle>
         </SectionHeader>
         <FormInviteAgent
           onSubmitAction={async (values) => {
-            // Determinar automaticamente o tipo de acesso baseado nos departmentIds
-            const departmentAccess =
-              values.departmentIds.length > 0 ? "specific" : "all";
+            // Determinar o tipo de acesso baseado no restrictDepartments
+            const departmentAccess = values.restrictDepartments ? "specific" : "all";
 
             await createMutation.mutateAsync({
               email: values.email,
               role: values.role,
               departmentAccess,
-              departmentIds: values.departmentIds,
+              departmentIds: values.restrictDepartments ? values.departmentIds : [],
             });
           }}
-          onSuccess={() => {
-            router.push("/settings/agents");
+          onSuccessAction={() => {
+            router.push("/settings/users");
           }}
         />
       </Section>

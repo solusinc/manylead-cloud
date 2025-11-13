@@ -22,10 +22,10 @@ export function Breadcrumb() {
         },
         {
           type: "link",
-          label: "Membros",
-          href: "/settings/agents",
+          label: "Usuários",
+          href: "/settings/users",
         },
-        { type: "page", label: agent.user?.name ?? agent.user?.email ?? "Membro" },
+        { type: "page", label: agent.user?.name ?? agent.user?.email ?? "Usuário" },
       ]}
     />
   );

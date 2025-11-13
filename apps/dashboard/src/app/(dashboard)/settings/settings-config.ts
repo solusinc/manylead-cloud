@@ -13,7 +13,7 @@ export const SETTINGS_NAV_ITEMS: {
   { value: "general", label: "Ajustes gerais", icon: SlidersVertical },
   { value: "account", label: "Conta", icon: User },
   { value: "departments", label: "Departamentos", icon: Building },
-  { value: "agents", label: "Membros", icon: Users },
+  { value: "users", label: "Usuários", icon: Users },
   // Temporarily hidden - user creation of organizations disabled
   // { value: "new-organization", label: "Criar Organização", icon: Plus },
 ];

@@ -13,10 +13,10 @@ export function Breadcrumb() {
         },
         {
           type: "link",
-          label: "Membros",
-          href: "/settings/agents",
+          label: "Usuários",
+          href: "/settings/users",
         },
-        { type: "page", label: "Convidar Membro" },
+        { type: "page", label: "Convidar usuário" },
       ]}
     />
   );

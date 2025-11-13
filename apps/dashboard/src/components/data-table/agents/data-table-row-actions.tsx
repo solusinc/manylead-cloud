@@ -61,7 +61,7 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
       icon: Edit,
       variant: "default" as const,
       onClick: () => {
-        router.push(`/settings/agents/${row.original.id}/edit`);
+        router.push(`/settings/users/${row.original.id}/edit`);
       },
     },
     {

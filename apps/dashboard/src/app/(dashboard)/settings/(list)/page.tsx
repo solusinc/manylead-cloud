@@ -43,10 +43,10 @@ const settings = [
     permission: { action: "manage" as Actions, subject: "Department" as Subjects },
   },
   {
-    title: "Membros",
+    title: "Usuários",
     description:
-      "Gerencie os membros da sua equipe e organize o relacionamento com seus clientes.",
-    href: "/settings/agents",
+      "Adicione usuários à sua conta, defina permissões de acesso e acompanhe quem está online.",
+    href: "/settings/users",
     icon: Users,
     permission: { action: "manage" as Actions, subject: "Agent" as Subjects },
   },

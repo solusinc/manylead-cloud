@@ -23,8 +23,8 @@ import {
   FormCardContent,
   FormCardDescription,
   FormCardFooter,
+  FormCardGroup,
   FormCardHeader,
-  FormCardSeparator,
   FormCardTitle,
 } from "~/components/forms/form-card";
 import { DepartmentSelector } from "./department-selector";
@@ -32,6 +32,7 @@ import { DepartmentSelector } from "./department-selector";
 interface FormValues {
   role: "owner" | "admin" | "member";
   isActive: boolean;
+  restrictDepartments: boolean;
   departmentIds: string[];
 }
 
@@ -76,6 +77,7 @@ export function FormGeneral({
     defaultValues: {
       role: defaultValues.role,
       isActive: defaultValues.isActive,
+      restrictDepartments: defaultValues.restrictDepartments,
       departmentIds: defaultValues.departmentIds,
     },
     onSubmit: ({ value }) => {
@@ -87,12 +89,12 @@ export function FormGeneral({
 
           toast.promise(promise, {
             loading: "Salvando...",
-            success: () => "Membro salvo com sucesso",
+            success: () => "Usuário salvo com sucesso",
             error: (error) => {
               if (isTRPCClientError(error)) {
                 return error.message;
               }
-              return "Falha ao salvar membro";
+              return "Falha ao salvar usuário";
             },
           });
 
@@ -112,119 +114,153 @@ export function FormGeneral({
         void form.handleSubmit();
       }}
     >
-      <FormCard>
-        <FormCardHeader>
-          <FormCardTitle>Informações Gerais</FormCardTitle>
-          <FormCardDescription>
-            Configure o nível de acesso e status do membro.
-          </FormCardDescription>
-        </FormCardHeader>
-        <FormCardContent className="grid gap-4">
-          <div className="grid gap-2">
-            <Label htmlFor="email">Email</Label>
-            <Input
-              id="email"
-              type="email"
-              value={defaultValues.email}
-              disabled
-            />
-          </div>
+      <FormCardGroup>
+        <FormCard>
+          <FormCardHeader>
+            <FormCardTitle>Informações do usuário</FormCardTitle>
+            <FormCardDescription>
+              Configure as informações do usuário que será editado.
+            </FormCardDescription>
+          </FormCardHeader>
+          <FormCardContent className="pb-6">
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div className="grid gap-2 sm:col-span-2">
+                <Label htmlFor="email">Email do usuário</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={defaultValues.email}
+                  disabled
+                />
+              </div>
 
-          <div className="flex flex-wrap justify-between gap-4">
-            <form.Field name="role">
-              {(field) => (
-                <div className="flex items-center gap-2">
-                  <Label htmlFor={field.name}>Nível de acesso</Label>
-                  <Select
-                    value={field.state.value}
-                    onValueChange={(value) => {
-                      field.handleChange(value as FormValues["role"]);
-                    }}
-                    disabled={disabled}
-                  >
-                    <SelectTrigger id={field.name}>
-                      <SelectValue>
-                        <div className="flex items-center gap-2">
-                          {(() => {
-                            const Icon = roleIcons[field.state.value];
-                            return <Icon className="h-4 w-4" />;
-                          })()}
-                          {roleLabels[field.state.value]}
-                        </div>
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent className="w-[calc(100vw-2rem)] sm:w-[--radix-select-trigger-width] max-w-[500px]">
-                      {(
-                        Object.keys(roleLabels) as (keyof typeof roleLabels)[]
-                      ).map((role) => {
-                        const Icon = roleIcons[role];
-                        const isDisabled = isLastOwner && role !== "owner";
-                        return (
-                          <SelectItem
-                            key={role}
-                            value={role}
-                            className="py-3"
-                            disabled={isDisabled}
-                          >
-                            <div className="flex items-start gap-2 sm:gap-3">
-                              <Icon className="mt-0.5 h-4 w-4 sm:h-5 sm:w-5 shrink-0" />
-                              <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-                                <span className="font-medium text-sm">
-                                  {roleLabels[role]}
-                                </span>
-                                <span className="text-xs text-muted-foreground leading-relaxed">
-                                  {roleDescriptions[role]}
-                                </span>
+              <form.Field name="role">
+                {(field) => (
+                  <div className="grid gap-2 sm:col-span-1">
+                    <Label htmlFor={field.name}>Perfil de acesso</Label>
+                    <Select
+                      value={field.state.value}
+                      onValueChange={(value) => {
+                        field.handleChange(value as FormValues["role"]);
+                      }}
+                      disabled={disabled}
+                    >
+                      <SelectTrigger id={field.name}>
+                        <SelectValue>
+                          <div className="flex items-center gap-2">
+                            {(() => {
+                              const Icon = roleIcons[field.state.value];
+                              return <Icon className="h-4 w-4" />;
+                            })()}
+                            {roleLabels[field.state.value]}
+                          </div>
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent className="w-[calc(100vw-2rem)] max-w-[500px] sm:w-[--radix-select-trigger-width]">
+                        {(
+                          Object.keys(roleLabels) as (keyof typeof roleLabels)[]
+                        ).map((role) => {
+                          const Icon = roleIcons[role];
+                          const isDisabled = isLastOwner && role !== "owner";
+                          return (
+                            <SelectItem
+                              key={role}
+                              value={role}
+                              className="py-3"
+                              disabled={isDisabled}
+                            >
+                              <div className="flex items-start gap-2 sm:gap-3">
+                                <Icon className="mt-0.5 h-4 w-4 shrink-0 sm:h-5 sm:w-5" />
+                                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                                  <span className="text-sm font-medium">
+                                    {roleLabels[role]}
+                                  </span>
+                                  <span className="text-muted-foreground text-xs leading-relaxed">
+                                    {roleDescriptions[role]}
+                                  </span>
+                                </div>
                               </div>
-                            </div>
-                          </SelectItem>
-                        );
-                      })}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-            </form.Field>
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </form.Field>
+            </div>
+          </FormCardContent>
+        </FormCard>
 
+        <FormCard>
+          <FormCardHeader>
+            <FormCardTitle>Permissões</FormCardTitle>
+            <FormCardDescription>
+              Defina o que este usuário pode visualizar, acessar e fazer no
+              sistema.
+            </FormCardDescription>
+          </FormCardHeader>
+          <FormCardContent className="grid gap-4">
             <form.Field name="isActive">
               {(field) => (
                 <div className="flex items-center gap-2">
-                  <Label htmlFor={field.name}>Ativo</Label>
                   <Switch
                     id={field.name}
                     checked={field.state.value}
                     onCheckedChange={field.handleChange}
                     disabled={disabled}
                   />
+                  <Label htmlFor={field.name} className="cursor-pointer font-normal">
+                    Usuário ativo
+                  </Label>
                 </div>
               )}
             </form.Field>
-          </div>
-        </FormCardContent>
 
-        <FormCardSeparator />
+            <form.Field name="restrictDepartments">
+              {(field) => (
+                <>
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      id={field.name}
+                      checked={field.state.value}
+                      onCheckedChange={field.handleChange}
+                      disabled={disabled}
+                    />
+                    <Label htmlFor={field.name} className="cursor-pointer font-normal">
+                      Restringir acesso a departamento
+                    </Label>
+                  </div>
 
-        <FormCardContent>
-          <form.Field name="departmentIds">
-            {(field) => (
-              <div className="grid gap-2">
-                <Label>Acesso aos departamentos</Label>
-                <DepartmentSelector
-                  value={field.state.value}
-                  onChange={field.handleChange}
-                  disabled={disabled}
-                />
-              </div>
-            )}
-          </form.Field>
-        </FormCardContent>
-
-        <FormCardFooter>
-          <Button type="submit" size="sm" disabled={disabled}>
-            {disabled ? "Salvando..." : "Salvar"}
-          </Button>
-        </FormCardFooter>
-      </FormCard>
+                  <form.Subscribe selector={(state) => state.values.restrictDepartments}>
+                    {(restrictDepartments) =>
+                      restrictDepartments ? (
+                        <form.Field name="departmentIds">
+                          {(departmentField) => (
+                            <div className="grid gap-2">
+                              <Label>Departamentos permitidos</Label>
+                              <DepartmentSelector
+                                value={departmentField.state.value}
+                                onChange={departmentField.handleChange}
+                                disabled={disabled}
+                              />
+                            </div>
+                          )}
+                        </form.Field>
+                      ) : null
+                    }
+                  </form.Subscribe>
+                </>
+              )}
+            </form.Field>
+          </FormCardContent>
+          <FormCardFooter>
+            <Button type="submit" size="sm" disabled={disabled}>
+              {disabled ? "Salvando..." : "Salvar"}
+            </Button>
+          </FormCardFooter>
+        </FormCard>
+      </FormCardGroup>
     </form>
   );
 }
