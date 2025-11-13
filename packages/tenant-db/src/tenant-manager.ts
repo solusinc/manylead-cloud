@@ -633,7 +633,7 @@ export class TenantDatabaseManager {
     }
   }
 
-  async deleteTenant(organizationId: string): Promise<void> {
+  async deleteTenant(organizationId: string, userId?: string): Promise<void> {
     const result = await this.catalogDb
       .select()
       .from(tenant)
@@ -675,6 +675,7 @@ export class TenantDatabaseManager {
     await this.activityLogger.logTenantDeleted(
       tenantRecord.id,
       tenantRecord.slug,
+      userId,
     );
   }
 

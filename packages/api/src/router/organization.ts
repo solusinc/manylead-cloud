@@ -259,7 +259,7 @@ export const organizationRouter = createTRPCRouter({
         // ROLLBACK: Limpar recursos criados
         try {
           // Deletar tenant record (job ainda pode estar na fila, mas não será processado)
-          await tenantManager.deleteTenant(createdOrg.id);
+          await tenantManager.deleteTenant(createdOrg.id, ctx.session.user.id);
 
           // Deletar a organização (CASCADE deleta members automaticamente)
           await ctx.db
@@ -616,7 +616,7 @@ export const organizationRouter = createTRPCRouter({
     }
 
     // Soft delete: marca tenant como deleted (mantém database por 30 dias)
-    await tenantManager.deleteTenant(activeOrgId);
+    await tenantManager.deleteTenant(activeOrgId, ctx.session.user.id);
 
     // Buscar outras organizações do usuário (excluindo deletadas e a atual)
     const otherOrgs = await ctx.db

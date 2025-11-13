@@ -68,13 +68,18 @@ export class ActivityLogger {
     });
   }
 
-  async logTenantDeleted(tenantId: string, slug: string): Promise<void> {
+  async logTenantDeleted(
+    tenantId: string,
+    slug: string,
+    userId?: string,
+  ): Promise<void> {
     await this.log({
       tenantId,
       action: "tenant.deleted",
       category: "tenant",
       severity: "warning",
       description: `Tenant ${slug} soft deleted`,
+      metadata: userId ? { userId } : undefined,
     });
   }
 
