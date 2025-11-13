@@ -40,6 +40,7 @@
     "drizzle-orm": "^0.44.7",
     "drizzle-zod": "^0.8.3",
     "postgres": "^3.4.7",
+    "uuid": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
@@ -47,6 +48,7 @@
     "@manylead/prettier-config": "workspace:*",
     "@manylead/tsconfig": "workspace:*",
     "@types/node": "catalog:",
+    "@types/uuid": "catalog:",
     "drizzle-kit": "^0.31.5",
     "eslint": "catalog:",
     "prettier": "catalog:",

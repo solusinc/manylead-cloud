@@ -9,6 +9,7 @@ import {
   jsonb,
   index,
 } from "drizzle-orm/pg-core";
+import { v7 as uuidv7 } from "uuid";
 
 import { databaseHost } from "../database-hosts";
 import { tenantMetric } from "../tenant-metrics";
@@ -25,7 +26,7 @@ import { tenantStatus, tenantTier } from "./constants";
 export const tenant = pgTable(
   "tenant",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
+    id: uuid("id").primaryKey().$defaultFn(() => uuidv7()),
 
     // Identificação
     organizationId: text("organization_id")

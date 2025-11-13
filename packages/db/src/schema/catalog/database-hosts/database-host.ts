@@ -9,6 +9,7 @@ import {
   timestamp,
   index,
 } from "drizzle-orm/pg-core";
+import { v7 as uuidv7 } from "uuid";
 
 import { tenant } from "../tenants";
 import { databaseHostStatus, databaseHostTier } from "./constants";
@@ -21,7 +22,7 @@ import { databaseHostStatus, databaseHostTier } from "./constants";
 export const databaseHost = pgTable(
   "database_host",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
+    id: uuid("id").primaryKey().$defaultFn(() => uuidv7()),
 
     // Identificação
     name: varchar("name", { length: 100 }).notNull().unique(),

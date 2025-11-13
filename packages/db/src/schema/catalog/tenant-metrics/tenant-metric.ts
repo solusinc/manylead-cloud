@@ -7,6 +7,7 @@ import {
   timestamp,
   index,
 } from "drizzle-orm/pg-core";
+import { v7 as uuidv7 } from "uuid";
 
 import { tenant } from "../tenants";
 
@@ -18,7 +19,7 @@ import { tenant } from "../tenants";
 export const tenantMetric = pgTable(
   "tenant_metric",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
+    id: uuid("id").primaryKey().$defaultFn(() => uuidv7()),
 
     tenantId: uuid("tenant_id")
       .notNull()

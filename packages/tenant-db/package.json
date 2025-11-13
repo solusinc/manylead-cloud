@@ -38,7 +38,7 @@
     "nanoid": "^5.0.9",
     "postgres": "^3.4.7",
     "slugify": "^1.6.6",
-    "uuid": "13.0.0",
+    "uuid": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
@@ -46,7 +46,7 @@
     "@manylead/prettier-config": "workspace:*",
     "@manylead/tsconfig": "workspace:*",
     "@types/node": "catalog:",
-    "@types/uuid": "^10.0.0",
+    "@types/uuid": "catalog:",
     "dotenv-cli": "11.0.0",
     "drizzle-kit": "^0.31.5",
     "eslint": "catalog:",

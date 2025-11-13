@@ -8,6 +8,7 @@ import {
   jsonb,
   index,
 } from "drizzle-orm/pg-core";
+import { v7 as uuidv7 } from "uuid";
 
 import { department } from "../departments/department";
 
@@ -20,7 +21,7 @@ import { department } from "../departments/department";
 export const agent = pgTable(
   "agent",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
+    id: uuid("id").primaryKey().$defaultFn(() => uuidv7()),
 
     userId: varchar("user_id", { length: 255 }).notNull().unique(),
     // ID do Better Auth user

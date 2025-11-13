@@ -8,6 +8,7 @@ import {
   jsonb,
   index,
 } from "drizzle-orm/pg-core";
+import { v7 as uuidv7 } from "uuid";
 
 import { tenant } from "../tenants";
 import { activityLogCategory, activityLogSeverity } from "./constants";
@@ -25,7 +26,7 @@ import { activityLogCategory, activityLogSeverity } from "./constants";
 export const activityLog = pgTable(
   "activity_log",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
+    id: uuid("id").primaryKey().$defaultFn(() => uuidv7()),
 
     // Contexto
     tenantId: uuid("tenant_id").references(() => tenant.id, {

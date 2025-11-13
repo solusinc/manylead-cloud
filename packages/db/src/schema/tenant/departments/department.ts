@@ -10,6 +10,7 @@ import {
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
+import { v7 as uuidv7 } from "uuid";
 
 import { agent } from "../agents/agent";
 
@@ -22,7 +23,7 @@ import { agent } from "../agents/agent";
 export const department = pgTable(
   "department",
   {
-    id: uuid("id").primaryKey().defaultRandom(),
+    id: uuid("id").primaryKey().$defaultFn(() => uuidv7()),
 
     organizationId: text("organization_id").notNull(),
     // Referência ao organization.id do catalog DB (Better Auth)

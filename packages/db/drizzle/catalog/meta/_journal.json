@@ -43,6 +43,13 @@
       "when": 1762991545170,
       "tag": "0005_famous_jackpot",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1763048666898,
+      "tag": "0006_loving_rafael_vega",
+      "breakpoints": true
     }
   ]
 }
