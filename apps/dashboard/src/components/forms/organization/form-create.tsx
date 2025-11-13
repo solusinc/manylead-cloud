@@ -34,7 +34,7 @@ export function FormCreateOrganization({
   children?: React.ReactNode;
 }) {
   const [isPending, startTransition] = useTransition();
-  const disabled = externalDisabled || isPending;
+  const disabled = externalDisabled ?? isPending;
 
   const form = useForm({
     defaultValues: {

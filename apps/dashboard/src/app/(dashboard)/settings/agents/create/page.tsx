@@ -35,7 +35,16 @@ export default function Page() {
         </SectionHeader>
         <FormInviteAgent
           onSubmitAction={async (values) => {
-            await createMutation.mutateAsync(values);
+            // Determinar automaticamente o tipo de acesso baseado nos departmentIds
+            const departmentAccess =
+              values.departmentIds.length > 0 ? "specific" : "all";
+
+            await createMutation.mutateAsync({
+              email: values.email,
+              role: values.role,
+              departmentAccess,
+              departmentIds: values.departmentIds,
+            });
           }}
           onSuccess={() => {
             router.push("/settings/agents");

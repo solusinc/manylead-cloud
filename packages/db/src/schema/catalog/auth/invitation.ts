@@ -1,4 +1,4 @@
-import { index, pgTable, text, timestamp } from "drizzle-orm/pg-core";
+import { index, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 
 import { organization } from "./organization";
 import { user } from "./user";
@@ -23,6 +23,7 @@ export const invitation = pgTable(
     inviterId: text("inviter_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
+    metadata: jsonb("metadata"),
   },
   (table) => ({
     // Índice para listar invitations de uma organização

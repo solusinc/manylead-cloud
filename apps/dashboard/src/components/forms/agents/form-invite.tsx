@@ -23,13 +23,16 @@ import {
   FormCardContent,
   FormCardDescription,
   FormCardFooter,
+  FormCardGroup,
   FormCardHeader,
   FormCardTitle,
 } from "~/components/forms/form-card";
+import { DepartmentSelector } from "./department-selector";
 
 const formSchema = z.object({
   email: z.string().email("Email inválido"),
   role: z.enum(["owner", "admin", "member"]),
+  departmentIds: z.array(z.string()),
 });
 
 type FormValues = z.infer<typeof formSchema>;
@@ -67,6 +70,7 @@ export function FormInviteAgent({
     defaultValues: {
       email: "",
       role: "member" as FormValues["role"],
+      departmentIds: [] as string[],
     },
     onSubmit: ({ value }) => {
       if (isPending) return;
@@ -104,15 +108,16 @@ export function FormInviteAgent({
         void form.handleSubmit();
       }}
     >
-      <FormCard>
-        <FormCardHeader>
-          <FormCardTitle>Informações do Convite</FormCardTitle>
-          <FormCardDescription>
-            Configure as informações do membro que será convidado.
-          </FormCardDescription>
-        </FormCardHeader>
-        <FormCardContent>
-          <div className="grid gap-4 sm:grid-cols-3">
+      <FormCardGroup>
+        <FormCard>
+          <FormCardHeader>
+            <FormCardTitle>Informações do Convite</FormCardTitle>
+            <FormCardDescription>
+              Configure as informações do membro que será convidado.
+            </FormCardDescription>
+          </FormCardHeader>
+          <FormCardContent className="pb-6">
+            <div className="grid gap-4 sm:grid-cols-3">
             <form.Field
               name="email"
               validators={{
@@ -195,12 +200,36 @@ export function FormInviteAgent({
             </form.Field>
           </div>
         </FormCardContent>
+      </FormCard>
+
+      <FormCard>
+        <FormCardHeader>
+          <FormCardTitle>Configurar Acessos</FormCardTitle>
+          <FormCardDescription>
+            Defina quais departamentos este membro poderá acessar.
+          </FormCardDescription>
+        </FormCardHeader>
+        <FormCardContent>
+          <form.Field name="departmentIds">
+            {(field) => (
+              <div className="grid gap-2">
+                <Label>Acesso aos Departamentos</Label>
+                <DepartmentSelector
+                  value={field.state.value}
+                  onChange={field.handleChange}
+                  disabled={locked ?? isPending}
+                />
+              </div>
+            )}
+          </form.Field>
+        </FormCardContent>
         <FormCardFooter>
           <Button type="submit" size="sm" disabled={isPending || (locked ?? false)}>
             {isPending ? "Enviando..." : "Enviar"}
           </Button>
         </FormCardFooter>
       </FormCard>
+      </FormCardGroup>
     </form>
   );
 }

@@ -116,7 +116,7 @@ export const invitationRouter = createTRPCRouter({
         headers: ctx.headers,
       });
 
-      // Create agent in tenant database with role from invitation
+      // Create agent in tenant database with role and permissions from invitation
       const tenantDb = await tenantManager.getConnection(organizationId);
 
       // Check if agent already exists
@@ -127,11 +127,26 @@ export const invitationRouter = createTRPCRouter({
         .limit(1);
 
       if (!existingAgent) {
+        // Pegar department access do metadata da invitation
+        const metadata = inv[0].metadata as
+          | {
+              departmentAccess?: "all" | "specific";
+              departmentIds?: string[];
+            }
+          | null
+          | undefined;
+
+        const departmentAccess = metadata?.departmentAccess ?? "all";
+        const departmentIds = metadata?.departmentIds ?? [];
+
         await tenantDb.insert(agent).values({
           userId: ctx.session.user.id,
           role: inv[0].role ?? "member", // Use role from invitation
           permissions: {
-            departments: { type: "all" },
+            departments:
+              departmentAccess === "specific"
+                ? { type: "specific", ids: departmentIds }
+                : { type: "all" },
             channels: { type: "all" },
           },
           isActive: true,
@@ -167,6 +182,8 @@ export const invitationRouter = createTRPCRouter({
       z.object({
         email: z.string().email("Email inválido"),
         role: z.enum(["owner", "admin", "member"]).default("member"),
+        departmentAccess: z.enum(["all", "specific"]).default("all"),
+        departmentIds: z.array(z.string()).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -176,6 +193,18 @@ export const invitationRouter = createTRPCRouter({
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "Nenhuma organização ativa encontrada",
+        });
+      }
+
+      // Validar que departmentIds está presente quando departmentAccess é "specific"
+      if (
+        input.departmentAccess === "specific" &&
+        (!input.departmentIds || input.departmentIds.length === 0)
+      ) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "Selecione pelo menos um departamento ou escolha 'Todos os atuais e futuros'",
         });
       }
 
@@ -209,6 +238,17 @@ export const invitationRouter = createTRPCRouter({
           message: "Falha ao criar convite",
         });
       }
+
+      // Atualizar invitation com metadata de department access
+      await ctx.db
+        .update(invitation)
+        .set({
+          metadata: {
+            departmentAccess: input.departmentAccess,
+            departmentIds: input.departmentIds ?? [],
+          },
+        })
+        .where(eq(invitation.id, newInvitation.id));
 
       // Send invitation email
       // TODO: O token de convite é válido por 1 semana (expiresAt definido pelo Better Auth)

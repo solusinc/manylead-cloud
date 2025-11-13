@@ -94,7 +94,17 @@ export const agentsRouter = createTRPCRouter({
         });
       }
 
-      return agentRecord;
+      // Get user data from catalog database
+      const [userData] = await ctx.db
+        .select()
+        .from(user)
+        .where(eq(user.id, agentRecord.userId))
+        .limit(1);
+
+      return {
+        ...selectAgentSchema.parse(agentRecord),
+        user: userData ?? null,
+      };
     }),
 
   /**

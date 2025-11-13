@@ -57,11 +57,6 @@ export function DepartmentDataTableActionBar({
   const queryClient = useQueryClient();
   const { can } = usePermissions();
 
-  // Não mostrar action bar se não tiver permissão
-  if (!can("manage", "Department")) {
-    return null;
-  }
-
   const deleteDepartmentsMutation = useMutation(
     trpc.departments.deleteDepartments.mutationOptions({
       onSuccess: () => {
@@ -88,6 +83,11 @@ export function DepartmentDataTableActionBar({
     () => `deletar departamento${rows.length === 1 ? "" : "s"}`,
     [rows.length],
   );
+
+  // Não mostrar action bar se não tiver permissão
+  if (!can("manage", "Department")) {
+    return null;
+  }
 
   const handleDelete = () => {
     try {
