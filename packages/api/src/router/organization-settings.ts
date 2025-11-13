@@ -8,7 +8,7 @@ import {
   organizationWorkingHoursSchema,
 } from "@manylead/db";
 
-import { adminProcedure, createTRPCRouter, tenantManager } from "../trpc";
+import { ownerProcedure, createTRPCRouter, tenantManager } from "../trpc";
 
 /**
  * Organization Settings Router
@@ -19,7 +19,7 @@ export const organizationSettingsRouter = createTRPCRouter({
   /**
    * Get organization settings
    */
-  get: adminProcedure.query(async ({ ctx }) => {
+  get: ownerProcedure.query(async ({ ctx }) => {
     const organizationId = ctx.session.session.activeOrganizationId;
 
     if (!organizationId) {
@@ -68,7 +68,7 @@ export const organizationSettingsRouter = createTRPCRouter({
   /**
    * Update timezone
    */
-  updateTimezone: adminProcedure
+  updateTimezone: ownerProcedure
     .input(
       z.object({
         timezone: z.string().min(1, "Fuso horário é obrigatório"),
@@ -134,7 +134,7 @@ export const organizationSettingsRouter = createTRPCRouter({
   /**
    * Update working hours
    */
-  updateWorkingHours: adminProcedure
+  updateWorkingHours: ownerProcedure
     .input(
       z.object({
         workingHours: organizationWorkingHoursSchema,
@@ -189,7 +189,7 @@ export const organizationSettingsRouter = createTRPCRouter({
   /**
    * Update messages (welcome and closing)
    */
-  updateMessages: adminProcedure
+  updateMessages: ownerProcedure
     .input(
       z.object({
         welcomeMessage: z.string().optional(),
@@ -247,7 +247,7 @@ export const organizationSettingsRouter = createTRPCRouter({
   /**
    * Update preferences (rating, user name, phone digits)
    */
-  updatePreferences: adminProcedure
+  updatePreferences: ownerProcedure
     .input(
       z.object({
         ratingEnabled: z.boolean(),
@@ -308,7 +308,7 @@ export const organizationSettingsRouter = createTRPCRouter({
   /**
    * Update all settings at once
    */
-  update: adminProcedure
+  update: ownerProcedure
     .input(updateOrganizationSettingsSchema)
     .mutation(async ({ ctx, input }) => {
       const organizationId = ctx.session.session.activeOrganizationId;

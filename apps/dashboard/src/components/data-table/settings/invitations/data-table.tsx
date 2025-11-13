@@ -52,9 +52,9 @@ export function DataTable() {
       <TableBody>
         {invitations.map((item) => {
           const roleLabels: Record<string, string> = {
-            owner: "Proprietário",
-            admin: "Admin",
-            member: "Operador",
+            owner: "Administrador",
+            admin: "Supervisor",
+            member: "Agente",
           };
 
           return (

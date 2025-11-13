@@ -29,9 +29,9 @@ type AgentWithUser = Agent & {
 };
 
 const roleLabels = {
-  owner: "Proprietário",
-  admin: "Admin",
-  member: "Operador",
+  owner: "Administrador",
+  admin: "Supervisor",
+  member: "Agente",
 } as const;
 
 const roleIcons = {
@@ -78,20 +78,20 @@ export function RoleSelectCell({ agent }: RoleSelectCellProps) {
     }),
   );
 
-  // Verificar se usuário logado é proprietário
+  // Verificar se usuário logado é administrador
   const currentUserAgent = agents?.find(
     (a: AgentWithUser) => a.userId === session?.user.id,
   );
   const currentUserIsOwner = currentUserAgent?.role === "owner";
 
-  // Contar quantos proprietários existem
+  // Contar quantos administradores existem
   const ownerCount =
     agents?.filter((a: AgentWithUser) => a.role === "owner").length ?? 0;
 
-  // Se este agent é proprietário e é o último, não pode ser rebaixado
+  // Se este agent é administrador e é o último, não pode ser rebaixado
   const isLastOwner = agent.role === "owner" && ownerCount === 1;
 
-  // Se não tem permissão manage Agent, não é proprietário logado, ou é o último proprietário, mostra apenas texto
+  // Se não tem permissão manage Agent, não é administrador logado, ou é o último administrador, mostra apenas texto
   if (!can("manage", "Agent") || !currentUserIsOwner || isLastOwner) {
     const Icon = roleIcons[agent.role];
     return (
@@ -102,7 +102,7 @@ export function RoleSelectCell({ agent }: RoleSelectCellProps) {
     );
   }
 
-  // Proprietário pode editar: mostra select
+  // Administrador pode editar: mostra select
   const Icon = roleIcons[agent.role];
 
   return (
@@ -137,19 +137,19 @@ export function RoleSelectCell({ agent }: RoleSelectCellProps) {
         <SelectItem value="owner">
           <div className="flex items-center gap-2">
             <Crown className="h-4 w-4" />
-            <span>Proprietário</span>
+            <span>Administrador</span>
           </div>
         </SelectItem>
         <SelectItem value="admin">
           <div className="flex items-center gap-2">
             <Key className="h-4 w-4" />
-            <span>Admin</span>
+            <span>Supervisor</span>
           </div>
         </SelectItem>
         <SelectItem value="member">
           <div className="flex items-center gap-2">
             <User className="h-4 w-4" />
-            <span>Operador</span>
+            <span>Agente</span>
           </div>
         </SelectItem>
       </SelectContent>

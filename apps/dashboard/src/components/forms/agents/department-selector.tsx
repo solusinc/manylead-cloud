@@ -1,11 +1,12 @@
 "use client";
 
-import { Check, ChevronsUpDown } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import { Check, ChevronsUpDown } from "lucide-react";
 
 import {
   Badge,
   Button,
+  cn,
   Command,
   CommandEmpty,
   CommandGroup,
@@ -15,7 +16,6 @@ import {
   Popover,
   PopoverContent,
   PopoverTrigger,
-  cn,
 } from "@manylead/ui";
 
 import { useTRPC } from "~/lib/trpc/react";
@@ -88,7 +88,7 @@ export function DepartmentSelector({
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0">
+      <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
         <Command>
           <CommandInput placeholder="Buscar departamentos..." />
           <CommandList className="w-full">
@@ -116,7 +116,7 @@ export function DepartmentSelector({
               <CommandGroup>
                 <CommandItem
                   onSelect={() => onChange([])}
-                  className="justify-center text-primary font-medium"
+                  className="text-primary justify-center font-medium"
                 >
                   Permitir todos
                 </CommandItem>

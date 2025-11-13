@@ -72,7 +72,7 @@ export function FormCreateOrganization({
           <FormCardTitle>Nova Organização</FormCardTitle>
           <FormCardDescription>
             Crie uma nova organização. Você será automaticamente definido como
-            proprietário.
+            administrador.
           </FormCardDescription>
         </FormCardHeader>
         <FormCardContent>

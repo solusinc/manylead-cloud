@@ -1,7 +1,7 @@
 import {
   createTRPCRouter,
   protectedProcedure,
-  adminProcedure,
+  ownerProcedure,
   tenantManager,
 } from "../trpc";
 import { TRPCError } from "@trpc/server";
@@ -175,9 +175,9 @@ export const invitationRouter = createTRPCRouter({
 
   /**
    * Create a new invitation and send email
-   * Only admins and owners can create invitations (enforced by adminProcedure)
+   * Only admins and owners can create invitations (enforced by ownerProcedure)
    */
-  create: adminProcedure
+  create: ownerProcedure
     .input(
       z.object({
         email: z.string().email("Email inválido"),
@@ -272,7 +272,7 @@ export const invitationRouter = createTRPCRouter({
   /**
    * List all pending invitations for the active organization
    */
-  list: adminProcedure.query(async ({ ctx }) => {
+  list: ownerProcedure.query(async ({ ctx }) => {
     const activeOrgId = ctx.session.session.activeOrganizationId;
 
     if (!activeOrgId) {
@@ -298,9 +298,9 @@ export const invitationRouter = createTRPCRouter({
 
   /**
    * Delete an invitation
-   * Only admins and owners can delete invitations (enforced by adminProcedure)
+   * Only admins and owners can delete invitations (enforced by ownerProcedure)
    */
-  delete: adminProcedure
+  delete: ownerProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const activeOrgId = ctx.session.session.activeOrganizationId;

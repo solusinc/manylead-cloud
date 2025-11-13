@@ -6,7 +6,7 @@ import { z } from "zod";
 import { member, organization, session, tenant } from "@manylead/db";
 import { ActivityLogger, TenantDatabaseManager } from "@manylead/tenant-db";
 
-import { adminProcedure, createTRPCRouter, protectedProcedure } from "../trpc";
+import { ownerProcedure, createTRPCRouter, protectedProcedure } from "../trpc";
 
 const tenantManager = new TenantDatabaseManager();
 const activityLogger = new ActivityLogger();
@@ -488,7 +488,7 @@ export const organizationRouter = createTRPCRouter({
   /**
    * Update organization name
    */
-  updateName: adminProcedure
+  updateName: ownerProcedure
     .input(
       z.object({
         name: z.string().min(2, "Nome deve ter no mínimo 2 caracteres"),
@@ -584,9 +584,9 @@ export const organizationRouter = createTRPCRouter({
 
   /**
    * Delete organization (soft delete)
-   * Only owners can delete the organization
+   * Only owners can delete the organization (enforced by ownerProcedure)
    */
-  delete: protectedProcedure.mutation(async ({ ctx }) => {
+  delete: ownerProcedure.mutation(async ({ ctx }) => {
     const activeOrgId = ctx.session.session.activeOrganizationId;
 
     if (!activeOrgId) {
@@ -596,25 +596,7 @@ export const organizationRouter = createTRPCRouter({
       });
     }
 
-    // Verificar se o usuário é owner
-    const [currentMember] = await ctx.db
-      .select({ role: member.role })
-      .from(member)
-      .where(
-        and(
-          eq(member.userId, ctx.session.user.id),
-          eq(member.organizationId, activeOrgId),
-        ),
-      )
-      .limit(1);
-
-    if (currentMember?.role !== "owner") {
-      throw new TRPCError({
-        code: "FORBIDDEN",
-        message: "Apenas proprietários podem deletar a organização",
-      });
-    }
-
+    // ownerProcedure já garante que ctx.agent.role === 'owner'
     // Soft delete: marca tenant como deleted (mantém database por 30 dias)
     await tenantManager.deleteTenant(activeOrgId, ctx.session.user.id);
 

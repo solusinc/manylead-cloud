@@ -41,18 +41,18 @@ const formSchema = z.object({
 type FormValues = z.infer<typeof formSchema>;
 
 const roleLabels = {
-  owner: "Proprietário",
-  admin: "Admin",
-  member: "Operador",
+  owner: "Administrador",
+  admin: "Supervisor",
+  member: "Agente",
 } as const;
 
 const roleDescriptions = {
   owner:
-    "Tem todas as permissões na ferramenta e tem acesso ao painel financeiro.",
+    "Acessa todas as conversas. Gerencia todas as configurações.",
   admin:
-    "Tem todas as permissões na ferramenta, porém não tem acesso ao painel financeiro.",
+    "Acessa todas as conversas. Gerencia apenas \"contatos\" e \"respostas rápidas\"",
   member:
-    "É capaz de enviar mensagens para contatos e pode alterar configurações básicas que são úteis aos atendentes.",
+    "Acessa apenas suas próprias conversas.",
 } as const;
 
 const roleIcons = {

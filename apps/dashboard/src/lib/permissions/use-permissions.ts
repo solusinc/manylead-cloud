@@ -51,11 +51,14 @@ export interface UsePermissionsReturn {
 export function usePermissions(): UsePermissionsReturn {
   const ability = useAbility();
 
-  // Determinar role baseado nas permissões
-  const isOwner = ability.can('manage', 'Billing');
+  // Determinar role baseado nas permissões da nova estrutura:
+  // - Administrador (owner): manage all
+  // - Supervisor (admin): manage Contact/QuickReply/Tag, mas NÃO manage Organization/Agent/Department
+  // - Agente (member): apenas read Conversation com assignedTo
+  const isOwner = ability.can('manage', 'Organization');
   const isAdmin =
-    ability.can('manage', 'Agent') && ability.cannot('manage', 'Billing');
-  const isMember = ability.cannot('manage', 'Agent');
+    ability.can('manage', 'Contact') && ability.cannot('manage', 'Organization');
+  const isMember = ability.cannot('manage', 'Contact');
 
   return {
     // Role info
@@ -63,24 +66,24 @@ export function usePermissions(): UsePermissionsReturn {
     isAdmin,
     isMember,
 
-    // Agent permissions
-    canInviteMember: ability.can('invite', 'Agent') || ability.can('manage', 'Agent'),
+    // Agent permissions - Apenas Administrador pode gerenciar usuários
+    canInviteMember: ability.can('manage', 'Agent'),
     canEditAgent: (_agent) => ability.can('manage', 'Agent'),
     canEditAgentRole: ability.can('manage', 'Agent'),
-    canDeleteAgent: (_agent) => ability.can('delete', 'Agent'),
+    canDeleteAgent: (_agent) => ability.can('manage', 'Agent'),
 
-    // Billing permissions
+    // Billing permissions - Apenas Administrador tem acesso
     canAccessBilling: ability.can('read', 'Billing'),
     canManageBilling: ability.can('manage', 'Billing'),
 
-    // Department permissions
-    canCreateDepartment: ability.can('create', 'Department'),
-    canEditDepartment: ability.can('update', 'Department'),
-    canDeleteDepartment: ability.can('delete', 'Department'),
+    // Department permissions - Apenas Administrador pode gerenciar departamentos
+    canCreateDepartment: ability.can('manage', 'Department'),
+    canEditDepartment: ability.can('manage', 'Department'),
+    canDeleteDepartment: ability.can('manage', 'Department'),
 
-    // Organization permissions
-    canAccessSettings: ability.can('read', 'Organization'),
-    canEditSettings: ability.can('update', 'Organization'),
+    // Organization permissions - Apenas Administrador pode gerenciar configurações
+    canAccessSettings: ability.can('manage', 'Organization'),
+    canEditSettings: ability.can('manage', 'Organization'),
 
     // Generic check
     can: (action, subject, field) =>

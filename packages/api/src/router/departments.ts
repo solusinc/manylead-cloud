@@ -9,7 +9,7 @@ import {
   updateDepartmentSchema,
 } from "@manylead/db";
 
-import { adminProcedure, createTRPCRouter, tenantManager } from "../trpc";
+import { ownerProcedure, createTRPCRouter, tenantManager } from "../trpc";
 
 /**
  * Departments Router
@@ -20,7 +20,7 @@ export const departmentsRouter = createTRPCRouter({
   /**
    * List all departments for the active organization
    */
-  list: adminProcedure.query(async ({ ctx }) => {
+  list: ownerProcedure.query(async ({ ctx }) => {
     const organizationId = ctx.session.session.activeOrganizationId;
 
     if (!organizationId) {
@@ -44,10 +44,10 @@ export const departmentsRouter = createTRPCRouter({
   /**
    * Get department by ID
    */
-  getById: adminProcedure
+  getById: ownerProcedure
     .input(z.object({ id: z.uuid() }))
     .query(async ({ ctx, input }) => {
-      // ctx.tenantDb já está disponível via adminProcedure
+      // ctx.tenantDb já está disponível via ownerProcedure
       // organizationId já foi validado pelo middleware
 
       const [dept] = await ctx.tenantDb
@@ -68,9 +68,9 @@ export const departmentsRouter = createTRPCRouter({
 
   /**
    * Create a new department
-   * Only admins and owners can create departments (enforced by adminProcedure)
+   * Only admins and owners can create departments (enforced by ownerProcedure)
    */
-  create: adminProcedure
+  create: ownerProcedure
     .input(insertDepartmentSchema.omit({ organizationId: true }))
     .mutation(async ({ ctx, input }) => {
       const organizationId = ctx.session.session.activeOrganizationId;
@@ -116,9 +116,9 @@ export const departmentsRouter = createTRPCRouter({
 
   /**
    * Update a department
-   * Only admins and owners can update departments (enforced by adminProcedure)
+   * Only admins and owners can update departments (enforced by ownerProcedure)
    */
-  update: adminProcedure
+  update: ownerProcedure
     .input(
       z.object({
         id: z.uuid(),
@@ -191,9 +191,9 @@ export const departmentsRouter = createTRPCRouter({
 
   /**
    * Update multiple departments
-   * Only admins and owners can update departments (enforced by adminProcedure)
+   * Only admins and owners can update departments (enforced by ownerProcedure)
    */
-  updateDepartments: adminProcedure
+  updateDepartments: ownerProcedure
     .input(
       z.object({
         ids: z.array(z.uuid()),
@@ -235,9 +235,9 @@ export const departmentsRouter = createTRPCRouter({
 
   /**
    * Delete multiple departments
-   * Only admins and owners can delete departments (enforced by adminProcedure)
+   * Only admins and owners can delete departments (enforced by ownerProcedure)
    */
-  deleteDepartments: adminProcedure
+  deleteDepartments: ownerProcedure
     .input(
       z.object({
         ids: z.array(z.uuid()),
@@ -274,9 +274,9 @@ export const departmentsRouter = createTRPCRouter({
 
   /**
    * Delete a department
-   * Only admins and owners can delete departments (enforced by adminProcedure)
+   * Only admins and owners can delete departments (enforced by ownerProcedure)
    */
-  delete: adminProcedure
+  delete: ownerProcedure
     .input(z.object({ id: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
       const organizationId = ctx.session.session.activeOrganizationId;

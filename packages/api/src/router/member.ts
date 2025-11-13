@@ -4,13 +4,13 @@ import { z } from "zod";
 
 import { member, session, user } from "@manylead/db";
 
-import { adminProcedure, createTRPCRouter } from "../trpc";
+import { ownerProcedure, createTRPCRouter } from "../trpc";
 
 export const memberRouter = createTRPCRouter({
   /**
    * List all members of the active organization
    */
-  list: adminProcedure.query(async ({ ctx }) => {
+  list: ownerProcedure.query(async ({ ctx }) => {
     const activeOrgId = ctx.session.session.activeOrganizationId;
 
     if (!activeOrgId) {
@@ -42,10 +42,10 @@ export const memberRouter = createTRPCRouter({
 
   /**
    * Remove a member from the organization
-   * Only admins and owners can remove members (enforced by adminProcedure)
+   * Only admins and owners can remove members (enforced by ownerProcedure)
    * Cannot remove yourself
    */
-  delete: adminProcedure
+  delete: ownerProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const activeOrgId = ctx.session.session.activeOrganizationId;
@@ -88,7 +88,7 @@ export const memberRouter = createTRPCRouter({
       if (memberToRemove[0].role === "owner") {
         throw new TRPCError({
           code: "FORBIDDEN",
-          message: "Não é possível remover o proprietário da organização",
+          message: "Não é possível remover o administrador da organização",
         });
       }
 

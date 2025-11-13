@@ -14,7 +14,7 @@ export function FormAgentUpdate() {
   const { data: agent } = useQuery(trpc.agents.getById.queryOptions({ id }));
   const { data: allAgents = [] } = useQuery(trpc.agents.list.queryOptions());
 
-  // Verificar se é o último proprietário
+  // Verificar se é o último administrador
   const isLastOwner =
     agent?.role === "owner" &&
     allAgents.filter((a) => a.role === "owner").length === 1;

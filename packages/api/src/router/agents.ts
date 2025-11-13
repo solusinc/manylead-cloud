@@ -14,7 +14,6 @@ import {
 import {
   createTRPCRouter,
   protectedProcedure,
-  adminProcedure,
   ownerProcedure,
   tenantManager,
 } from "../trpc";
@@ -22,13 +21,13 @@ import {
 /**
  * Agents Router
  *
- * Gerencia agents (atendentes) do tenant com permissões granulares
+ * Gerencia agents (usuários) do tenant com permissões granulares
  */
 export const agentsRouter = createTRPCRouter({
   /**
    * List all agents for the active organization with user data
    */
-  list: adminProcedure.query(async ({ ctx }) => {
+  list: ownerProcedure.query(async ({ ctx }) => {
     const organizationId = ctx.session.session.activeOrganizationId;
 
     if (!organizationId) {
@@ -74,12 +73,12 @@ export const agentsRouter = createTRPCRouter({
 
   /**
    * Get agent by ID
-   * Only admins and owners can view any agent (enforced by adminProcedure)
+   * Only admins and owners can view any agent (enforced by ownerProcedure)
    */
-  getById: adminProcedure
+  getById: ownerProcedure
     .input(z.object({ id: z.uuid() }))
     .query(async ({ ctx, input }) => {
-      // ctx.tenantDb já está disponível via adminProcedure
+      // ctx.tenantDb já está disponível via ownerProcedure
 
       const [agentRecord] = await ctx.tenantDb
         .select()
@@ -181,12 +180,12 @@ export const agentsRouter = createTRPCRouter({
 
   /**
    * Create a new agent
-   * Only admins and owners can create agents (enforced by adminProcedure)
+   * Only admins and owners can create agents (enforced by ownerProcedure)
    */
-  create: adminProcedure
+  create: ownerProcedure
     .input(insertAgentSchema)
     .mutation(async ({ ctx, input }) => {
-      // ctx.tenantDb já está disponível via adminProcedure
+      // ctx.tenantDb já está disponível via ownerProcedure
 
       // Verificar se já existe agent com mesmo userId
       const [existing] = await ctx.tenantDb
@@ -212,9 +211,9 @@ export const agentsRouter = createTRPCRouter({
 
   /**
    * Update an agent
-   * Only admins and owners can update agents (enforced by adminProcedure)
+   * Only admins and owners can update agents (enforced by ownerProcedure)
    */
-  update: adminProcedure
+  update: ownerProcedure
     .input(
       z.object({
         id: z.uuid(),
@@ -222,7 +221,7 @@ export const agentsRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      // ctx.tenantDb já está disponível via adminProcedure
+      // ctx.tenantDb já está disponível via ownerProcedure
 
       // Verificar se agent existe
       const [existing] = await ctx.tenantDb
@@ -268,12 +267,12 @@ export const agentsRouter = createTRPCRouter({
 
   /**
    * Delete an agent (removes from tenant agent table + catalog member table)
-   * Only admins and owners can delete agents (enforced by adminProcedure)
+   * Only admins and owners can delete agents (enforced by ownerProcedure)
    */
-  delete: adminProcedure
+  delete: ownerProcedure
     .input(z.object({ id: z.uuid() }))
     .mutation(async ({ ctx, input }) => {
-      // ctx.tenantDb já está disponível via adminProcedure
+      // ctx.tenantDb já está disponível via ownerProcedure
       const organizationId = ctx.session.session.activeOrganizationId;
 
       if (!organizationId) {

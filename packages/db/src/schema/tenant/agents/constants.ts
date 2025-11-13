@@ -5,8 +5,8 @@ export const accessTypes = ["all", "specific"] as const;
 
 /**
  * Agent roles (espelhado do Better Auth)
- * - owner: Proprietário - Full access + financeiro
- * - admin: Admin - Full access - financeiro
- * - member: Membro - Atendimento e visualização
+ * - owner: Administrador - Acessa todas as conversas. Gerencia todas as configurações.
+ * - admin: Supervisor - Acessa todas as conversas. Gerencia apenas "contatos" e "respostas rápidas"
+ * - member: Agente - Acessa apenas suas próprias conversas.
  */
 export const agentRoles = ["owner", "admin", "member"] as const;

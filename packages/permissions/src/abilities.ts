@@ -28,26 +28,39 @@ export function defineAbilitiesFor(
 
   switch (role) {
     case 'owner':
-      // Proprietários têm acesso total a tudo
+      // Administradores têm acesso total a tudo
       can('manage', 'all');
       break;
 
     case 'admin':
-      // Admins podem gerenciar organização, agentes e departamentos
-      can('manage', 'Organization');
-      can('manage', 'Agent');
-      can('manage', 'Department');
+      // Supervisores podem visualizar todas as conversas
+      can('read', 'Conversation');
+      can('update', 'Conversation'); // Atribuir conversas
 
-      // Admins podem VER billing mas não gerenciar
-      can('read', 'Billing');
+      // Supervisores podem gerenciar contatos
+      can('manage', 'Contact');
+
+      // Supervisores podem gerenciar respostas rápidas
+      can('manage', 'QuickReply');
+
+      // Supervisores podem gerenciar tags
+      can('manage', 'Tag');
+
+      // Supervisores NÃO podem gerenciar organização, usuários ou departamentos
+      // Supervisores NÃO têm acesso ao billing
       break;
 
     case 'member':
-      // Membros só podem editar sua própria conta
-      // Não têm acesso a nenhum módulo de /settings/ (exceto /settings/account)
+      // Agentes só podem ver conversas atribuídas a eles
       if (userId) {
+        can('read', 'Conversation', { assignedTo: userId });
+        can('update', 'Conversation', { assignedTo: userId });
+
+        // Agentes podem editar seu próprio perfil
         can('update', 'Agent', { userId });
       }
+
+      // Agentes NÃO podem gerenciar contatos, respostas rápidas ou configurações
       break;
   }
 

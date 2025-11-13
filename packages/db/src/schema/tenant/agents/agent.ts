@@ -13,7 +13,7 @@ import { v7 as uuidv7 } from "uuid";
 import { department } from "../departments/department";
 
 /**
- * Agent table - Atendentes com permissões granulares
+ * Agent table - Usuários com permissões granulares
  *
  * Extensão do member do Better Auth com configurações específicas
  * do tenant e permissões detalhadas de acesso
