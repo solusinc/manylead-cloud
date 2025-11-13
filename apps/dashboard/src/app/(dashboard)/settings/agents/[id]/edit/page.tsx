@@ -11,7 +11,6 @@ import { FormAgentUpdate } from "~/components/forms/agents/update";
 import { useTRPC } from "~/lib/trpc/react";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "next/navigation";
-import { ChevronRight } from "lucide-react";
 
 export default function Page() {
   const { id } = useParams<{ id: string }>();
@@ -24,7 +23,7 @@ export default function Page() {
     <SectionGroup>
       <Section>
         <SectionHeader>
-          <SectionTitle>Editar membro</SectionTitle>
+          <SectionTitle>{agent.user?.name ?? agent.user?.email ?? "Membro"}</SectionTitle>
           <SectionDescription>
             Personalize as configurações e permissões do membro.
           </SectionDescription>
