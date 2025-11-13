@@ -608,7 +608,7 @@ export const organizationRouter = createTRPCRouter({
       )
       .limit(1);
 
-    if (!currentMember || currentMember.role !== "owner") {
+    if (currentMember?.role !== "owner") {
       throw new TRPCError({
         code: "FORBIDDEN",
         message: "Apenas proprietários podem deletar a organização",

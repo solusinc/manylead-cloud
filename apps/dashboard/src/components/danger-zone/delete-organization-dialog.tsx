@@ -64,13 +64,12 @@ export function DeleteOrganizationDialog({
               </div>
 
               <div className="bg-destructive/5 border-destructive/20 space-y-2 rounded-lg border p-4">
-                <div className="font-medium">O que será deletado:</div>
+                <div className="font-medium">Todos os dados da organização serão deletados incluindo:</div>
                 <ul className="text-muted-foreground space-y-1 text-sm">
-                  <li>• Todos os dados da organização</li>
-                  <li>• Todos os membros perderão acesso</li>
-                  <li>• Todos os agentes e departamentos</li>
-                  <li>• Todos os chats e históricos</li>
-                  <li>• Todas as configurações e integrações</li>
+                  <li>• Membros e permissões</li>
+                  <li>• Agentes e departamentos</li>
+                  <li>• Chats e históricos</li>
+                  <li>• Configurações e integrações</li>
                 </ul>
               </div>
 

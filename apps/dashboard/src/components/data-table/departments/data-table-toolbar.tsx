@@ -36,16 +36,6 @@ export function DepartmentDataTableToolbar({ table }: DataTableToolbarProps) {
             ]}
           />
         )}
-        {table.getColumn("autoAssignment") && (
-          <DataTableFacetedFilter
-            column={table.getColumn("autoAssignment")}
-            title="Atribuição"
-            options={[
-              { label: "Automática", value: "true" },
-              { label: "Manual", value: "false" },
-            ]}
-          />
-        )}
         {isFiltered && (
           <Button
             variant="ghost"

@@ -14,7 +14,7 @@ export default function Page() {
     <SectionGroup>
       <Section>
         <SectionHeader>
-          <SectionTitle>Geral</SectionTitle>
+          <SectionTitle>Configurações gerais</SectionTitle>
           <SectionDescription>
             Gerencie as configurações da sua organização.
           </SectionDescription>

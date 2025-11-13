@@ -6,7 +6,6 @@ import { useParams, useRouter } from "next/navigation";
 import { FormCardGroup } from "~/components/forms/form-card";
 import { useTRPC } from "~/lib/trpc/react";
 import { FormGeneral } from "./form-general";
-import { FormWorkingHours } from "./form-working-hours";
 
 export function FormDepartmentUpdate() {
   const { id } = useParams<{ id: string }>();
@@ -18,7 +17,7 @@ export function FormDepartmentUpdate() {
     trpc.departments.getById.queryOptions({ id }),
   );
 
-  const updateGeneralMutation = useMutation(
+  const updateMutation = useMutation(
     trpc.departments.update.mutationOptions({
       onSuccess: () => {
         // Invalidate list query to update the department in the list
@@ -31,17 +30,6 @@ export function FormDepartmentUpdate() {
     }),
   );
 
-  const updateWorkingHoursMutation = useMutation(
-    trpc.departments.update.mutationOptions({
-      onSuccess: () => {
-        void queryClient.invalidateQueries({
-          queryKey: trpc.departments.list.queryKey(),
-        });
-        void refetch();
-      },
-    }),
-  );
-
   if (!department) return null;
 
   return (
@@ -49,18 +37,7 @@ export function FormDepartmentUpdate() {
       <FormGeneral
         defaultValues={{
           name: department.name,
-          autoAssignment: department.autoAssignment,
-        }}
-        onSubmitAction={async (values) => {
-          await updateGeneralMutation.mutateAsync({
-            id,
-            data: values,
-          });
-        }}
-      />
-      <FormWorkingHours
-        defaultValues={
-          department.workingHours
+          workingHours: department.workingHours
             ? {
                 enabled: department.workingHours.enabled,
                 timezone: department.workingHours.timezone,
@@ -74,14 +51,12 @@ export function FormDepartmentUpdate() {
                   sunday: { start: string; end: string; enabled: boolean };
                 },
               }
-            : undefined
-        }
+            : undefined,
+        }}
         onSubmitAction={async (values) => {
-          await updateWorkingHoursMutation.mutateAsync({
+          await updateMutation.mutateAsync({
             id,
-            data: {
-              workingHours: values,
-            },
+            data: values,
           });
         }}
       />

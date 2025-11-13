@@ -10,9 +10,9 @@ import {
   DeleteOrganizationDialog,
 } from "~/components/danger-zone";
 import { FormCardGroup } from "~/components/forms/form-card";
-import { FormMembers } from "~/components/forms/members/form-invite";
+// import { FormMembers } from "~/components/forms/members/form-invite";
 import { FormOrganization } from "./form-general";
-import { FormSlug } from "./form-slug";
+// import { FormSlug } from "./form-slug";
 import { usePermissions } from "~/lib/permissions";
 import { useTRPC } from "~/lib/trpc/react";
 
@@ -40,15 +40,15 @@ export function FormOrganizationUpdate() {
     }),
   );
 
-  const createInvitationMutation = useMutation(
-    trpc.invitation.create.mutationOptions({
-      onSuccess: () => {
-        void queryClient.invalidateQueries({
-          queryKey: trpc.invitation.list.queryKey(),
-        });
-      },
-    }),
-  );
+  // const createInvitationMutation = useMutation(
+  //   trpc.invitation.create.mutationOptions({
+  //     onSuccess: () => {
+  //       void queryClient.invalidateQueries({
+  //         queryKey: trpc.invitation.list.queryKey(),
+  //       });
+  //     },
+  //   }),
+  // );
 
   const deleteOrganizationMutation = useMutation(
     trpc.organization.delete.mutationOptions({
@@ -79,33 +79,32 @@ export function FormOrganizationUpdate() {
       <FormCardGroup>
         <FormOrganization
           defaultValues={{ name: organization.name }}
+          slug={organization.slug}
           onSubmit={async (values) => {
             await updateOrganizationNameMutation.mutateAsync({
               name: values.name,
             });
           }}
         />
-        <FormSlug defaultValues={{ slug: organization.slug }} />
-        <FormMembers
+        {/* Temporarily hidden - team members moved to dedicated agents page */}
+        {/* <FormMembers
           onCreate={async (values) => {
             await createInvitationMutation.mutateAsync({
               email: values.email,
             });
           }}
-        />
+        /> */}
       </FormCardGroup>
 
       {isOwner && (
-        <div className="mt-8">
-          <DangerZone>
-            <DangerZoneItem
-              title="Deletar Organização"
-              description="Uma vez deletada, não será possível recuperar esta organização. Todos os dados serão permanentemente deletados."
-              action="Deletar Organização"
-              onAction={() => setDeleteDialogOpen(true)}
-            />
-          </DangerZone>
-        </div>
+        <DangerZone>
+          <DangerZoneItem
+            title=""
+            description=""
+            action="Deletar Organização"
+            onAction={() => setDeleteDialogOpen(true)}
+          />
+        </DangerZone>
       )}
 
       <DeleteOrganizationDialog

@@ -3,7 +3,6 @@
 import { NavBreadcrumb } from "~/components/nav/nav-breadcrumb";
 import { useTRPC } from "~/lib/trpc/react";
 import { useQuery } from "@tanstack/react-query";
-import { Users } from "lucide-react";
 import { useParams } from "next/navigation";
 
 export function Breadcrumb() {
@@ -18,9 +17,13 @@ export function Breadcrumb() {
       items={[
         {
           type: "link",
+          label: "Configurações",
+          href: "/settings",
+        },
+        {
+          type: "link",
           label: "Membros",
           href: "/settings/agents",
-          icon: Users,
         },
         { type: "page", label: agent.user?.name ?? agent.user?.email ?? "Membro" },
       ]}

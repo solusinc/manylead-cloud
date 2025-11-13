@@ -33,9 +33,6 @@ export const department = pgTable(
     // Ex: "Vendas", "Suporte", "Financeiro"
 
     // Configurações
-    autoAssignment: boolean("auto_assignment").default(false).notNull(),
-    // Se true, conversas são distribuídas automaticamente entre membros
-
     workingHours: jsonb("working_hours").$type<{
       enabled: boolean;
       timezone: string;

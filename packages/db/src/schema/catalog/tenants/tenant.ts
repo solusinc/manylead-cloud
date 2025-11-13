@@ -65,13 +65,13 @@ export const tenant = pgTable(
       jobId?: string;
       progress?: number;
       currentStep?: string;
-      steps?: Array<{
+      steps?: {
         name: string;
         status: "pending" | "in_progress" | "completed" | "failed";
         startedAt?: string;
         completedAt?: string;
         error?: string;
-      }>;
+      }[];
       startedAt?: string;
       completedAt?: string;
       error?: string;

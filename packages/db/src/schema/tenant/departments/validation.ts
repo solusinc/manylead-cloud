@@ -35,7 +35,6 @@ export const insertDepartmentSchema = createInsertSchema(department, {
     .string()
     .min(1, "Nome é obrigatório")
     .max(100, "Nome deve ter no máximo 100 caracteres"),
-  autoAssignment: z.boolean().default(false),
   workingHours: workingHoursSchema,
 });
 

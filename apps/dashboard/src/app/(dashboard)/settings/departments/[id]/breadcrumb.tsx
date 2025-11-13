@@ -3,7 +3,6 @@
 import { NavBreadcrumb } from "~/components/nav/nav-breadcrumb";
 import { useTRPC } from "~/lib/trpc/react";
 import { useQuery } from "@tanstack/react-query";
-import { Building2 } from "lucide-react";
 import { useParams } from "next/navigation";
 
 export function Breadcrumb() {
@@ -20,9 +19,13 @@ export function Breadcrumb() {
       items={[
         {
           type: "link",
+          label: "Configurações",
+          href: "/settings",
+        },
+        {
+          type: "link",
           label: "Departamentos",
           href: "/settings/departments",
-          icon: Building2,
         },
         { type: "page", label: department.name },
       ]}

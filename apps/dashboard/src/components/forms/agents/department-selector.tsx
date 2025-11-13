@@ -24,7 +24,6 @@ interface Department {
   id: string;
   name: string;
   organizationId: string;
-  autoAssignment: boolean;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;

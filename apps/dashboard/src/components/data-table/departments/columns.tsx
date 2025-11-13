@@ -7,7 +7,6 @@ import type { Department } from "@manylead/db";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { DataTableRowActions } from "./data-table-row-actions";
-import { Badge } from "@manylead/ui/badge";
 import { TableCellDate } from "~/components/data-table/table-cell-date";
 import { usePermissions } from "~/lib/permissions";
 
@@ -68,20 +67,6 @@ export const columns: ColumnDef<Department>[] = [
     meta: {
       cellClassName: "max-w-[150px] min-w-max",
     },
-  },
-  {
-    accessorKey: "autoAssignment",
-    header: "Atribuição Automática",
-    cell: ({ row }) => {
-      const value = row.getValue("autoAssignment");
-      return value ? (
-        <Badge variant="default">Ativa</Badge>
-      ) : (
-        <Badge variant="secondary">Inativa</Badge>
-      );
-    },
-    enableHiding: true,
-    enableSorting: true,
   },
   {
     accessorKey: "isActive",

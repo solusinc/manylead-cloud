@@ -20,9 +20,9 @@ import type { Actions, Subjects } from "@manylead/permissions";
 
 const settings = [
   {
-    title: "Geral",
+    title: "Organização",
     description: "Gerencie as configurações da sua organização.",
-    href: "/settings/general",
+    href: "/settings/organization",
     permission: { action: "manage" as Actions, subject: "Organization" as Subjects },
   },
   {
@@ -45,12 +45,13 @@ const settings = [
     href: "/settings/agents",
     permission: { action: "manage" as Actions, subject: "Agent" as Subjects },
   },
-  {
-    title: "Criar Organização",
-    description: "Crie uma nova organização e comece a gerenciar sua equipe.",
-    href: "/settings/new-organization",
-    permission: { action: "create" as Actions, subject: "Organization" as Subjects },
-  },
+  // Temporarily hidden - user creation of organizations disabled
+  // {
+  //   title: "Criar Organização",
+  //   description: "Crie uma nova organização e comece a gerenciar sua equipe.",
+  //   href: "/settings/new-organization",
+  //   permission: { action: "create" as Actions, subject: "Organization" as Subjects },
+  // },
 ];
 
 export default function Page() {

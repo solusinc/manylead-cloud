@@ -29,6 +29,13 @@
       "when": 1762825286460,
       "tag": "0003_chubby_namora",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1763046111576,
+      "tag": "0004_remarkable_mach_iv",
+      "breakpoints": true
     }
   ]
 }
