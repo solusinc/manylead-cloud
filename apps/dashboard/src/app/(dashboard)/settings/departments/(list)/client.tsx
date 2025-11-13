@@ -43,10 +43,7 @@ export function Client() {
         ) : departments ? (
           <DataTable
             columns={columns}
-            data={departments.map((dept) => ({
-              ...dept,
-              workingHours: dept.workingHours ?? undefined,
-            }))}
+            data={departments}
             actionBar={DepartmentDataTableActionBar}
             toolbarComponent={DepartmentDataTableToolbar}
             paginationComponent={DataTablePaginationSimple}

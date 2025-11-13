@@ -144,7 +144,7 @@ export function FormOrganization({
         </FormCardContent>
         <FormCardFooter>
           <Button type="submit" disabled={isPending} size="sm">
-            {isPending ? "Enviando..." : "Enviar"}
+            {isPending ? "Salvando..." : "Salvar"}
           </Button>
         </FormCardFooter>
       </FormCard>

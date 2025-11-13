@@ -17,18 +17,21 @@ import {
 import Link from "next/link";
 import { usePermissions } from "~/lib/permissions";
 import type { Actions, Subjects } from "@manylead/permissions";
+import { Building, SlidersVertical, User, Users } from "lucide-react";
 
 const settings = [
   {
-    title: "Organização",
+    title: "Ajustes gerais",
     description: "Gerencie as configurações da sua organização.",
-    href: "/settings/organization",
+    href: "/settings/general",
+    icon: SlidersVertical,
     permission: { action: "manage" as Actions, subject: "Organization" as Subjects },
   },
   {
     title: "Conta",
     description: "Gerencie suas informações pessoais e preferências.",
     href: "/settings/account",
+    icon: User,
     permission: null, // Todos podem ver
   },
   {
@@ -36,6 +39,7 @@ const settings = [
     description:
       "Organize sua equipe em setores e otimize a distribuição de conversas.",
     href: "/settings/departments",
+    icon: Building,
     permission: { action: "manage" as Actions, subject: "Department" as Subjects },
   },
   {
@@ -43,6 +47,7 @@ const settings = [
     description:
       "Gerencie os membros da sua equipe e organize o relacionamento com seus clientes.",
     href: "/settings/agents",
+    icon: Users,
     permission: { action: "manage" as Actions, subject: "Agent" as Subjects },
   },
   // Temporarily hidden - user creation of organizations disabled
@@ -73,18 +78,28 @@ export default function Page() {
           </SectionDescription>
         </SectionHeader>
         <ActionCardGroup>
-          {visibleSettings.map((setting) => (
-            <Link href={setting.href} key={setting.href}>
-              <ActionCard className="h-full w-full">
-                <ActionCardHeader>
-                  <ActionCardTitle>{setting.title}</ActionCardTitle>
-                  <ActionCardDescription>
-                    {setting.description}
-                  </ActionCardDescription>
-                </ActionCardHeader>
-              </ActionCard>
-            </Link>
-          ))}
+          {visibleSettings.map((setting) => {
+            const Icon = setting.icon;
+            return (
+              <Link href={setting.href} key={setting.href}>
+                <ActionCard className="h-full w-full transition-colors hover:bg-accent">
+                  <ActionCardHeader>
+                    <div className="flex gap-3">
+                      <div className="flex items-center justify-center">
+                        <Icon className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                      </div>
+                      <div className="flex flex-col gap-1">
+                        <ActionCardTitle>{setting.title}</ActionCardTitle>
+                        <ActionCardDescription>
+                          {setting.description}
+                        </ActionCardDescription>
+                      </div>
+                    </div>
+                  </ActionCardHeader>
+                </ActionCard>
+              </Link>
+            );
+          })}
         </ActionCardGroup>
       </Section>
     </SectionGroup>

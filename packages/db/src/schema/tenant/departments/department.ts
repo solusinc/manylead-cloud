@@ -2,7 +2,6 @@ import { relations } from "drizzle-orm";
 import {
   boolean,
   index,
-  jsonb,
   pgTable,
   text,
   timestamp,
@@ -32,17 +31,6 @@ export const department = pgTable(
     // Informações básicas
     name: varchar("name", { length: 100 }).notNull(),
     // Ex: "Vendas", "Suporte", "Financeiro"
-
-    // Configurações
-    workingHours: jsonb("working_hours").$type<{
-      enabled: boolean;
-      timezone: string;
-      schedule: Record<
-        string,
-        { start: string; end: string; enabled: boolean }
-      >;
-      // Ex: { monday: { start: "09:00", end: "18:00", enabled: true } }
-    }>(),
 
     isActive: boolean("is_active").default(true).notNull(),
 

@@ -12,6 +12,9 @@ import {
 import { FormCardGroup } from "~/components/forms/form-card";
 // import { FormMembers } from "~/components/forms/members/form-invite";
 import { FormOrganization } from "./form-general";
+import { FormWorkingHours } from "./form-working-hours";
+import { FormMessages } from "./form-messages";
+import { FormPreferences } from "./form-preferences";
 // import { FormSlug } from "./form-slug";
 import { usePermissions } from "~/lib/permissions";
 import { useTRPC } from "~/lib/trpc/react";
@@ -27,6 +30,10 @@ export function FormOrganizationUpdate() {
     trpc.organization.getCurrent.queryOptions(),
   );
 
+  const { data: settings } = useQuery(
+    trpc.organizationSettings.get.queryOptions(),
+  );
+
   const updateOrganizationNameMutation = useMutation(
     trpc.organization.updateName.mutationOptions({
       onSuccess: () => {
@@ -35,6 +42,46 @@ export function FormOrganizationUpdate() {
         });
         void queryClient.invalidateQueries({
           queryKey: trpc.organization.list.queryKey(),
+        });
+      },
+    }),
+  );
+
+  const updateTimezoneMutation = useMutation(
+    trpc.organizationSettings.updateTimezone.mutationOptions({
+      onSuccess: () => {
+        void queryClient.invalidateQueries({
+          queryKey: trpc.organizationSettings.get.queryKey(),
+        });
+      },
+    }),
+  );
+
+  const updateWorkingHoursMutation = useMutation(
+    trpc.organizationSettings.updateWorkingHours.mutationOptions({
+      onSuccess: () => {
+        void queryClient.invalidateQueries({
+          queryKey: trpc.organizationSettings.get.queryKey(),
+        });
+      },
+    }),
+  );
+
+  const updateMessagesMutation = useMutation(
+    trpc.organizationSettings.updateMessages.mutationOptions({
+      onSuccess: () => {
+        void queryClient.invalidateQueries({
+          queryKey: trpc.organizationSettings.get.queryKey(),
+        });
+      },
+    }),
+  );
+
+  const updatePreferencesMutation = useMutation(
+    trpc.organizationSettings.updatePreferences.mutationOptions({
+      onSuccess: () => {
+        void queryClient.invalidateQueries({
+          queryKey: trpc.organizationSettings.get.queryKey(),
         });
       },
     }),
@@ -70,7 +117,7 @@ export function FormOrganizationUpdate() {
     }),
   );
 
-  if (!organization) return null;
+  if (!organization || !settings) return null;
 
   const isOwner = can("delete", "Organization");
 
@@ -84,6 +131,50 @@ export function FormOrganizationUpdate() {
             await updateOrganizationNameMutation.mutateAsync({
               name: values.name,
             });
+          }}
+        />
+        <FormWorkingHours
+          defaultValues={{
+            timezone: settings.timezone,
+            workingHours: settings.workingHours ?? {
+              enabled: false,
+              schedule: {
+                monday: { start: "09:00", end: "18:00", enabled: true },
+                tuesday: { start: "09:00", end: "18:00", enabled: true },
+                wednesday: { start: "09:00", end: "18:00", enabled: true },
+                thursday: { start: "09:00", end: "18:00", enabled: true },
+                friday: { start: "09:00", end: "18:00", enabled: true },
+                saturday: { start: "09:00", end: "13:00", enabled: false },
+                sunday: { start: "09:00", end: "13:00", enabled: false },
+              },
+            },
+          }}
+          onSubmitAction={async (values) => {
+            await updateTimezoneMutation.mutateAsync({
+              timezone: values.timezone,
+            });
+            await updateWorkingHoursMutation.mutateAsync({
+              workingHours: values.workingHours,
+            });
+          }}
+        />
+        <FormMessages
+          defaultValues={{
+            welcomeMessage: settings.welcomeMessage ?? undefined,
+            closingMessage: settings.closingMessage ?? undefined,
+          }}
+          onSubmitAction={async (values) => {
+            await updateMessagesMutation.mutateAsync(values);
+          }}
+        />
+        <FormPreferences
+          defaultValues={{
+            ratingEnabled: settings.ratingEnabled,
+            includeUserName: settings.includeUserName,
+            hidePhoneDigits: settings.hidePhoneDigits,
+          }}
+          onSubmitAction={async (values) => {
+            await updatePreferencesMutation.mutateAsync(values);
           }}
         />
         {/* Temporarily hidden - team members moved to dedicated agents page */}

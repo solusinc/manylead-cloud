@@ -14,9 +14,9 @@ export default function Page() {
     <SectionGroup>
       <Section>
         <SectionHeader>
-          <SectionTitle>Configurações gerais</SectionTitle>
+          <SectionTitle>Ajustes gerais</SectionTitle>
           <SectionDescription>
-            Gerencie as configurações da sua organização.
+            Os principais ajustes da Manylead estão aqui. Mensagens boas vindas/finalização, regras de utilização, horário de atendimento e mais.
           </SectionDescription>
         </SectionHeader>
         <FormOrganizationUpdate />

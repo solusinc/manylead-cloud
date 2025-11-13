@@ -6,6 +6,9 @@
  * gerenciados pelo Better Auth.
  */
 
+// Organization Settings
+export * from "./organization-settings";
+
 // Departments
 export * from "./departments";
 

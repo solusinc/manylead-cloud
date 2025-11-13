@@ -37,21 +37,6 @@ export function FormDepartmentUpdate() {
       <FormGeneral
         defaultValues={{
           name: department.name,
-          workingHours: department.workingHours
-            ? {
-                enabled: department.workingHours.enabled,
-                timezone: department.workingHours.timezone,
-                schedule: department.workingHours.schedule as {
-                  monday: { start: string; end: string; enabled: boolean };
-                  tuesday: { start: string; end: string; enabled: boolean };
-                  wednesday: { start: string; end: string; enabled: boolean };
-                  thursday: { start: string; end: string; enabled: boolean };
-                  friday: { start: string; end: string; enabled: boolean };
-                  saturday: { start: string; end: string; enabled: boolean };
-                  sunday: { start: string; end: string; enabled: boolean };
-                },
-              }
-            : undefined,
         }}
         onSubmitAction={async (values) => {
           await updateMutation.mutateAsync({
