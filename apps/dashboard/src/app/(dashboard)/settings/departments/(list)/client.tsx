@@ -1,5 +1,9 @@
 "use client";
 
+import type { ColumnFiltersState, SortingState } from "@tanstack/react-table";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+
 import {
   Section,
   SectionDescription,
@@ -11,12 +15,9 @@ import { columns } from "~/components/data-table/departments/columns";
 import { DepartmentDataTableActionBar } from "~/components/data-table/departments/data-table-action-bar";
 import { DepartmentDataTableToolbar } from "~/components/data-table/departments/data-table-toolbar";
 import { DataTable } from "~/components/ui/data-table/data-table";
-import { DataTableSkeleton } from "~/components/ui/data-table/data-table-skeleton";
 import { DataTablePaginationSimple } from "~/components/ui/data-table/data-table-pagination";
+import { DataTableSkeleton } from "~/components/ui/data-table/data-table-skeleton";
 import { useTRPC } from "~/lib/trpc/react";
-import { useQuery } from "@tanstack/react-query";
-import type { ColumnFiltersState, SortingState } from "@tanstack/react-table";
-import { useState } from "react";
 
 export function Client() {
   const trpc = useTRPC();
@@ -32,8 +33,8 @@ export function Client() {
         <SectionHeader>
           <SectionTitle>Departamentos</SectionTitle>
           <SectionDescription>
-            Organize sua equipe em setores e otimize a distribuição de
-            conversas.
+            Departamentos são usados para organizar usuários, direcionar o
+            chatbot e facilitar transferências.
           </SectionDescription>
         </SectionHeader>
       </Section>

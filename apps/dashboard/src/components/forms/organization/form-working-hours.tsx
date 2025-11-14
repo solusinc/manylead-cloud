@@ -170,7 +170,7 @@ export function FormWorkingHours({
           <form.Field name="timezone">
             {(field) => (
               <div className="grid gap-2">
-                <Label htmlFor={field.name}>Fuso Horário</Label>
+                <Label htmlFor={field.name}>Fuso horário</Label>
                 <Select
                   value={field.state.value}
                   onValueChange={field.handleChange}

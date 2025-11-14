@@ -82,17 +82,17 @@ export function DepartmentSelector({
                 </Badge>
               ))
             ) : (
-              <span>Todos os atuais e futuros</span>
+              <span>Selecionar departamento</span>
             )}
           </div>
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
         <Command>
           <CommandInput placeholder="Buscar departamentos..." />
           <CommandList className="w-full">
-            <CommandEmpty>
+            <CommandEmpty className="px-4 py-6 text-center text-sm">
               {isLoading ? "Carregando..." : "Nenhum departamento encontrado."}
             </CommandEmpty>
             <CommandGroup>
@@ -112,16 +112,6 @@ export function DepartmentSelector({
                 </CommandItem>
               ))}
             </CommandGroup>
-            {value.length > 0 && (
-              <CommandGroup>
-                <CommandItem
-                  onSelect={() => onChange([])}
-                  className="text-primary justify-center font-medium"
-                >
-                  Permitir todos
-                </CommandItem>
-              </CommandGroup>
-            )}
           </CommandList>
         </Command>
       </PopoverContent>

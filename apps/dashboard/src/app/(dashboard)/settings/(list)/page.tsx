@@ -1,5 +1,10 @@
 "use client";
 
+import Link from "next/link";
+import { Building, SlidersVertical, User, Users } from "lucide-react";
+
+import type { Actions, Subjects } from "@manylead/permissions";
+
 import {
   ActionCard,
   ActionCardDescription,
@@ -14,18 +19,19 @@ import {
   SectionHeader,
   SectionTitle,
 } from "~/components/content/section";
-import Link from "next/link";
 import { usePermissions } from "~/lib/permissions";
-import type { Actions, Subjects } from "@manylead/permissions";
-import { Building, SlidersVertical, User, Users } from "lucide-react";
 
 const settings = [
   {
     title: "Ajustes gerais",
-    description: "Gerencie as configurações da sua organização.",
+    description:
+      "Gerencie as configurações da sua organização, mensagens, regras de utilização, horário de atendimento e mais.",
     href: "/settings/general",
     icon: SlidersVertical,
-    permission: { action: "manage" as Actions, subject: "Organization" as Subjects },
+    permission: {
+      action: "manage" as Actions,
+      subject: "Organization" as Subjects,
+    },
   },
   {
     title: "Conta",
@@ -40,7 +46,10 @@ const settings = [
       "Organize sua equipe em setores e otimize a distribuição de conversas.",
     href: "/settings/departments",
     icon: Building,
-    permission: { action: "manage" as Actions, subject: "Department" as Subjects },
+    permission: {
+      action: "manage" as Actions,
+      subject: "Department" as Subjects,
+    },
   },
   {
     title: "Usuários",
@@ -82,11 +91,11 @@ export default function Page() {
             const Icon = setting.icon;
             return (
               <Link href={setting.href} key={setting.href}>
-                <ActionCard className="h-full w-full transition-colors hover:bg-accent">
+                <ActionCard className="hover:bg-accent h-full w-full transition-colors">
                   <ActionCardHeader>
                     <div className="flex gap-3">
                       <div className="flex items-center justify-center">
-                        <Icon className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                        <Icon className="text-muted-foreground h-5 w-5 shrink-0" />
                       </div>
                       <div className="flex flex-col gap-1">
                         <ActionCardTitle>{setting.title}</ActionCardTitle>

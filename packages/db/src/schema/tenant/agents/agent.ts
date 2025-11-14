@@ -1,4 +1,3 @@
-import { relations } from "drizzle-orm";
 import {
   pgTable,
   uuid,
@@ -9,8 +8,6 @@ import {
   index,
 } from "drizzle-orm/pg-core";
 import { v7 as uuidv7 } from "uuid";
-
-import { department } from "../departments/department";
 
 /**
  * Agent table - Usuários com permissões granulares
@@ -29,11 +26,6 @@ export const agent = pgTable(
     role: varchar("role", { length: 50 }).notNull().default("member"),
     // Role do agente: owner | admin | member
     // (espelhado do Better Auth member.role para evitar cross-DB)
-
-    departmentId: uuid("department_id").references(() => department.id, {
-      onDelete: "set null",
-    }),
-    // NULL = acesso a todos os departamentos
 
     // Permissões granulares
     permissions: jsonb("permissions")
@@ -61,14 +53,6 @@ export const agent = pgTable(
   },
   (table) => [
     index("agent_user_idx").on(table.userId),
-    index("agent_dept_idx").on(table.departmentId),
     index("agent_active_idx").on(table.isActive),
   ],
 );
-
-export const agentRelations = relations(agent, ({ one }) => ({
-  department: one(department, {
-    fields: [agent.departmentId],
-    references: [department.id],
-  }),
-}));

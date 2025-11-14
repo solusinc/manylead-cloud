@@ -15,6 +15,13 @@
       "when": 1763048680667,
       "tag": "0001_numerous_pete_wisdom",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1763081710595,
+      "tag": "0002_optimal_iron_monger",
+      "breakpoints": true
     }
   ]
 }

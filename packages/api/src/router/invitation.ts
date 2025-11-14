@@ -204,7 +204,7 @@ export const invitationRouter = createTRPCRouter({
         throw new TRPCError({
           code: "BAD_REQUEST",
           message:
-            "Selecione pelo menos um departamento ou escolha 'Todos os atuais e futuros'",
+            "Selecione pelo menos um departamento",
         });
       }
 
@@ -295,6 +295,129 @@ export const invitationRouter = createTRPCRouter({
 
     return invitations;
   }),
+
+  /**
+   * Get invitation by ID
+   * Only admins and owners can get invitation details (enforced by ownerProcedure)
+   */
+  getById: ownerProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const activeOrgId = ctx.session.session.activeOrganizationId;
+
+      if (!activeOrgId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Nenhuma organização ativa encontrada",
+        });
+      }
+
+      const inv = await ctx.db
+        .select()
+        .from(invitation)
+        .where(eq(invitation.id, input.id))
+        .limit(1);
+
+      if (!inv[0]) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Convite não encontrado",
+        });
+      }
+
+      if (inv[0].organizationId !== activeOrgId) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Você não tem permissão para visualizar este convite",
+        });
+      }
+
+      return inv[0];
+    }),
+
+  /**
+   * Update invitation
+   * Only admins and owners can update invitations (enforced by ownerProcedure)
+   */
+  update: ownerProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        role: z.enum(["owner", "admin", "member"]).optional(),
+        departmentAccess: z.enum(["all", "specific"]).optional(),
+        departmentIds: z.array(z.string()).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const activeOrgId = ctx.session.session.activeOrganizationId;
+
+      if (!activeOrgId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Nenhuma organização ativa encontrada",
+        });
+      }
+
+      // Verify the invitation belongs to the active organization
+      const inv = await ctx.db
+        .select()
+        .from(invitation)
+        .where(eq(invitation.id, input.id))
+        .limit(1);
+
+      if (!inv[0]) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Convite não encontrado",
+        });
+      }
+
+      if (inv[0].organizationId !== activeOrgId) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Você não tem permissão para editar este convite",
+        });
+      }
+
+      // Validar que departmentIds está presente quando departmentAccess é "specific"
+      if (
+        input.departmentAccess === "specific" &&
+        (!input.departmentIds || input.departmentIds.length === 0)
+      ) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Selecione pelo menos um departamento",
+        });
+      }
+
+      // Parse metadata existente
+      const currentMetadata = (inv[0].metadata as {
+        departmentAccess?: string;
+        departmentIds?: string[];
+      }) ?? {};
+
+      // Construir novo metadata
+      const newMetadata = {
+        departmentAccess: input.departmentAccess ?? currentMetadata.departmentAccess ?? "all",
+        departmentIds:
+          input.departmentAccess === "specific"
+            ? input.departmentIds
+            : input.departmentAccess === "all"
+              ? []
+              : currentMetadata.departmentIds ?? [],
+      };
+
+      // Update invitation
+      await ctx.db
+        .update(invitation)
+        .set({
+          role: input.role ?? inv[0].role,
+          metadata: newMetadata,
+        })
+        .where(eq(invitation.id, input.id));
+
+      return { success: true };
+    }),
 
   /**
    * Delete an invitation

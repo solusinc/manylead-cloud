@@ -2,9 +2,9 @@
 
 import { useTransition } from "react";
 import { useForm } from "@tanstack/react-form";
+import { Check, Copy } from "lucide-react";
 import { toast } from "sonner";
 import { z } from "zod";
-import { Check, Copy } from "lucide-react";
 
 import { Button, Input, Label } from "@manylead/ui";
 
@@ -73,7 +73,7 @@ export function FormOrganization({
         <FormCardHeader>
           <FormCardTitle>Organização</FormCardTitle>
           <FormCardDescription>
-            Gerencie o nome e identificador da sua organização.
+            Atualize o nome da sua organização.
           </FormCardDescription>
         </FormCardHeader>
         <FormCardContent>
@@ -85,7 +85,9 @@ export function FormOrganization({
                   onChange: ({ value }) => {
                     const result = schema.shape.name.safeParse(value);
                     if (!result.success) {
-                      return result.error.issues[0]?.message ?? "Erro de validação";
+                      return (
+                        result.error.issues[0]?.message ?? "Erro de validação"
+                      );
                     }
                     return undefined;
                   },
@@ -120,15 +122,22 @@ export function FormOrganization({
                     className="w-full justify-start"
                     onClick={() =>
                       copy(slug, {
-                        successMessage: "Slug copiado para a área de transferência",
+                        successMessage:
+                          "Slug copiado para a área de transferência",
                       })
                     }
                   >
                     {slug}
                     {isCopied ? (
-                      <Check size={16} className="ml-auto text-muted-foreground" />
+                      <Check
+                        size={16}
+                        className="text-muted-foreground ml-auto"
+                      />
                     ) : (
-                      <Copy size={16} className="ml-auto text-muted-foreground" />
+                      <Copy
+                        size={16}
+                        className="text-muted-foreground ml-auto"
+                      />
                     )}
                   </Button>
                 </div>
@@ -137,7 +146,8 @@ export function FormOrganization({
 
             {slug && (
               <p className="text-muted-foreground text-sm">
-                O slug é usado ao interagir com a API e não pode ser alterado. Entre em contato se precisar alterá-lo.
+                O slug é usado ao interagir com a API e não pode ser alterado.
+                Entre em contato se precisar alterá-lo.
               </p>
             )}
           </div>

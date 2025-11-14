@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   EmptyStateContainer,
   EmptyStateDescription,
@@ -11,8 +13,10 @@ import { formatDate } from "~/lib/formatter";
 import { useTRPC } from "~/lib/trpc/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { usePermissions } from "~/lib/permissions";
+import { Pencil } from "lucide-react";
 
 export function DataTable() {
+  const router = useRouter();
   const trpc = useTRPC();
   const { data: invitations, refetch } = useQuery(
     trpc.invitation.list.queryOptions(),
@@ -59,13 +63,31 @@ export function DataTable() {
 
           return (
             <TableRow key={item.id}>
-              <TableCell>{item.email}</TableCell>
+              <TableCell>
+                <Link
+                  href={`/settings/users/invitations/${item.id}/edit`}
+                  className="text-foreground hover:underline"
+                >
+                  {item.email}
+                </Link>
+              </TableCell>
               <TableCell>{roleLabels[item.role ?? "member"] ?? item.role}</TableCell>
               <TableCell>{formatDate(item.createdAt)}</TableCell>
               <TableCell>
                 <div className="flex justify-end">
                   {can("manage", "Agent") && (
                     <QuickActions
+                      actions={[
+                        {
+                          id: "edit",
+                          label: "Editar",
+                          icon: Pencil,
+                          variant: "default" as const,
+                          onClick: () => {
+                            router.push(`/settings/users/invitations/${item.id}/edit`);
+                          },
+                        },
+                      ]}
                       deleteAction={{
                         title: "Convite",
                         submitAction: async () =>

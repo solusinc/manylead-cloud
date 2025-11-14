@@ -1,11 +1,12 @@
 "use client";
 
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useParams, useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { useForm } from "@tanstack/react-form";
 import { isTRPCClientError } from "@trpc/client";
-import { Crown, Key, User } from "lucide-react";
 import { toast } from "sonner";
-import { z } from "zod";
+import { Crown, Key, User } from "lucide-react";
 
 import {
   Button,
@@ -29,28 +30,13 @@ import {
   FormCardTitle,
 } from "~/components/forms/form-card";
 import { DepartmentSelector } from "./department-selector";
+import { useTRPC } from "~/lib/trpc/react";
 
-const formSchema = z.object({
-  email: z.string().email("Email inválido"),
-  role: z.enum(["owner", "admin", "member"]),
-  isActive: z.boolean(),
-  restrictDepartments: z.boolean(),
-  departmentIds: z.array(z.string()),
-}).refine(
-  (data) => {
-    // Se restrictDepartments for true, departmentIds deve ter pelo menos 1 item
-    if (data.restrictDepartments && data.departmentIds.length === 0) {
-      return false;
-    }
-    return true;
-  },
-  {
-    message: "Selecione pelo menos um departamento",
-    path: ["departmentIds"],
-  }
-);
-
-type FormValues = z.infer<typeof formSchema>;
+interface FormValues {
+  role: "owner" | "admin" | "member";
+  restrictDepartments: boolean;
+  departmentIds: string[];
+}
 
 const roleLabels = {
   owner: "Administrador",
@@ -73,45 +59,68 @@ const roleIcons = {
   member: User,
 } as const;
 
-export function FormInviteAgent({
-  locked,
-  onSuccessAction,
-  onSubmitAction,
-}: {
-  locked?: boolean;
-  onSuccessAction?: () => void;
-  onSubmitAction: (values: FormValues) => Promise<void>;
-}) {
+export function FormInvitationUpdate() {
+  const { id } = useParams<{ id: string }>();
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
+
+  const { data: invitation } = useQuery(trpc.invitation.getById.queryOptions({ id }));
+
+  const updateMutation = useMutation(
+    trpc.invitation.update.mutationOptions({
+      onSuccess: () => {
+        void queryClient.invalidateQueries({
+          queryKey: trpc.invitation.list.queryKey(),
+        });
+        void queryClient.invalidateQueries({
+          queryKey: trpc.invitation.getById.queryKey({ id }),
+        });
+        router.push("/settings/users");
+      },
+    }),
+  );
+
+  const metadata = invitation?.metadata as
+    | {
+        departmentAccess?: "all" | "specific";
+        departmentIds?: string[];
+      }
+    | null
+    | undefined;
 
   const form = useForm({
     defaultValues: {
-      email: "",
-      role: "member" as FormValues["role"],
-      isActive: true,
-      restrictDepartments: false,
-      departmentIds: [] as string[],
+      role: (invitation?.role ?? "member") as FormValues["role"],
+      restrictDepartments: metadata?.departmentAccess === "specific",
+      departmentIds: metadata?.departmentIds ?? [],
     },
     onSubmit: ({ value }) => {
       if (isPending) return;
 
       startTransition(async () => {
         try {
-          const promise = onSubmitAction(value);
+          const departmentAccess = value.restrictDepartments ? "specific" : "all";
+
+          const promise = updateMutation.mutateAsync({
+            id,
+            role: value.role,
+            departmentAccess,
+            departmentIds: value.restrictDepartments ? value.departmentIds : undefined,
+          });
+
           toast.promise(promise, {
             loading: "Salvando...",
-            success: () => {
-              form.reset();
-              onSuccessAction?.();
-              return "Convite enviado com sucesso";
-            },
+            success: () => "Convite atualizado com sucesso",
             error: (error) => {
               if (isTRPCClientError(error)) {
                 return error.message;
               }
-              return "Falha ao enviar convite";
+              return "Falha ao atualizar convite";
             },
           });
+
           await promise;
         } catch (error) {
           console.error(error);
@@ -119,6 +128,8 @@ export function FormInviteAgent({
       });
     },
   });
+
+  if (!invitation) return null;
 
   return (
     <form
@@ -133,46 +144,20 @@ export function FormInviteAgent({
           <FormCardHeader>
             <FormCardTitle>Informações do convite</FormCardTitle>
             <FormCardDescription>
-              Configure as informações do usuário que será convidado.
+              Configure as informações do convite que será editado.
             </FormCardDescription>
           </FormCardHeader>
           <FormCardContent className="pb-6">
             <div className="grid gap-4 sm:grid-cols-3">
-              <form.Field
-                name="email"
-                validators={{
-                  onChange: ({ value }) => {
-                    const result = formSchema.shape.email.safeParse(value);
-                    if (!result.success) {
-                      return (
-                        result.error.issues[0]?.message ?? "Erro de validação"
-                      );
-                    }
-                    return undefined;
-                  },
-                }}
-              >
-                {(field) => (
-                  <div className="grid gap-2 sm:col-span-2">
-                    <Label htmlFor={field.name}>Email do usuário</Label>
-                    <Input
-                      id={field.name}
-                      name={field.name}
-                      type="email"
-                      placeholder="email@exemplo.com"
-                      value={field.state.value}
-                      onBlur={field.handleBlur}
-                      onChange={(e) => field.handleChange(e.target.value)}
-                      disabled={locked ?? isPending}
-                    />
-                    {field.state.meta.errors.length > 0 ? (
-                      <p className="text-destructive text-sm">
-                        {field.state.meta.errors[0]}
-                      </p>
-                    ) : null}
-                  </div>
-                )}
-              </form.Field>
+              <div className="grid gap-2 sm:col-span-2">
+                <Label htmlFor="email">Email do usuário</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={invitation.email}
+                  disabled
+                />
+              </div>
 
               <form.Field name="role">
                 {(field) => (
@@ -183,7 +168,7 @@ export function FormInviteAgent({
                       onValueChange={(value) => {
                         field.handleChange(value as FormValues["role"]);
                       }}
-                      disabled={locked ?? isPending}
+                      disabled={isPending}
                     >
                       <SelectTrigger id={field.name}>
                         <SelectValue>
@@ -239,22 +224,6 @@ export function FormInviteAgent({
             </FormCardDescription>
           </FormCardHeader>
           <FormCardContent className="grid gap-4">
-            <form.Field name="isActive">
-              {(field) => (
-                <div className="flex items-center gap-2">
-                  <Switch
-                    id={field.name}
-                    checked={field.state.value}
-                    onCheckedChange={field.handleChange}
-                    disabled={locked ?? isPending}
-                  />
-                  <Label htmlFor={field.name} className="cursor-pointer font-normal">
-                    Usuário ativo
-                  </Label>
-                </div>
-              )}
-            </form.Field>
-
             <form.Field name="restrictDepartments">
               {(field) => (
                 <>
@@ -263,7 +232,7 @@ export function FormInviteAgent({
                       id={field.name}
                       checked={field.state.value}
                       onCheckedChange={field.handleChange}
-                      disabled={locked ?? isPending}
+                      disabled={isPending}
                     />
                     <Label htmlFor={field.name} className="cursor-pointer font-normal">
                       Restringir acesso a departamento
@@ -280,7 +249,7 @@ export function FormInviteAgent({
                               <DepartmentSelector
                                 value={departmentField.state.value}
                                 onChange={departmentField.handleChange}
-                                disabled={locked ?? isPending}
+                                disabled={isPending}
                               />
                             </div>
                           )}
@@ -293,12 +262,8 @@ export function FormInviteAgent({
             </form.Field>
           </FormCardContent>
           <FormCardFooter>
-            <Button
-              type="submit"
-              size="sm"
-              disabled={isPending || (locked ?? false)}
-            >
-              {isPending ? "Enviando..." : "Enviar"}
+            <Button type="submit" size="sm" disabled={isPending}>
+              {isPending ? "Salvando..." : "Salvar"}
             </Button>
           </FormCardFooter>
         </FormCard>

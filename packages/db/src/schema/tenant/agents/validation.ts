@@ -33,11 +33,6 @@ const permissionsSchema = z.object({
  */
 export const selectAgentSchema = createSelectSchema(agent, {
   role: agentRoleSchema,
-  departmentId: z
-    .string()
-    .uuid()
-    .nullish()
-    .transform((v) => (v === null ? undefined : v)),
   permissions: permissionsSchema,
 });
 

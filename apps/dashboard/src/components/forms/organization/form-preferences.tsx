@@ -75,7 +75,7 @@ export function FormPreferences({
     >
       <FormCard>
         <FormCardHeader>
-          <FormCardTitle>Preferências de Atendimento</FormCardTitle>
+          <FormCardTitle>Preferências de atendimento</FormCardTitle>
           <FormCardDescription>
             Configure como os atendimentos serão realizados e quais informações
             serão exibidas.
