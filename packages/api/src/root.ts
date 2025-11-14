@@ -1,5 +1,6 @@
 import { agentsRouter } from "./router/agents";
 import { authRouter } from "./router/auth";
+import { channelsRouter } from "./router/channels";
 import { departmentsRouter } from "./router/departments";
 import { invitationRouter } from "./router/invitation";
 import { memberRouter } from "./router/member";
@@ -15,6 +16,7 @@ export const appRouter = createTRPCRouter({
   member: memberRouter,
   departments: departmentsRouter,
   agents: agentsRouter,
+  channels: channelsRouter,
 });
 
 // export type definition of API

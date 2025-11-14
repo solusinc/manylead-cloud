@@ -5,50 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1762630743624,
-      "tag": "0000_first_black_queen",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1762647801504,
-      "tag": "0001_familiar_medusa",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1762648488351,
-      "tag": "0002_flippant_layla_miller",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1762739496497,
-      "tag": "0003_past_squadron_supreme",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1762893926565,
-      "tag": "0004_dear_mockingbird",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1762991545170,
-      "tag": "0005_famous_jackpot",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1763048666898,
-      "tag": "0006_loving_rafael_vega",
+      "when": 1763160448933,
+      "tag": "0000_watery_whirlwind",
       "breakpoints": true
     }
   ]

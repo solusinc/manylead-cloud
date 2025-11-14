@@ -5,6 +5,7 @@ export type Subjects =
   | 'Organization' // Configurações da organização (/settings/general + /settings/new-organization)
   | 'Agent'        // Gerenciar membros/atendentes (/settings/users)
   | 'Department'   // Gerenciar departamentos (/settings/departments)
+  | 'Channel'      // Gerenciar canais WhatsApp (/settings/channels)
   | 'Conversation' // Conversas com contatos
   | 'Contact'      // Contatos da organização
   | 'QuickReply'   // Respostas rápidas

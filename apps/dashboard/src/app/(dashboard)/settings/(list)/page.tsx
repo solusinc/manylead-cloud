@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Building, SlidersVertical, User, Users } from "lucide-react";
+import { Building, MessageSquare, SlidersVertical, User, Users } from "lucide-react";
 
 import type { Actions, Subjects } from "@manylead/permissions";
 
@@ -49,6 +49,17 @@ const settings = [
     permission: {
       action: "manage" as Actions,
       subject: "Department" as Subjects,
+    },
+  },
+  {
+    title: "Canais",
+    description:
+      "Conecte e gerencie seus canais de atendimento via WhatsApp.",
+    href: "/settings/channels",
+    icon: MessageSquare,
+    permission: {
+      action: "manage" as Actions,
+      subject: "Channel" as Subjects,
     },
   },
   {

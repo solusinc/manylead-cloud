@@ -110,10 +110,7 @@ export default function Page() {
                 setOrganizationId(org.id);
 
                 // PASSO 2: Conectar Socket.io ANTES de provisionar
-                socket.connect(org.id);
-
-                // Aguardar um pouco para garantir que o socket conectou
-                await new Promise((resolve) => setTimeout(resolve, 500));
+                await socket.connect(org.id);
 
                 // PASSO 3: Provisionar tenant (dispara job e retorna imediatamente)
                 await provisionTenant.mutateAsync({

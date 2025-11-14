@@ -1,1 +1,0 @@
-ALTER TABLE "department" DROP COLUMN "auto_assignment";

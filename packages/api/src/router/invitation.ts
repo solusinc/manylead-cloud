@@ -391,10 +391,10 @@ export const invitationRouter = createTRPCRouter({
       }
 
       // Parse metadata existente
-      const currentMetadata = (inv[0].metadata as {
+      const currentMetadata = (inv[0].metadata ?? {}) as {
         departmentAccess?: string;
         departmentIds?: string[];
-      }) ?? {};
+      };
 
       // Construir novo metadata
       const newMetadata = {

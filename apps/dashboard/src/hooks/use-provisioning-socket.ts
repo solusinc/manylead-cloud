@@ -2,6 +2,7 @@ import type { Socket } from "socket.io-client";
 import { useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 
+import { authClient } from "~/lib/auth/client";
 import { env } from "~/env";
 
 export interface ProvisioningProgress {
@@ -32,7 +33,7 @@ interface UseProvisioningSocketReturn {
   progress: ProvisioningProgress | null;
   error: ProvisioningError | null;
   isComplete: boolean;
-  connect: (organizationId: string) => void;
+  connect: (organizationId: string) => Promise<void>;
   disconnect: () => void;
 }
 
@@ -46,7 +47,7 @@ export function useProvisioningSocket(): UseProvisioningSocketReturn {
   const [error, setError] = useState<ProvisioningError | null>(null);
   const [isComplete, setIsComplete] = useState(false);
 
-  const connect = (organizationId: string) => {
+  const connect = async (organizationId: string) => {
     // Se já estiver conectado, não reconectar
     if (socketRef.current?.connected) {
       console.log("[Socket.io] Already connected, skipping reconnection");
@@ -55,8 +56,24 @@ export function useProvisioningSocket(): UseProvisioningSocketReturn {
 
     console.log("[Socket.io] Connecting to:", env.NEXT_PUBLIC_SOCKET_URL);
 
-    // Criar conexão Socket.io
+    // Get session token for authentication
+    const result = await authClient.getSession();
+    const token = result.data?.session.token;
+
+    if (!token) {
+      console.error("[Socket.io] No authentication token available");
+      setError({
+        error: "Authentication required",
+        message: "Please log in to connect",
+      });
+      return;
+    }
+
+    // Criar conexão Socket.io com autenticação JWT
     const socket = io(env.NEXT_PUBLIC_SOCKET_URL, {
+      auth: {
+        token,
+      },
       transports: ["websocket", "polling"],
       reconnection: true,
       reconnectionAttempts: 5,

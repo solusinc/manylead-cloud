@@ -20,6 +20,7 @@ import {
 } from "~/components/metric/metric-card";
 import { List, Search, Terminal } from "lucide-react";
 import Link from "next/link";
+import { TestMessageButton } from "./_components/test-message-button";
 
 export default function OverviewPage() {
   // TODO: Implement TRPC queries
@@ -78,6 +79,15 @@ export default function OverviewPage() {
           <Link href="/settings/api">Learn more</Link>
         </NoteButton>
       </Note>
+      <Section>
+        <SectionHeader>
+          <SectionTitle>WhatsApp Test</SectionTitle>
+          <SectionDescription>
+            Envie uma mensagem de teste para +5521984848843
+          </SectionDescription>
+        </SectionHeader>
+        <TestMessageButton />
+      </Section>
       <Section>
         <SectionHeader>
           <SectionTitle>Overview</SectionTitle>

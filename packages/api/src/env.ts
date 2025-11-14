@@ -7,11 +7,13 @@ export const env = createEnv({
       .enum(["development", "production", "test"])
       .default("development"),
     RESEND_API_KEY: z.string().min(1),
-    NEXT_PUBLIC_APP_URL: z.string().url(),
+    NEXT_PUBLIC_APP_URL: z.url(),
+    REDIS_URL: z.url(),
   },
   runtimeEnv: {
     NODE_ENV: process.env.NODE_ENV,
     RESEND_API_KEY: process.env.RESEND_API_KEY,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+    REDIS_URL: process.env.REDIS_URL,
   },
 });

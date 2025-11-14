@@ -1,1 +1,0 @@
-ALTER TABLE "agent" ADD COLUMN "role" varchar(50) DEFAULT 'member' NOT NULL;

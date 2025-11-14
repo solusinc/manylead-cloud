@@ -5,57 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1762717000005,
-      "tag": "0000_flashy_tana_nile",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1762791773005,
-      "tag": "0001_secret_typhoid_mary",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1762815732878,
-      "tag": "0002_curly_arclight",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1762825286460,
-      "tag": "0003_chubby_namora",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1763046111576,
-      "tag": "0004_remarkable_mach_iv",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1763057820003,
-      "tag": "0005_dark_robin_chapel",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1763058543011,
-      "tag": "0006_organic_cargill",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "7",
-      "when": 1763059125282,
-      "tag": "0007_youthful_bloodscream",
+      "when": 1763160582726,
+      "tag": "0000_narrow_thunderbolt_ross",
       "breakpoints": true
     }
   ]

@@ -50,6 +50,7 @@
     "AUTH_SECRET",
     "DATABASE_URL",
     "DATABASE_URL_DIRECT",
+    "ENCRYPTION_KEY",
     "NEXT_PUBLIC_APP_URL",
     "NEXT_PUBLIC_SENTRY_DSN",
     "NEXT_PUBLIC_SOCKET_URL",
@@ -61,5 +62,10 @@
     "RESEND_API_KEY",
     "TENANT_MIGRATIONS_PATH"
   ],
-  "globalPassThroughEnv": ["NODE_ENV", "CI", "npm_lifecycle_event"]
+  "globalPassThroughEnv": [
+    "NODE_ENV",
+    "CI",
+    "npm_lifecycle_event",
+    "SKIP_ENV_VALIDATION"
+  ]
 }

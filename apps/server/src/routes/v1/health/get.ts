@@ -13,7 +13,7 @@ export function registerGetHealth(app: Hono) {
     let redisStatus = "healthy";
     try {
       await redis.ping();
-    } catch (error) {
+    } catch {
       redisStatus = "unhealthy";
     }
 

@@ -1,35 +1,27 @@
-import { Server as HTTPServer } from "node:http";
+import type { Server as HTTPServer } from "node:http";
 import { Server as SocketIOServer } from "socket.io";
-import Redis from "ioredis";
+
+import type { SocketData } from "./types";
 import { env } from "../env";
+import { authMiddleware, validateOrganizationAccess } from "./middleware";
+import { RedisPubSubManager } from "./redis-pubsub";
 
 /**
- * Event types emitted to Socket.io clients
- */
-export interface ProvisioningEvent {
-  type: "provisioning:progress" | "provisioning:complete" | "provisioning:error";
-  organizationId: string;
-  data: {
-    progress?: number;
-    currentStep?: string;
-    message?: string;
-    error?: string;
-  };
-}
-
-/**
- * Socket.io server setup with Redis Pub/Sub integration
+ * Socket.io Manager
+ *
+ * Manages Socket.io connections, rooms, and real-time events.
+ * Uses Redis Pub/Sub to receive events from workers and broadcast to clients.
  *
  * Architecture:
- * 1. Worker processes tenant provisioning jobs
- * 2. Worker publishes progress events to Redis channel "tenant:provisioning"
- * 3. Server subscribes to Redis channel
- * 4. Server broadcasts events to Socket.io clients in the organization's room
- * 5. Dashboard UI listens for real-time updates
+ * 1. Worker processes jobs (provisioning, channels, etc.)
+ * 2. Worker publishes events to Redis channels
+ * 3. RedisPubSubManager subscribes and routes to handlers
+ * 4. Handlers broadcast events to Socket.io clients in organization rooms
+ * 5. Dashboard UI receives real-time updates
  */
 export class SocketManager {
   private io: SocketIOServer;
-  private redisSubscriber: Redis;
+  private redisPubSub: RedisPubSubManager;
 
   constructor(httpServer: HTTPServer) {
     // Initialize Socket.io server with CORS
@@ -42,153 +34,123 @@ export class SocketManager {
       transports: ["websocket", "polling"],
     });
 
-    // Initialize Redis subscriber for Pub/Sub
-    // PERFORMANCE OPTIMIZATION: enableAutoPipelining batches commands automatically
-    this.redisSubscriber = new Redis(env.REDIS_URL, {
-      lazyConnect: false, // Connect immediately
-      enableAutoPipelining: true, // Batch commands for low latency
-      keepAlive: 30000, // Keep TCP connection alive
-      connectTimeout: 10000, // 10 second timeout
-      retryStrategy: (times) => {
-        const delay = Math.min(times * 50, 2000);
-        console.log(`[Socket.io] Retrying Redis connection in ${delay}ms...`);
-        return delay;
-      },
-    });
-
+    // Setup Socket.io connection handlers
     this.setupSocketHandlers();
-    this.setupRedisPubSub();
+
+    // Initialize Redis Pub/Sub for receiving events
+    this.redisPubSub = new RedisPubSubManager(this.io);
+
+    console.log("[SocketManager] ✅ Initialized");
   }
 
   /**
    * Setup Socket.io connection handlers
    */
   private setupSocketHandlers(): void {
-    this.io.on("connection", (socket) => {
-      console.log(`[Socket.io] Client connected: ${socket.id}`);
+    // Apply authentication middleware to all connections
+    this.io.use((socket, next) => {
+      void authMiddleware(socket, next);
+    });
 
-      // Join organization room
+    this.io.on("connection", (socket) => {
+      const socketData = socket.data as SocketData;
+      console.log(
+        `[SocketManager] Client connected: ${socket.id} (user: ${socketData.userId ?? "unknown"})`,
+      );
+
+      /**
+       * Join organization room
+       * Clients must join their organization's room to receive events
+       */
       socket.on("join:organization", (organizationId: string) => {
         if (!organizationId) {
           socket.emit("error", { message: "organizationId is required" });
           return;
         }
 
+        // Validate user has access to this organization
+        if (!validateOrganizationAccess(socket, organizationId)) {
+          socket.emit("error", {
+            message: "Unauthorized access to organization",
+          });
+          console.warn(
+            `[SocketManager] User ${socketData.userId ?? "unknown"} tried to access org ${organizationId} without permission`,
+          );
+          return;
+        }
+
         const room = `org:${organizationId}`;
-        socket.join(room);
+        void socket.join(room);
+
         console.log(
-          `[Socket.io] Client ${socket.id} joined room: ${room}`,
+          `[SocketManager] Client ${socket.id} (user: ${socketData.userId ?? "unknown"}) joined room: ${room}`,
         );
 
         socket.emit("joined", { room, organizationId });
       });
 
-      // Leave organization room
+      /**
+       * Leave organization room
+       */
       socket.on("leave:organization", (organizationId: string) => {
         if (!organizationId) return;
 
         const room = `org:${organizationId}`;
-        socket.leave(room);
+        void socket.leave(room);
+
+        console.log(`[SocketManager] Client ${socket.id} left room: ${room}`);
+      });
+
+      /**
+       * Join channel room (for QR code updates)
+       * Used when user is on the channel creation page
+       */
+      socket.on("join:channel", (channelId: string) => {
+        if (!channelId) {
+          socket.emit("error", { message: "channelId is required" });
+          return;
+        }
+
+        const room = `channel:${channelId}`;
+        void socket.join(room);
+
         console.log(
-          `[Socket.io] Client ${socket.id} left room: ${room}`,
+          `[SocketManager] Client ${socket.id} joined channel room: ${room}`,
+        );
+
+        socket.emit("joined:channel", { room, channelId });
+      });
+
+      /**
+       * Leave channel room
+       */
+      socket.on("leave:channel", (channelId: string) => {
+        if (!channelId) return;
+
+        const room = `channel:${channelId}`;
+        void socket.leave(room);
+
+        console.log(
+          `[SocketManager] Client ${socket.id} left channel room: ${room}`,
         );
       });
 
+      /**
+       * Disconnect handler
+       */
       socket.on("disconnect", () => {
-        console.log(`[Socket.io] Client disconnected: ${socket.id}`);
+        console.log(`[SocketManager] Client disconnected: ${socket.id}`);
       });
 
-      // Debug: list rooms
+      /**
+       * Debug: list rooms
+       */
       socket.on("rooms", () => {
         socket.emit("rooms", Array.from(socket.rooms));
       });
     });
 
-    console.log("[Socket.io] ✅ Socket handlers initialized");
-  }
-
-  /**
-   * Setup Redis Pub/Sub for receiving provisioning events from worker
-   */
-  private async setupRedisPubSub(): Promise<void> {
-    try {
-      // IMPORTANT: Register message handlers BEFORE subscribing
-      // Handle messages from Redis
-      this.redisSubscriber.on("message", (channel, message) => {
-        console.log(`[Socket.io] Received message on channel: ${channel}`);
-        if (channel === "tenant:provisioning") {
-          this.handleProvisioningEvent(message);
-        }
-      });
-
-      // Handle reconnection - resubscribe when reconnected
-      this.redisSubscriber.on("ready", async () => {
-        console.log("[Socket.io] Redis connection ready/reconnected");
-        // Resubscribe after reconnection
-        try {
-          await this.redisSubscriber.subscribe("tenant:provisioning");
-          console.log("[Socket.io] ✅ Re-subscribed to Redis channel after reconnection");
-        } catch (err) {
-          console.error("[Socket.io] Failed to resubscribe:", err);
-        }
-      });
-
-      this.redisSubscriber.on("reconnecting", () => {
-        console.log("[Socket.io] Redis reconnecting...");
-      });
-
-      this.redisSubscriber.on("error", (error) => {
-        console.error("[Socket.io] Redis subscriber error:", error);
-      });
-
-      this.redisSubscriber.on("close", () => {
-        console.log("[Socket.io] Redis connection closed");
-      });
-
-      // With lazyConnect: false, connection happens automatically
-      // Wait for the connection to be ready before subscribing
-      if (this.redisSubscriber.status !== "ready") {
-        await new Promise<void>((resolve) => {
-          this.redisSubscriber.once("ready", () => {
-            console.log("[Socket.io] Redis connection ready");
-            resolve();
-          });
-        });
-      }
-
-      // Subscribe to tenant provisioning events
-      await this.redisSubscriber.subscribe("tenant:provisioning");
-
-      console.log(
-        "[Socket.io] ✅ Subscribed to Redis channel: tenant:provisioning",
-      );
-      console.log(`[Socket.io] Subscriber status: ${this.redisSubscriber.status}`);
-    } catch (error) {
-      console.error("[Socket.io] Failed to setup Redis Pub/Sub:", error);
-      throw error;
-    }
-  }
-
-  /**
-   * Handle provisioning events from Redis and broadcast to clients
-   */
-  private handleProvisioningEvent(message: string): void {
-    try {
-      const event = JSON.parse(message) as ProvisioningEvent;
-      const room = `org:${event.organizationId}`;
-
-      console.log(
-        `[Socket.io] Broadcasting ${event.type} to room: ${room}`,
-      );
-
-      // Broadcast to all clients in the organization's room
-      this.io.to(room).emit(event.type, event.data);
-    } catch (error) {
-      console.error(
-        "[Socket.io] Failed to parse provisioning event:",
-        error,
-      );
-    }
+    console.log("[SocketManager] ✅ Socket handlers initialized");
   }
 
   /**
@@ -209,21 +171,25 @@ export class SocketManager {
    * Cleanup on shutdown
    */
   public async close(): Promise<void> {
-    console.log("[Socket.io] Closing connections...");
+    console.log("[SocketManager] Closing connections...");
 
     // Disconnect all clients
     this.io.disconnectSockets();
 
     // Close Socket.io server
     await new Promise<void>((resolve) => {
-      this.io.close(() => {
-        console.log("[Socket.io] ✅ Socket.io server closed");
+      void this.io.close(() => {
+        console.log("[SocketManager] ✅ Socket.io server closed");
         resolve();
       });
     });
 
-    // Disconnect Redis subscriber
-    await this.redisSubscriber.quit();
-    console.log("[Socket.io] ✅ Redis subscriber closed");
+    // Close Redis Pub/Sub
+    await this.redisPubSub.close();
+
+    console.log("[SocketManager] ✅ Shutdown complete");
   }
 }
+
+// Re-export types for convenience
+export * from "./types";

@@ -14,3 +14,6 @@ export * from "./departments";
 
 // Agents
 export * from "./agents";
+
+// Channels
+export * from "./channels";

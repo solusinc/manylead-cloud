@@ -32,8 +32,8 @@ export const env = createEnv({
     SENTRY_DSN: z.string().optional(),
 
     // Better Auth
-    BETTER_AUTH_URL: z.string().url().optional(),
-    AUTH_SECRET: z.string().optional(),
+    BETTER_AUTH_URL: z.string().url(),
+    AUTH_SECRET: z.string().min(32),
   },
 
   /**

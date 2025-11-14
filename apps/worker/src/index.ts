@@ -1,8 +1,10 @@
 import type { Worker } from "bullmq";
 import { env } from "~/env";
-import { closeRedis } from "~/libs/cache/redis";
+import { closeRedis, getRedisClient } from "~/libs/cache/redis";
 import { createWorkers } from "~/libs/queue/workers";
 import { logger } from "~/libs/utils/logger";
+import { cleanupAllSessions } from "~/workers/channel-sessions";
+import { subscribeToChannelEvents } from "~/services/baileys/event-subscriber";
 
 /**
  * Worker entry point
@@ -27,15 +29,20 @@ async function startWorker() {
       "Workers started successfully",
     );
 
+    // Subscribe to channel events (QR code updates, connections, etc.)
+    logger.info("Subscribing to channel events...");
+    await subscribeToChannelEvents(getRedisClient());
+    logger.info("✅ Event subscriber started");
+
     // Keep process alive
-    process.on("SIGTERM", async () => {
+    process.on("SIGTERM", () => {
       logger.info("SIGTERM received, shutting down gracefully");
-      await gracefulShutdown(workers);
+      void gracefulShutdown(workers);
     });
 
-    process.on("SIGINT", async () => {
+    process.on("SIGINT", () => {
       logger.info("SIGINT received, shutting down gracefully");
-      await gracefulShutdown(workers);
+      void gracefulShutdown(workers);
     });
   } catch (error) {
     logger.error(
@@ -64,6 +71,9 @@ async function gracefulShutdown(workers: Worker[]) {
     }),
   );
 
+  // Cleanup Baileys sessions
+  await cleanupAllSessions();
+
   // Close Redis connection
   await closeRedis();
 
@@ -72,4 +82,4 @@ async function gracefulShutdown(workers: Worker[]) {
 }
 
 // Start the worker
-startWorker();
+void startWorker();
