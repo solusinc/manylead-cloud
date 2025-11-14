@@ -144,10 +144,10 @@ export function OnboardingClient() {
     <div className="container mx-auto flex min-h-screen items-center justify-center p-4">
       <Card className="w-full max-w-lg">
         <CardHeader>
-          <CardTitle className="text-2xl">Bem vindo a Manylead</CardTitle>
+          <CardTitle className="text-2xl">Boas-vindas à Manylead</CardTitle>
           <CardDescription>
-            Vamos começar criando sua organização. Você poderá convidar membros
-            da equipe depois.
+            Vamos começar criando sua organização. Em seguida, você poderá
+            convidar sua equipe e gerenciar tudo em um só lugar.
           </CardDescription>
         </CardHeader>
         <form
@@ -174,7 +174,7 @@ export function OnboardingClient() {
                 return (
                   <Field data-invalid={isInvalid}>
                     <FieldLabel htmlFor={field.name}>
-                      Nome da Organização
+                      Digite o nome da sua empresa
                     </FieldLabel>
                     <div className="relative">
                       <Input
