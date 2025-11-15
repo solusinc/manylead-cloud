@@ -12,7 +12,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@hapi/boom": "^10.0.1",
     "@manylead/db": "workspace:*",
     "@manylead/error": "workspace:*",
     "@manylead/shared": "workspace:*",
