@@ -6,7 +6,16 @@ import { isTRPCClientError } from "@trpc/client";
 import { toast } from "sonner";
 import { z } from "zod";
 
-import { Button, Input, Label } from "@manylead/ui";
+import {
+  Button,
+  Input,
+  Label,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@manylead/ui";
 
 import {
   FormCard,
@@ -19,6 +28,7 @@ import {
 } from "~/components/forms/form-card";
 
 const schema = z.object({
+  channelType: z.enum(["qr_code", "official"]),
   displayName: z
     .string()
     .min(1, "Nome é obrigatório")
@@ -43,6 +53,7 @@ export function FormGeneral({
 
   const form = useForm({
     defaultValues: {
+      channelType: defaultValues?.channelType ?? ("qr_code" as const),
       displayName: defaultValues?.displayName ?? "",
       phoneNumber: defaultValues?.phoneNumber ?? "",
     },
@@ -94,6 +105,38 @@ export function FormGeneral({
         <FormCardSeparator />
         <FormCardContent>
           <div className="grid gap-4">
+            {/* Channel Type */}
+            <form.Field name="channelType">
+              {(field) => (
+                <div className="grid gap-2">
+                  <Label htmlFor={field.name}>Tipo de Canal</Label>
+                  <Select
+                    value={field.state.value}
+                    onValueChange={(value) =>
+                      field.handleChange(value as "qr_code" | "official")
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="qr_code">
+                        QR Code (Não oficial)
+                      </SelectItem>
+                      <SelectItem value="official">
+                        Oficial (WhatsApp Business API)
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-muted-foreground text-xs">
+                    {field.state.value === "qr_code"
+                      ? "Conexão via QR Code - ideal para começar rapidamente"
+                      : "WhatsApp Business API oficial - requer aprovação Meta"}
+                  </p>
+                </div>
+              )}
+            </form.Field>
+
             <form.Field
               name="displayName"
               validators={{

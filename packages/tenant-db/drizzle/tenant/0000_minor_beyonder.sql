@@ -37,16 +37,14 @@ CREATE TABLE "agent" (
 CREATE TABLE "channel" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"organization_id" text NOT NULL,
-	"default_department_id" uuid,
+	"channel_type" varchar(20) NOT NULL,
 	"phone_number_id" varchar(100) NOT NULL,
 	"phone_number" varchar(20),
 	"display_name" varchar(255) NOT NULL,
 	"profile_picture_url" text,
 	"status" varchar(50) DEFAULT 'pending' NOT NULL,
-	"auth_state" jsonb,
-	"session_data" jsonb,
-	"qr_code" text,
-	"qr_code_expires_at" timestamp,
+	"evolution_instance_name" varchar(100) NOT NULL,
+	"evolution_connection_state" varchar(50),
 	"is_active" boolean DEFAULT true NOT NULL,
 	"last_connected_at" timestamp,
 	"last_message_at" timestamp,
@@ -57,17 +55,18 @@ CREATE TABLE "channel" (
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "channel_phone_number_id_unique" UNIQUE("phone_number_id"),
+	CONSTRAINT "channel_evolution_instance_name_unique" UNIQUE("evolution_instance_name"),
+	CONSTRAINT "channel_org_type_unique" UNIQUE("organization_id","channel_type"),
 	CONSTRAINT "channel_org_phone_unique" UNIQUE("organization_id","phone_number_id")
 );
 --> statement-breakpoint
-ALTER TABLE "channel" ADD CONSTRAINT "channel_default_department_id_department_id_fk" FOREIGN KEY ("default_department_id") REFERENCES "public"."department"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "organization_settings_org_idx" ON "organization_settings" USING btree ("organization_id");--> statement-breakpoint
 CREATE INDEX "department_org_idx" ON "department" USING btree ("organization_id");--> statement-breakpoint
 CREATE INDEX "department_active_idx" ON "department" USING btree ("is_active");--> statement-breakpoint
 CREATE INDEX "agent_user_idx" ON "agent" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "agent_active_idx" ON "agent" USING btree ("is_active");--> statement-breakpoint
 CREATE INDEX "channel_org_idx" ON "channel" USING btree ("organization_id");--> statement-breakpoint
+CREATE INDEX "channel_type_idx" ON "channel" USING btree ("channel_type");--> statement-breakpoint
 CREATE INDEX "channel_status_idx" ON "channel" USING btree ("status");--> statement-breakpoint
 CREATE INDEX "channel_active_idx" ON "channel" USING btree ("is_active");--> statement-breakpoint
-CREATE INDEX "channel_department_idx" ON "channel" USING btree ("default_department_id");--> statement-breakpoint
 CREATE INDEX "channel_active_status_idx" ON "channel" USING btree ("organization_id","is_active","status");

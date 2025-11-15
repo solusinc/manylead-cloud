@@ -2,7 +2,7 @@ import type { Server as SocketIOServer } from "socket.io";
 import Redis from "ioredis";
 import { env } from "../env";
 import { REDIS_CHANNELS } from "./types";
-import { handleProvisioningEvent, handleChannelEvent } from "./handlers";
+import { handleProvisioningEvent } from "./handlers";
 
 /**
  * Redis Pub/Sub Manager for Socket.io events
@@ -111,10 +111,6 @@ export class RedisPubSubManager {
     switch (channel) {
       case REDIS_CHANNELS.PROVISIONING:
         handleProvisioningEvent(this.io, message);
-        break;
-
-      case REDIS_CHANNELS.CHANNELS:
-        handleChannelEvent(this.io, message);
         break;
 
       default:

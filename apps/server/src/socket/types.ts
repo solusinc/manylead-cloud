@@ -17,31 +17,15 @@ export interface ProvisioningEvent {
 }
 
 /**
- * Channel QR Code events
- */
-export interface ChannelQREvent {
-  type: "channel:qr-updated" | "channel:connected" | "channel:disconnected" | "channel:error";
-  organizationId: string;
-  channelId: string;
-  data: {
-    qrCode?: string;
-    expiresAt?: string;
-    status?: string;
-    error?: string;
-  };
-}
-
-/**
  * Union type of all events
  */
-export type SocketEvent = ProvisioningEvent | ChannelQREvent;
+export type SocketEvent = ProvisioningEvent;
 
 /**
  * Redis channel names
  */
 export const REDIS_CHANNELS = {
   PROVISIONING: "tenant:provisioning",
-  CHANNELS: "channels:events",
 } as const;
 
 /**

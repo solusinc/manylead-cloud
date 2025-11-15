@@ -406,6 +406,9 @@ importers:
       '@manylead/emails':
         specifier: workspace:*
         version: link:../emails
+      '@manylead/evolution-api-client':
+        specifier: workspace:*
+        version: link:../evolution-api-client
       '@manylead/permissions':
         specifier: workspace:*
         version: link:../permissions
@@ -643,6 +646,31 @@ importers:
       '@manylead/tsconfig':
         specifier: workspace:*
         version: link:../../tooling/typescript
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+
+  packages/evolution-api-client:
+    dependencies:
+      '@t3-oss/env-core':
+        specifier: 'catalog:'
+        version: 0.13.8(typescript@5.9.3)(zod@4.1.12)
+      zod:
+        specifier: 'catalog:'
+        version: 4.1.12
+    devDependencies:
+      '@manylead/eslint-config':
+        specifier: workspace:*
+        version: link:../../tooling/eslint
+      '@manylead/tsconfig':
+        specifier: workspace:*
+        version: link:../../tooling/typescript
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.19.0
+      eslint:
+        specifier: 'catalog:'
+        version: 9.39.1(jiti@2.6.1)
       typescript:
         specifier: 'catalog:'
         version: 5.9.3

@@ -1,5 +1,5 @@
 {
-  "id": "bd3de08c-9853-4801-a1a8-9bcf0898820b",
+  "id": "120408db-3b24-4951-9a32-fcbd22902c9a",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -320,11 +320,11 @@
           "primaryKey": false,
           "notNull": true
         },
-        "default_department_id": {
-          "name": "default_department_id",
-          "type": "uuid",
+        "channel_type": {
+          "name": "channel_type",
+          "type": "varchar(20)",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
         "phone_number_id": {
           "name": "phone_number_id",
@@ -357,27 +357,15 @@
           "notNull": true,
           "default": "'pending'"
         },
-        "auth_state": {
-          "name": "auth_state",
-          "type": "jsonb",
+        "evolution_instance_name": {
+          "name": "evolution_instance_name",
+          "type": "varchar(100)",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true
         },
-        "session_data": {
-          "name": "session_data",
-          "type": "jsonb",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "qr_code": {
-          "name": "qr_code",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "qr_code_expires_at": {
-          "name": "qr_code_expires_at",
-          "type": "timestamp",
+        "evolution_connection_state": {
+          "name": "evolution_connection_state",
+          "type": "varchar(50)",
           "primaryKey": false,
           "notNull": false
         },
@@ -457,6 +445,21 @@
           "method": "btree",
           "with": {}
         },
+        "channel_type_idx": {
+          "name": "channel_type_idx",
+          "columns": [
+            {
+              "expression": "channel_type",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
         "channel_status_idx": {
           "name": "channel_status_idx",
           "columns": [
@@ -477,21 +480,6 @@
           "columns": [
             {
               "expression": "is_active",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
-        "channel_department_idx": {
-          "name": "channel_department_idx",
-          "columns": [
-            {
-              "expression": "default_department_id",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -530,21 +518,7 @@
           "with": {}
         }
       },
-      "foreignKeys": {
-        "channel_default_department_id_department_id_fk": {
-          "name": "channel_default_department_id_department_id_fk",
-          "tableFrom": "channel",
-          "tableTo": "department",
-          "columnsFrom": [
-            "default_department_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
         "channel_phone_number_id_unique": {
@@ -552,6 +526,21 @@
           "nullsNotDistinct": false,
           "columns": [
             "phone_number_id"
+          ]
+        },
+        "channel_evolution_instance_name_unique": {
+          "name": "channel_evolution_instance_name_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "evolution_instance_name"
+          ]
+        },
+        "channel_org_type_unique": {
+          "name": "channel_org_type_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "organization_id",
+            "channel_type"
           ]
         },
         "channel_org_phone_unique": {

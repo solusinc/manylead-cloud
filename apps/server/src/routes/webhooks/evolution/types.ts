@@ -1,0 +1,90 @@
+/**
+ * Evolution API Webhook Types
+ *
+ * Documentação: https://doc.evolution-api.com/v2/en/webhooks
+ */
+
+export interface EvolutionWebhookPayload {
+  event: EvolutionWebhookEvent;
+  instance: string;
+  data: unknown;
+  destination?: string;
+  date_time: string;
+  sender: string;
+  server_url: string;
+  apikey: string;
+}
+
+export type EvolutionWebhookEvent =
+  | "qrcode.updated"
+  | "connection.update"
+  | "messages.upsert"
+  | "messages.update"
+  | "messages.delete"
+  | "send.message"
+  | "contacts.upsert"
+  | "contacts.update"
+  | "presence.update"
+  | "chats.upsert"
+  | "chats.update"
+  | "chats.delete"
+  | "groups.upsert"
+  | "groups.update"
+  | "group-participants.update"
+  | "labels.edit"
+  | "labels.association";
+
+export interface QRCodeData {
+  qrcode: {
+    code: string;
+    base64: string;
+  };
+}
+
+export interface ConnectionUpdateData {
+  state: "open" | "close" | "connecting";
+  statusReason?: string | number;
+  instance: string;
+  wuid?: string;
+  profileName?: string;
+  profilePictureUrl?: string | null;
+}
+
+export interface MessageData {
+  key: {
+    remoteJid: string;
+    fromMe: boolean;
+    id: string;
+    participant?: string;
+  };
+  pushName?: string;
+  message?: Record<string, unknown>;
+  messageType?: string;
+  messageTimestamp: string | number;
+  instanceId?: string;
+  source?: string;
+}
+
+export interface MessagesUpsertData {
+  messages: MessageData[];
+}
+
+export interface SendMessageData {
+  key: {
+    remoteJid: string;
+    fromMe: boolean;
+    id: string;
+  };
+  message: Record<string, unknown>;
+  messageTimestamp: string;
+  status: string;
+}
+
+/**
+ * Handler context - dados compartilhados entre handlers
+ */
+export interface HandlerContext {
+  organizationId: string;
+  channelId: string;
+  instanceName: string;
+}

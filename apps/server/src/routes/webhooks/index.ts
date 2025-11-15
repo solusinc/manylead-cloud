@@ -1,11 +1,11 @@
 import { Hono } from "hono";
 
+import { evolutionWebhook } from "./evolution";
+
 export const webhooks = new Hono();
 
 /**
- * Webhooks routes (placeholder for Phase 4)
- * Will handle WhatsApp webhook callbacks
+ * Evolution API Webhooks
+ * POST /webhooks/evolution
  */
-
-// GET /webhooks/whatsapp/:channelId - Webhook verification
-// POST /webhooks/whatsapp/:channelId - Webhook callback
+webhooks.route("/evolution", evolutionWebhook);

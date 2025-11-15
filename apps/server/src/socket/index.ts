@@ -193,3 +193,19 @@ export class SocketManager {
 
 // Re-export types for convenience
 export * from "./types";
+
+/**
+ * Singleton instance (set by server on startup)
+ */
+let socketManagerInstance: SocketManager | null = null;
+
+export function setSocketManager(instance: SocketManager): void {
+  socketManagerInstance = instance;
+}
+
+export function getSocketManager(): SocketManager {
+  if (!socketManagerInstance) {
+    throw new Error("SocketManager not initialized. Call setSocketManager first.");
+  }
+  return socketManagerInstance;
+}

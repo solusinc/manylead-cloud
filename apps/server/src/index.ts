@@ -10,7 +10,7 @@ import { env } from "~/env";
 import { handleError } from "~/libs/errors";
 import { v1 } from "~/routes/v1";
 import { webhooks } from "~/routes/webhooks";
-import { SocketManager } from "~/socket";
+import { SocketManager, setSocketManager } from "~/socket";
 
 /**
  * Create Hono app
@@ -103,6 +103,7 @@ const server = Bun.serve({
 // For now, we'll create a separate HTTP server for Socket.io
 const httpServer = createServer();
 const socketManager = new SocketManager(httpServer);
+setSocketManager(socketManager); // Set singleton instance
 
 // Start HTTP server for Socket.io on the same port + 1
 const socketPort = port + 1;

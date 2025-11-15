@@ -21,6 +21,7 @@
     "@manylead/auth": "workspace:*",
     "@manylead/db": "workspace:*",
     "@manylead/emails": "workspace:*",
+    "@manylead/evolution-api-client": "workspace:*",
     "@manylead/permissions": "workspace:*",
     "@manylead/tenant-db": "workspace:*",
     "@t3-oss/env-core": "catalog:",

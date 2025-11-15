@@ -1,15 +1,13 @@
 import type { Worker } from "bullmq";
 import { env } from "~/env";
-import { closeRedis, getRedisClient } from "~/libs/cache/redis";
+import { closeRedis } from "~/libs/cache/redis";
 import { createWorkers } from "~/libs/queue/workers";
 import { logger } from "~/libs/utils/logger";
-import { cleanupAllSessions } from "~/workers/channel-sessions";
-import { subscribeToChannelEvents } from "~/services/baileys/event-subscriber";
 
 /**
  * Worker entry point
  */
-async function startWorker() {
+function startWorker() {
   logger.info("🚀 Starting BullMQ Worker...");
   logger.info(`Environment: ${env.NODE_ENV}`);
   logger.info(`Concurrency: ${env.WORKER_CONCURRENCY}`);
@@ -28,11 +26,6 @@ async function startWorker() {
       },
       "Workers started successfully",
     );
-
-    // Subscribe to channel events (QR code updates, connections, etc.)
-    logger.info("Subscribing to channel events...");
-    await subscribeToChannelEvents(getRedisClient());
-    logger.info("✅ Event subscriber started");
 
     // Keep process alive
     process.on("SIGTERM", () => {
@@ -70,9 +63,6 @@ async function gracefulShutdown(workers: Worker[]) {
       await worker.close();
     }),
   );
-
-  // Cleanup Baileys sessions
-  await cleanupAllSessions();
 
   // Close Redis connection
   await closeRedis();

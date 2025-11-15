@@ -152,18 +152,6 @@ export default function Page() {
                   Redirecionando para a lista de canais...
                 </p>
               </div>
-            ) : qrData?.expired ? (
-              <div className="text-center">
-                <XCircle className="text-destructive mx-auto mb-4 h-16 w-16" />
-                <h3 className="mb-2 text-lg font-semibold">QR Code expirado</h3>
-                <p className="text-muted-foreground mb-4 text-sm">
-                  O QR Code expirou. Clique no botão abaixo para gerar um novo.
-                </p>
-                <Button onClick={() => void refetchQR()}>
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                  Gerar novo QR Code
-                </Button>
-              </div>
             ) : qrData?.qrCode ? (
               <div className="text-center">
                 <div className="bg-white mb-4 inline-block rounded-lg p-4">

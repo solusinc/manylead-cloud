@@ -2,7 +2,6 @@ import {
   boolean,
   index,
   integer,
-  jsonb,
   pgTable,
   text,
   timestamp,
@@ -12,10 +11,12 @@ import {
 } from "drizzle-orm/pg-core";
 import { v7 as uuidv7 } from "uuid";
 
-import { department } from "../departments/department";
-
 /**
- * Channels - Canais WhatsApp via QR Code (Baileys)
+ * Channels - Canais WhatsApp via Evolution API
+ *
+ * Estrutura simplificada:
+ * - Máximo 2 canais por organização (1 QR Code + 1 Oficial)
+ * - Sem relação direta com departments
  */
 export const channel = pgTable(
   "channel",
@@ -26,11 +27,8 @@ export const channel = pgTable(
 
     organizationId: text("organization_id").notNull(),
 
-    // Departamento padrão (opcional)
-    defaultDepartmentId: uuid("default_department_id").references(
-      () => department.id,
-      { onDelete: "set null" }
-    ),
+    // Tipo do canal: "qr_code" (não oficial) | "official" (WhatsApp Business API)
+    channelType: varchar("channel_type", { length: 20 }).notNull(),
 
     // Identificação
     phoneNumberId: varchar("phone_number_id", { length: 100 })
@@ -47,22 +45,15 @@ export const channel = pgTable(
     status: varchar("status", { length: 50 }).notNull().default("pending"),
     // pending | connected | disconnected | error
 
-    // Baileys
-    authState: jsonb("auth_state").$type<{
-      creds?: unknown;
-      keys?: unknown;
-    }>(),
+    // Evolution API
+    evolutionInstanceName: varchar("evolution_instance_name", { length: 100 })
+      .notNull()
+      .unique(),
 
-    sessionData: jsonb("session_data").$type<{
-      lastSeen?: string;
-      platform?: string;
-      deviceManufacturer?: string;
-      deviceModel?: string;
-    }>(),
-
-    qrCode: text("qr_code"),
-
-    qrCodeExpiresAt: timestamp("qr_code_expires_at"),
+    evolutionConnectionState: varchar("evolution_connection_state", {
+      length: 50,
+    }),
+    // open | close | connecting
 
     // Flags e metadata
     isActive: boolean("is_active").default(true).notNull(),
@@ -84,14 +75,19 @@ export const channel = pgTable(
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (table) => [
+    // NOVO: Garante apenas 1 canal de cada tipo por organização
+    unique("channel_org_type_unique").on(
+      table.organizationId,
+      table.channelType
+    ),
     unique("channel_org_phone_unique").on(
       table.organizationId,
       table.phoneNumberId
     ),
     index("channel_org_idx").on(table.organizationId),
+    index("channel_type_idx").on(table.channelType),
     index("channel_status_idx").on(table.status),
     index("channel_active_idx").on(table.isActive),
-    index("channel_department_idx").on(table.defaultDepartmentId),
     // Composite index for fast active channel queries
     index("channel_active_status_idx").on(
       table.organizationId,
