@@ -7,4 +7,5 @@
 export { handleQRCodeUpdated } from "./qrcode-updated";
 export { handleConnectionUpdate } from "./connection-update";
 export { handleMessagesUpsert } from "./messages-upsert";
+export { handleMessagesUpdate } from "./messages-update";
 export { handleSendMessage } from "./send-message";

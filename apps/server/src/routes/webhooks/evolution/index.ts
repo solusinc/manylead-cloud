@@ -4,6 +4,7 @@ import { Hono } from "hono";
 import {
   handleConnectionUpdate,
   handleMessagesUpsert,
+  handleMessagesUpdate,
   handleQRCodeUpdated,
   handleSendMessage,
 } from "./handlers";
@@ -11,6 +12,7 @@ import type {
   ConnectionUpdateData,
   EvolutionWebhookPayload,
   MessagesUpsertData,
+  MessagesUpdateData,
   QRCodeData,
   SendMessageData,
 } from "./types";
@@ -77,12 +79,17 @@ async function routeEvent(event: string, instance: string, data: unknown) {
 
     case "send.message": {
       const validatedData = validateEventData<SendMessageData>(event, data);
-      handleSendMessage(instance, validatedData);
+      await handleSendMessage(instance, validatedData);
+      break;
+    }
+
+    case "messages.update": {
+      const validatedData = validateEventData<MessagesUpdateData>(event, data);
+      await handleMessagesUpdate(instance, validatedData);
       break;
     }
 
     // Eventos não implementados (por enquanto)
-    case "messages.update":
     case "messages.delete":
     case "contacts.upsert":
     case "contacts.update":

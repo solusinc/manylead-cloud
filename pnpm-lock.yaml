@@ -299,6 +299,9 @@ importers:
       '@manylead/evolution-api-client':
         specifier: workspace:*
         version: link:../../packages/evolution-api-client
+      '@manylead/shared':
+        specifier: workspace:^
+        version: link:../../packages/shared
       '@manylead/tenant-db':
         specifier: workspace:*
         version: link:../../packages/tenant-db

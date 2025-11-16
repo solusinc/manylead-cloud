@@ -69,6 +69,10 @@ export interface MessagesUpsertData {
   messages: MessageData[];
 }
 
+export interface MessagesUpdateData {
+  messages: MessageData[];
+}
+
 export interface SendMessageData {
   key: {
     remoteJid: string;
