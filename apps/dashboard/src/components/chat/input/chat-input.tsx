@@ -88,7 +88,7 @@ export const ChatInputArea = ({
         "placeholder:text-muted-foreground text-sm",
         "focus-visible:outline-none",
         "disabled:cursor-not-allowed disabled:opacity-50",
-        "max-h-[200px] min-h-11",
+        "max-h-[200px] h-11",
         className,
       )}
       minRows={1}
