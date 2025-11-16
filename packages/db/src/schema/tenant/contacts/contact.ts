@@ -55,10 +55,17 @@ export const contact = pgTable(
     // Unique: um contato por número por organização
     unique("contact_org_phone_unique").on(
       table.organizationId,
-      table.phoneNumber
+      table.phoneNumber,
     ),
+
     index("contact_org_idx").on(table.organizationId),
     index("contact_phone_idx").on(table.phoneNumber),
     index("contact_name_idx").on(table.name),
+
+    // Index para buscar contatos recentes da org
+    index("contact_org_created_idx").on(
+      table.organizationId,
+      table.createdAt.desc(),
+    ),
   ]
 );

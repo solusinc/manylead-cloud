@@ -7,11 +7,11 @@ set -e
 # Set default if POSTGRES_DB is not provided
 POSTGRES_DB="${POSTGRES_DB:-postgres}"
 
-# Start PostgreSQL with pg_cron enabled and performance tuning
+# Start PostgreSQL with TimescaleDB, pg_cron enabled and performance tuning
 # IMPORTANTE: cron.database_name define onde o metadata do pg_cron é armazenado
 # Mas a extensão pode ser criada em qualquer database usando cron.use_background_workers=off
 exec docker-entrypoint.sh postgres \
-  -c shared_preload_libraries=pg_cron \
+  -c shared_preload_libraries='timescaledb,pg_cron' \
   -c cron.database_name="${POSTGRES_DB}" \
   -c cron.use_background_workers=on \
   -c shared_buffers=256MB \

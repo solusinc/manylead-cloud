@@ -1,16 +1,17 @@
 # docker/postgres/Dockerfile
-# PostgreSQL 16 with custom extensions for Manylead Cloud
-# Extensions: pg_cron, pgvector, pg_partman
+# TimescaleDB 2.17 (PostgreSQL 16) with custom extensions for Manylead Cloud
+# Extensions: pg_cron, pgvector, timescaledb
 
-FROM postgres:16
+FROM timescale/timescaledb:latest-pg16
 
-# Install build dependencies
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    postgresql-server-dev-16 \
+# Install build dependencies (Alpine uses apk, not apt-get)
+RUN apk add --no-cache --virtual .build-deps \
+    build-base \
+    postgresql16-dev \
+    clang19 \
+    llvm19 \
     git \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+    curl
 
 # Install pg_cron
 RUN git clone https://github.com/citusdata/pg_cron.git /tmp/pg_cron \
@@ -29,16 +30,11 @@ RUN git clone --branch v0.8.0 https://github.com/pgvector/pgvector.git /tmp/pgve
     && cd / \
     && rm -rf /tmp/pgvector
 
-# Install pg_partman
-RUN git clone --branch v5.2.2 https://github.com/pgpartman/pg_partman.git /tmp/pg_partman \
-    && cd /tmp/pg_partman \
-    && make \
-    && make install \
-    && cd / \
-    && rm -rf /tmp/pg_partman
+# TimescaleDB is already included in the base image
+# No need to install pg_partman - TimescaleDB handles partitioning natively
 
 # Clean build dependencies to reduce image size
-RUN apt-get purge -y --auto-remove build-essential git curl
+RUN apk del .build-deps
 
 # Copy custom entrypoint script
 COPY docker-entrypoint.sh /usr/local/bin/custom-entrypoint.sh

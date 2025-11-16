@@ -30,7 +30,7 @@ async function main() {
       status: "active",
       capabilities: {
         pgVersion: "16",
-        extensions: ["pg_cron", "vector", "pg_partman"],
+        extensions: ["timescaledb", "pg_cron", "vector"],
         features: ["full-text-search", "pgbouncer"],
       },
     })

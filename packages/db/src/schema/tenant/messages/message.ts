@@ -1,16 +1,14 @@
 import {
   boolean,
-  index,
   jsonb,
   pgTable,
+  primaryKey,
   text,
   timestamp,
-  unique,
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
 import { v7 as uuidv7 } from "uuid";
-import { chat } from "../chats/chat";
 
 /**
  * Messages - Mensagens
@@ -22,12 +20,13 @@ export const message = pgTable(
   "message",
   {
     id: uuid("id")
-      .primaryKey()
+      .notNull()
       .$defaultFn(() => uuidv7()),
 
-    chatId: uuid("chat_id")
-      .notNull()
-      .references(() => chat.id, { onDelete: "cascade" }),
+    chatId: uuid("chat_id").notNull(),
+    // NOTA: FK removido porque TimescaleDB PRIMARY KEYs compostos incompatíveis
+    // chat tem PK (id, created_at) e message tem PK (id, timestamp)
+    // FK será validado na aplicação
 
     // WhatsApp Message ID
     whatsappMessageId: varchar("whatsapp_message_id", { length: 255 }),
@@ -76,15 +75,11 @@ export const message = pgTable(
 
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
-  (table) => [
-    // Unique: WhatsApp message ID (apenas para mensagens do WhatsApp)
-    unique("message_whatsapp_id_unique").on(table.whatsappMessageId),
+  (table) => ({
+    // PRIMARY KEY composto (id + timestamp) - OBRIGATÓRIO para TimescaleDB hypertables
+    pk: primaryKey({ columns: [table.id, table.timestamp] }),
 
-    index("message_chat_idx").on(table.chatId),
-    index("message_sender_idx").on(table.senderId),
-    index("message_status_idx").on(table.status),
-
-    // Composite index para queries comuns (mais recente primeiro)
-    index("message_chat_timestamp_idx").on(table.chatId, table.timestamp),
-  ]
+    // NOTA: TODOS os indexes e constraints serão criados DEPOIS do hypertable em timescale.ts
+    // TimescaleDB NÃO PERMITE indexes existentes antes da conversão para hypertable
+  }),
 );

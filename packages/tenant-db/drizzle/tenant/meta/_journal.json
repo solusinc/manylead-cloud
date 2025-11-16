@@ -5,29 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1763225542747,
-      "tag": "0000_minor_beyonder",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1763249170544,
-      "tag": "0001_premium_terrax",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1763250861316,
-      "tag": "0002_hesitant_skreet",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1763301751998,
-      "tag": "0003_colossal_menace",
+      "when": 1763307785003,
+      "tag": "0000_neat_hannibal_king",
       "breakpoints": true
     }
   ]

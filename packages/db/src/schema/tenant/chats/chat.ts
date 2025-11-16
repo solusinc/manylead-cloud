@@ -1,11 +1,10 @@
 import {
   boolean,
-  index,
   integer,
   pgTable,
+  primaryKey,
   text,
   timestamp,
-  unique,
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
@@ -28,7 +27,7 @@ export const chat = pgTable(
   "chat",
   {
     id: uuid("id")
-      .primaryKey()
+      .notNull()
       .$defaultFn(() => uuidv7()),
 
     organizationId: text("organization_id").notNull(),
@@ -89,24 +88,11 @@ export const chat = pgTable(
     // Partitioning key (mensal)
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
-  (table) => [
-    // Unique: um chat por canal + contato (apenas para WhatsApp)
-    unique("chat_channel_contact_unique").on(table.channelId, table.contactId),
+  (table) => ({
+    // PRIMARY KEY composto (id + created_at) - OBRIGATÓRIO para TimescaleDB hypertables
+    pk: primaryKey({ columns: [table.id, table.createdAt] }),
 
-    index("chat_org_idx").on(table.organizationId),
-    index("chat_channel_idx").on(table.channelId),
-    index("chat_contact_idx").on(table.contactId),
-    index("chat_assigned_idx").on(table.assignedTo),
-    index("chat_status_idx").on(table.status),
-
-    // Composite index para queries comuns
-    index("chat_org_status_last_msg_idx").on(
-      table.organizationId,
-      table.status,
-      table.lastMessageAt,
-    ),
-
-    // Index para snoozed chats (buscar os que precisam ser reativados)
-    index("chat_snoozed_until_idx").on(table.snoozedUntil),
-  ],
+    // NOTA: TODOS os indexes e constraints serão criados DEPOIS do hypertable em timescale.ts
+    // TimescaleDB NÃO PERMITE indexes existentes antes da conversão para hypertable
+  }),
 );
