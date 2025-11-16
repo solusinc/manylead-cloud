@@ -25,6 +25,19 @@ export const env = createEnv({
     QUEUE_TENANT_PROVISIONING: z.string().default("tenant-provisioning"),
     QUEUE_TENANT_MIGRATION: z.string().default("tenant-migration"),
     QUEUE_CHANNEL_SYNC: z.string().default("channel-sync"),
+    QUEUE_MEDIA_DOWNLOAD: z.string().default("media-download"),
+    QUEUE_ATTACHMENT_CLEANUP: z.string().default("attachment-cleanup"),
+
+    // Cloudflare R2 Storage
+    R2_ACCOUNT_ID: z.string().min(1),
+    R2_ACCESS_KEY_ID: z.string().min(1),
+    R2_SECRET_ACCESS_KEY: z.string().min(1),
+    R2_BUCKET_NAME: z.string().min(1),
+    R2_PUBLIC_URL: z.string().url(),
+
+    // Evolution API
+    EVOLUTION_API_URL: z.string().url(),
+    EVOLUTION_API_KEY: z.string().min(1),
 
     // Sentry (optional)
     SENTRY_DSN: z.string().optional(),

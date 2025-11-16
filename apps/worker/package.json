@@ -14,7 +14,9 @@
   "dependencies": {
     "@manylead/db": "workspace:*",
     "@manylead/error": "workspace:*",
+    "@manylead/evolution-api-client": "workspace:^",
     "@manylead/shared": "workspace:*",
+    "@manylead/storage": "workspace:^",
     "@manylead/tenant-db": "workspace:*",
     "@t3-oss/env-core": "catalog:",
     "bullmq": "^5.63.0",

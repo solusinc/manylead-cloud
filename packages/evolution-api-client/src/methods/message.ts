@@ -2,6 +2,7 @@ import type {
   SendMediaMessageRequest,
   SendMessageResponse,
   SendTextMessageRequest,
+  MediaDownloadResponse,
 } from "../types";
 
 export class MessageMethods {
@@ -40,6 +41,20 @@ export class MessageMethods {
       "POST",
       `/message/sendMedia/${instanceName}`,
       params,
+    );
+  }
+
+  /**
+   * Baixa mídia do WhatsApp
+   * https://doc.evolution-api.com/v2/en/endpoints/messages
+   */
+  async downloadMedia(
+    instanceName: string,
+    messageId: string,
+  ): Promise<MediaDownloadResponse> {
+    return this.request<MediaDownloadResponse>(
+      "GET",
+      `/message/download/${instanceName}/${messageId}`,
     );
   }
 }

@@ -167,6 +167,12 @@ export interface WebhookEvent {
   apikey: string;
 }
 
+export interface MediaDownloadResponse {
+  base64: string;
+  mimetype: string;
+  filename?: string;
+}
+
 export interface EvolutionAPIError {
   error: string;
   message: string;
