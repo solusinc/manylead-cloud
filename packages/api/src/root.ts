@@ -1,9 +1,13 @@
 import { agentsRouter } from "./router/agents";
+import { attachmentsRouter } from "./router/attachments";
 import { authRouter } from "./router/auth";
 import { channelsRouter } from "./router/channels";
+import { chatsRouter } from "./router/chats";
+import { contactsRouter } from "./router/contacts";
 import { departmentsRouter } from "./router/departments";
 import { invitationRouter } from "./router/invitation";
 import { memberRouter } from "./router/member";
+import { messagesRouter } from "./router/messages";
 import { organizationRouter } from "./router/organization";
 import { organizationSettingsRouter } from "./router/organization-settings";
 import { createTRPCRouter } from "./trpc";
@@ -17,6 +21,10 @@ export const appRouter = createTRPCRouter({
   departments: departmentsRouter,
   agents: agentsRouter,
   channels: channelsRouter,
+  contacts: contactsRouter,
+  chats: chatsRouter,
+  messages: messagesRouter,
+  attachments: attachmentsRouter,
 });
 
 // export type definition of API

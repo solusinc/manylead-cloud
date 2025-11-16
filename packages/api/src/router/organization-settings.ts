@@ -1,14 +1,14 @@
 import { TRPCError } from "@trpc/server";
-import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 import {
+  eq,
   organizationSettings,
-  updateOrganizationSettingsSchema,
   organizationWorkingHoursSchema,
+  updateOrganizationSettingsSchema,
 } from "@manylead/db";
 
-import { ownerProcedure, createTRPCRouter, tenantManager } from "../trpc";
+import { createTRPCRouter, ownerProcedure, tenantManager } from "../trpc";
 
 /**
  * Organization Settings Router

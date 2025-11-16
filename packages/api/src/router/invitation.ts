@@ -1,15 +1,16 @@
-import {
-  createTRPCRouter,
-  protectedProcedure,
-  ownerProcedure,
-  tenantManager,
-} from "../trpc";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
-import { and, eq, gte } from "drizzle-orm";
-import { invitation, organization, agent } from "@manylead/db";
+
+import { agent, and, eq, gte, invitation, organization } from "@manylead/db";
 import { EmailClient } from "@manylead/emails";
+
 import { env } from "../env";
+import {
+  createTRPCRouter,
+  ownerProcedure,
+  protectedProcedure,
+  tenantManager,
+} from "../trpc";
 
 const emailClient = new EmailClient({
   apiKey: env.RESEND_API_KEY,
@@ -203,8 +204,7 @@ export const invitationRouter = createTRPCRouter({
       ) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message:
-            "Selecione pelo menos um departamento",
+          message: "Selecione pelo menos um departamento",
         });
       }
 
@@ -398,13 +398,14 @@ export const invitationRouter = createTRPCRouter({
 
       // Construir novo metadata
       const newMetadata = {
-        departmentAccess: input.departmentAccess ?? currentMetadata.departmentAccess ?? "all",
+        departmentAccess:
+          input.departmentAccess ?? currentMetadata.departmentAccess ?? "all",
         departmentIds:
           input.departmentAccess === "specific"
             ? input.departmentIds
             : input.departmentAccess === "all"
               ? []
-              : currentMetadata.departmentIds ?? [],
+              : (currentMetadata.departmentIds ?? []),
       };
 
       // Update invitation

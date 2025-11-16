@@ -1,10 +1,9 @@
 import { TRPCError } from "@trpc/server";
-import { and, eq, ne } from "drizzle-orm";
 import { z } from "zod";
 
-import { member, session, user } from "@manylead/db";
+import { and, eq, member, ne, session, user } from "@manylead/db";
 
-import { ownerProcedure, createTRPCRouter } from "../trpc";
+import { createTRPCRouter, ownerProcedure } from "../trpc";
 
 export const memberRouter = createTRPCRouter({
   /**

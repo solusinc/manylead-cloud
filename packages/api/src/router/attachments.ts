@@ -1,0 +1,195 @@
+import { TRPCError } from "@trpc/server";
+import { z } from "zod";
+
+import { and, attachment, count, desc, eq, sql } from "@manylead/db";
+
+import { createTRPCRouter, ownerProcedure } from "../trpc";
+
+/**
+ * Attachments Router
+ *
+ * Gerencia anexos/mídias das mensagens
+ */
+export const attachmentsRouter = createTRPCRouter({
+  /**
+   * Listar attachments de uma mensagem
+   */
+  listByMessage: ownerProcedure
+    .input(
+      z.object({
+        messageId: z.string().uuid(),
+        limit: z.number().min(1).max(100).default(50),
+        offset: z.number().min(0).default(0),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const { messageId, limit, offset } = input;
+
+      const [items, totalResult] = await Promise.all([
+        ctx.tenantDb
+          .select()
+          .from(attachment)
+          .where(eq(attachment.messageId, messageId))
+          .limit(limit)
+          .offset(offset)
+          .orderBy(desc(attachment.createdAt)),
+        ctx.tenantDb
+          .select({ count: count() })
+          .from(attachment)
+          .where(eq(attachment.messageId, messageId)),
+      ]);
+
+      return {
+        items,
+        total: totalResult[0]?.count ?? 0,
+        limit,
+        offset,
+      };
+    }),
+
+  /**
+   * Listar attachments pendentes de download
+   */
+  listPending: ownerProcedure
+    .input(
+      z.object({
+        limit: z.number().min(1).max(100).default(50),
+        offset: z.number().min(0).default(0),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const { limit, offset } = input;
+
+      const [items, totalResult] = await Promise.all([
+        ctx.tenantDb
+          .select()
+          .from(attachment)
+          .where(and(eq(attachment.downloadStatus, "pending")))
+          .limit(limit)
+          .offset(offset)
+          .orderBy(desc(attachment.createdAt)),
+        ctx.tenantDb
+          .select({ count: count() })
+          .from(attachment)
+          .where(eq(attachment.downloadStatus, "pending")),
+      ]);
+
+      return {
+        items,
+        total: totalResult[0]?.count ?? 0,
+        limit,
+        offset,
+      };
+    }),
+
+  /**
+   * Buscar attachment por ID
+   */
+  getById: ownerProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .query(async ({ ctx, input }) => {
+      const [attachmentRecord] = await ctx.tenantDb
+        .select()
+        .from(attachment)
+        .where(eq(attachment.id, input.id))
+        .limit(1);
+
+      if (!attachmentRecord) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Anexo não encontrado",
+        });
+      }
+
+      return attachmentRecord;
+    }),
+
+  /**
+   * Atualizar status de download do attachment
+   */
+  updateDownloadStatus: ownerProcedure
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        downloadStatus: z.enum([
+          "pending",
+          "downloading",
+          "completed",
+          "failed",
+          "expired",
+        ]),
+        storagePath: z.string().optional(),
+        storageUrl: z.string().url().optional(),
+        fileSize: z.number().optional(),
+        downloadError: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { id, downloadStatus, ...data } = input;
+
+      const updateData: Record<string, unknown> = {
+        downloadStatus,
+        ...data,
+      };
+
+      if (downloadStatus === "completed") {
+        updateData.downloadedAt = new Date();
+      }
+
+      const [updated] = await ctx.tenantDb
+        .update(attachment)
+        .set(updateData)
+        .where(eq(attachment.id, id))
+        .returning();
+
+      if (!updated) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Anexo não encontrado",
+        });
+      }
+
+      return updated;
+    }),
+
+  /**
+   * Deletar attachment
+   */
+  delete: ownerProcedure
+    .input(z.object({ id: z.string().uuid() }))
+    .mutation(async ({ ctx, input }) => {
+      const [deleted] = await ctx.tenantDb
+        .delete(attachment)
+        .where(eq(attachment.id, input.id))
+        .returning();
+
+      if (!deleted) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Anexo não encontrado",
+        });
+      }
+
+      // TODO: Deletar arquivo do R2 também
+
+      return { success: true };
+    }),
+
+  /**
+   * Estatísticas de attachments
+   */
+  stats: ownerProcedure.query(async ({ ctx }) => {
+    const [stats] = await ctx.tenantDb
+      .select({
+        total: count(),
+        pending: sql<number>`count(*) FILTER (WHERE ${attachment.downloadStatus} = 'pending')`,
+        downloading: sql<number>`count(*) FILTER (WHERE ${attachment.downloadStatus} = 'downloading')`,
+        completed: sql<number>`count(*) FILTER (WHERE ${attachment.downloadStatus} = 'completed')`,
+        failed: sql<number>`count(*) FILTER (WHERE ${attachment.downloadStatus} = 'failed')`,
+        expired: sql<number>`count(*) FILTER (WHERE ${attachment.downloadStatus} = 'expired')`,
+      })
+      .from(attachment);
+
+    return stats;
+  }),
+});

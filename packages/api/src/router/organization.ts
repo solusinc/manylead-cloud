@@ -1,12 +1,19 @@
 import { TRPCError } from "@trpc/server";
-import { and, eq, isNull } from "drizzle-orm";
 import slugify from "slugify";
 import { z } from "zod";
 
-import { member, organization, session, tenant } from "@manylead/db";
+import {
+  and,
+  eq,
+  isNull,
+  member,
+  organization,
+  session,
+  tenant,
+} from "@manylead/db";
 import { ActivityLogger, TenantDatabaseManager } from "@manylead/tenant-db";
 
-import { ownerProcedure, createTRPCRouter, protectedProcedure } from "../trpc";
+import { createTRPCRouter, ownerProcedure, protectedProcedure } from "../trpc";
 
 const tenantManager = new TenantDatabaseManager();
 const activityLogger = new ActivityLogger();

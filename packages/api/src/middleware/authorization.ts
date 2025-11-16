@@ -1,8 +1,7 @@
 import { TRPCError } from "@trpc/server";
-import { eq } from "drizzle-orm";
 
-import { agent } from "@manylead/db";
-import type { AgentRole, Actions, Subjects } from "@manylead/permissions";
+import type { Actions, AgentRole, Subjects } from "@manylead/permissions";
+import { agent, eq } from "@manylead/db";
 import { defineAbilitiesFor } from "@manylead/permissions";
 
 import type { BaseContext } from "../types";
@@ -70,8 +69,11 @@ export async function withAbility(ctx: BaseContext) {
     });
   }
 
-  const { agent: currentAgent, ability, tenantDb } =
-    await getAgentWithAbility(ctx);
+  const {
+    agent: currentAgent,
+    ability,
+    tenantDb,
+  } = await getAgentWithAbility(ctx);
 
   return {
     ...ctx,

@@ -1,20 +1,23 @@
-import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { and, eq, inArray } from "drizzle-orm";
+import { z } from "zod";
+
 import {
   agent,
+  and,
+  eq,
+  inArray,
   insertAgentSchema,
+  member,
+  organization,
   selectAgentSchema,
   updateAgentSchema,
   user,
-  member,
-  organization,
 } from "@manylead/db";
 
 import {
   createTRPCRouter,
-  protectedProcedure,
   ownerProcedure,
+  protectedProcedure,
   tenantManager,
 } from "../trpc";
 
@@ -40,10 +43,7 @@ export const agentsRouter = createTRPCRouter({
     const tenantDb = await tenantManager.getConnection(organizationId);
 
     // Get all agents from tenant database
-    const agents = await tenantDb
-      .select()
-      .from(agent)
-      .orderBy(agent.createdAt);
+    const agents = await tenantDb.select().from(agent).orderBy(agent.createdAt);
 
     // Se não houver agents, retornar array vazio
     if (agents.length === 0) {
@@ -111,12 +111,15 @@ export const agentsRouter = createTRPCRouter({
    * Users can get their own agent, admins/owners can get any agent
    */
   getByUserId: protectedProcedure
-    .input(z.object({ userId: z.string(), organizationId: z.string().optional() }))
+    .input(
+      z.object({ userId: z.string(), organizationId: z.string().optional() }),
+    )
     .query(async ({ ctx, input }) => {
       // Se está buscando agent de outro usuário, precisa ser admin/owner
       if (input.userId !== ctx.session.user.id) {
         // Verificar se o usuário atual é member da org e pegar seu role
-        const activeOrgId = input.organizationId ?? ctx.session.session.activeOrganizationId;
+        const activeOrgId =
+          input.organizationId ?? ctx.session.session.activeOrganizationId;
 
         if (!activeOrgId) {
           throw new TRPCError({
@@ -131,13 +134,16 @@ export const agentsRouter = createTRPCRouter({
           .where(
             and(
               eq(member.userId, ctx.session.user.id),
-              eq(member.organizationId, activeOrgId)
-            )
+              eq(member.organizationId, activeOrgId),
+            ),
           )
           .limit(1);
 
         // Apenas owner ou admin podem buscar agents de outros usuários
-        if (!currentMember || (currentMember.role !== "owner" && currentMember.role !== "admin")) {
+        if (
+          !currentMember ||
+          (currentMember.role !== "owner" && currentMember.role !== "admin")
+        ) {
           throw new TRPCError({
             code: "FORBIDDEN",
             message: "Você não tem permissão para acessar este recurso",
@@ -146,7 +152,8 @@ export const agentsRouter = createTRPCRouter({
       }
 
       // Usar organizationId do input se fornecido, senão pegar da sessão
-      let organizationId = input.organizationId ?? ctx.session.session.activeOrganizationId;
+      let organizationId =
+        input.organizationId ?? ctx.session.session.activeOrganizationId;
 
       // Se ainda não tiver, buscar a primeira org do usuário
       if (!organizationId) {

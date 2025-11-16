@@ -27,7 +27,6 @@
     "@t3-oss/env-core": "catalog:",
     "@trpc/server": "catalog:",
     "bullmq": "^5.63.0",
-    "drizzle-orm": "^0.44.7",
     "ioredis": "^5.8.2",
     "slugify": "^1.6.6",
     "superjson": "2.2.3",
