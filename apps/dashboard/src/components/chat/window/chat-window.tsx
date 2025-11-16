@@ -52,12 +52,12 @@ export function ChatWindow({
 
   return (
     <div
-      className={cn("flex flex-col h-full bg-muted/20", className)}
+      className={cn("flex flex-col bg-muted/20 h-full max-h-[calc(100vh-3.5rem)] sm:max-h-full", className)}
       {...props}
     >
       <ChatWindowHeader chat={chat} />
 
-      <ScrollArea className="flex-1 px-6 py-4">
+      <ScrollArea className="flex-1 px-6 py-4 overflow-auto">
         <ChatMessageList chatId={chatId} />
       </ScrollArea>
 
