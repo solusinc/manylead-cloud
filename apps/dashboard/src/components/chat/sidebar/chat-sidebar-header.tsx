@@ -50,12 +50,20 @@ export function ChatSidebarSearch({
     <div className={cn("relative flex-1", className)} {...props}>
       <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
       <Input
-        type="search"
+        type="text"
         placeholder="Buscar contato"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
         className="pl-10 h-8"
       />
+      {search && (
+        <button
+          onClick={() => setSearch("")}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      )}
     </div>
   );
 }
