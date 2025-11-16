@@ -3,7 +3,7 @@
 import type { EmojiClickData } from "emoji-picker-react";
 import { useState } from "react";
 import EmojiPicker from "emoji-picker-react";
-import { Paperclip, Smile } from "lucide-react";
+import { Smile, Plus, MessageSquareText, FileText, Image as ImageIcon } from "lucide-react";
 
 import { cn } from "@manylead/ui";
 import { Button } from "@manylead/ui/button";
@@ -72,32 +72,92 @@ export function ChatInputAttachButton({
 }: {
   onFileSelect?: (file: File) => void;
 } & React.ComponentProps<typeof Button>) {
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const [open, setOpen] = useState(false);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: string) => {
     const file = e.target.files?.[0];
     if (file) {
       onFileSelect?.(file);
+      setOpen(false);
     }
   };
 
   return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn("h-11 w-11 shrink-0", className)}
+          aria-label="Attach"
+          {...props}
+        >
+          <Plus className="h-5 w-5" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-56 p-2" side="top" align="start">
+        <div className="space-y-1">
+          <AttachMenuOption
+            icon={MessageSquareText}
+            label="Comentário"
+            onClick={() => {
+              // TODO: Implement comment
+              setOpen(false);
+            }}
+          />
+          <AttachMenuOption
+            icon={FileText}
+            label="Documento"
+            inputId="document-upload"
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.txt"
+            onChange={(e) => handleFileChange(e, "document")}
+          />
+          <AttachMenuOption
+            icon={ImageIcon}
+            label="Foto e Vídeo"
+            inputId="media-upload"
+            accept="image/*,video/*"
+            onChange={(e) => handleFileChange(e, "media")}
+          />
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function AttachMenuOption({
+  icon: Icon,
+  label,
+  onClick,
+  inputId,
+  accept,
+  onChange,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  onClick?: () => void;
+  inputId?: string;
+  accept?: string;
+  onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
+}) {
+  return (
     <>
-      <input
-        type="file"
-        id="chat-file-upload"
-        className="hidden"
-        onChange={handleFileChange}
-        accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx"
-      />
-      <Button
-        variant="ghost"
-        size="icon"
-        className={cn("h-11 w-11 shrink-0", className)}
-        aria-label="Attach file"
-        onClick={() => document.getElementById("chat-file-upload")?.click()}
-        {...props}
+      {inputId && (
+        <input
+          type="file"
+          id={inputId}
+          className="hidden"
+          accept={accept}
+          onChange={onChange}
+        />
+      )}
+      <button
+        onClick={inputId ? () => document.getElementById(inputId)?.click() : onClick}
+        className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm hover:bg-accent"
       >
-        <Paperclip className="h-5 w-5" />
-      </Button>
+        <Icon className="h-5 w-5" />
+        <span>{label}</span>
+      </button>
     </>
   );
 }

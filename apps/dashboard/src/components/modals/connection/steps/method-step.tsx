@@ -42,7 +42,7 @@ export function MethodStep() {
 
   return (
     <div className="grid gap-6">
-      <p className="text-muted-foreground text-center">
+      <p className="text-muted-foreground text-center hidden sm:block">
         Como deseja se conectar ao WhatsApp?
       </p>
 
@@ -57,7 +57,7 @@ export function MethodStep() {
             {method.icon}
             <div className="text-center">
               <p className="font-semibold underline">{method.title}</p>
-              <p className="text-muted-foreground mt-1 text-xs">
+              <p className="text-muted-foreground mt-1 text-xs hidden sm:block">
                 {method.description}
               </p>
             </div>

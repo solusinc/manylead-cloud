@@ -156,7 +156,7 @@ export function PairingStep() {
 
     return (
       <div className="grid gap-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {/* Lado esquerdo - Instruções */}
           <div className="space-y-4">
             <ol className="space-y-3 text-sm text-muted-foreground list-decimal list-inside">
@@ -171,13 +171,13 @@ export function PairingStep() {
               </li>
               <li>
                 Toque em <strong>Conectar com número de telefone</strong> e
-                insira o código exibido no seu celular.
+                insira o código exibido <span className="hidden sm:inline">ao lado</span><span className="sm:hidden">abaixo</span>.
               </li>
             </ol>
           </div>
 
           {/* Lado direito - Código */}
-          <div className="flex flex-col items-center justify-center gap-3">
+          <div className="flex flex-col items-center justify-center gap-3 sm:order-none order-last">
             <div className="rounded-lg border p-4 bg-background">
               <p className="text-3xl font-bold tracking-[0.15em] text-center">
                 {formattedCode}

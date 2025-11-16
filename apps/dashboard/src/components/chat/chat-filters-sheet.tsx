@@ -79,8 +79,8 @@ export function ChatFiltersSheet() {
         </div>
 
         {/* Footer com botões */}
-        <div className="border-t bg-background p-4">
-          <div className="flex gap-3">
+        <div className="border-t bg-background h-14 flex items-center px-4">
+          <div className="flex gap-3 w-full">
             <Button onClick={handleApply} className="flex-1">
               Aplicar
             </Button>

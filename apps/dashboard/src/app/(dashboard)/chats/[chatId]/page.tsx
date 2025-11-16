@@ -12,7 +12,7 @@ export default function ChatPage({
   const { chatId } = use(params);
 
   return (
-    <ChatLayout>
+    <ChatLayout hasChatSelected>
       <ChatWindow chatId={chatId} />
     </ChatLayout>
   );

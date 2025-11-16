@@ -28,28 +28,28 @@ const NETWORKS: NetworkOption[] = [
   {
     id: "whatsapp",
     name: "WhatsApp",
-    description: "Conecte seu WhatsApp à Manylead. Semelhante à conexão com WhatsApp Web.",
+    description: "Conecte seu WhatsApp. Semelhante ao WhatsApp Web.",
     icon: <FaWhatsapp className="h-6 w-6 text-green-600" />,
     enabled: true,
   },
   {
     id: "whatsapp_official",
-    name: "WhatsApp Oficial (Cloud API)",
-    description: "Crie uma conta oficial para utilizar com a Manylead.",
-    icon: <FaWhatsapp className="h-6 w-6 text-foreground" />,
+    name: "WhatsApp Oficial",
+    description: "Conta oficial WhatsApp Cloud API.",
+    icon: <FaWhatsapp className="h-6 w-6 text-muted-foreground" />,
     enabled: false,
   },
   {
     id: "facebook",
-    name: "Facebook Messenger (Beta)",
-    description: "Conecte suas contas Facebook Messenger à Manylead.",
+    name: "Facebook Messenger",
+    description: "Conecte suas contas Facebook Messenger.",
     icon: <FaFacebook className="h-6 w-6 text-blue-600" />,
     enabled: false,
   },
   {
     id: "instagram",
-    name: "Instagram Direct (Beta)",
-    description: "Conecte suas contas do Instagram Direct à Manylead.",
+    name: "Instagram Direct",
+    description: "Conecte suas contas Instagram Direct.",
     icon: <FaInstagram className="h-6 w-6 text-pink-600" />,
     enabled: false,
   },
@@ -101,7 +101,7 @@ export function NetworkStep() {
             }
           >
             <ActionCardHeader>
-              <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
                 <div className="flex gap-3">
                   <div className="flex items-center justify-center">
                     {network.icon}
@@ -114,25 +114,27 @@ export function NetworkStep() {
                   </div>
                 </div>
 
-                {network.enabled ? (
-                  network.id === "whatsapp" &&
-                  whatsappChannel?.status === "connected" ? (
-                    <Badge variant="default" className="bg-green-600">
-                      Conectado
-                    </Badge>
+                <div className="flex justify-center sm:justify-end sm:shrink-0">
+                  {network.enabled ? (
+                    network.id === "whatsapp" &&
+                    whatsappChannel?.status === "connected" ? (
+                      <Badge variant="default" className="bg-green-600">
+                        Conectado
+                      </Badge>
+                    ) : (
+                      <Button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSelect(network.id);
+                        }}
+                      >
+                        Conectar
+                      </Button>
+                    )
                   ) : (
-                    <Button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleSelect(network.id);
-                      }}
-                    >
-                      Conectar
-                    </Button>
-                  )
-                ) : (
-                  <Badge variant="secondary">Em breve</Badge>
-                )}
+                    <Badge variant="secondary">Em breve</Badge>
+                  )}
+                </div>
               </div>
             </ActionCardHeader>
           </ActionCard>

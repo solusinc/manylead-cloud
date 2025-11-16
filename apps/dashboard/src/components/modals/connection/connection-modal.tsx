@@ -44,7 +44,12 @@ export function ConnectionModal({ open, onOpenChange }: ConnectionModalProps) {
       <DialogContent className="sm:max-w-2xl" onOpenAutoFocus={(e) => e.preventDefault()}>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            {currentStep === "network" && "Escolha as redes que deseja conectar à Manylead"}
+            {currentStep === "network" && (
+              <span className="text-base sm:text-lg">
+                <span className="hidden sm:inline">Escolha as redes que deseja conectar à Manylead</span>
+                <span className="sm:hidden">Conectar redes</span>
+              </span>
+            )}
             {currentStep === "method" && (
               <>
                 <FaWhatsapp className="h-5 w-5 text-foreground" />

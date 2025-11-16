@@ -2,7 +2,7 @@
 
 import type { KeyboardEvent } from "react";
 import { useRef, useState } from "react";
-import { Send } from "lucide-react";
+import { Mic } from "lucide-react";
 import TextareaAutosize from "react-textarea-autosize";
 
 import { cn } from "@manylead/ui";
@@ -36,7 +36,7 @@ export function ChatInput({
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       void handleSend();
     }
@@ -48,26 +48,18 @@ export function ChatInput({
   };
 
   return (
-    <div className={cn("space-y-2", className)} {...props}>
-      <div className="flex items-end gap-2">
-        <ChatInputToolbar onEmojiSelect={insertEmoji} />
+    <div className={cn("flex items-end gap-2", className)} {...props}>
+      <ChatInputToolbar onEmojiSelect={insertEmoji} />
 
-        <ChatInputArea
-          ref={textareaRef}
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          onKeyDown={handleKeyDown}
-          disabled={isSending}
-        />
+      <ChatInputArea
+        ref={textareaRef}
+        value={content}
+        onChange={(e) => setContent(e.target.value)}
+        onKeyDown={handleKeyDown}
+        disabled={isSending}
+      />
 
-        <ChatInputSendButton
-          onClick={handleSend}
-          disabled={!content.trim() || isSending}
-          isLoading={isSending}
-        />
-      </div>
-
-      <ChatInputHint />
+      <ChatInputMicButton />
     </div>
   );
 }
@@ -94,7 +86,7 @@ export const ChatInputArea = ({
       className={cn(
         "border-input bg-background flex-1 resize-none rounded-md border px-3 py-2",
         "placeholder:text-muted-foreground text-sm",
-        "focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none",
+        "focus-visible:outline-none",
         "disabled:cursor-not-allowed disabled:opacity-50",
         "max-h-[200px] min-h-11",
         className,
@@ -106,42 +98,19 @@ export const ChatInputArea = ({
   );
 };
 
-export function ChatInputSendButton({
-  onClick,
-  disabled,
-  isLoading,
+export function ChatInputMicButton({
   className,
   ...props
-}: {
-  onClick: () => void;
-  disabled?: boolean;
-  isLoading?: boolean;
-} & React.ComponentProps<typeof Button>) {
+}: React.ComponentProps<typeof Button>) {
   return (
     <Button
-      onClick={onClick}
-      disabled={disabled}
+      variant="ghost"
       size="icon"
-      className={cn("h-11 w-111 shrink-0", className)}
-      aria-label="Send message"
+      className={cn("h-11 w-11 shrink-0", className)}
+      aria-label="Voice message"
       {...props}
     >
-      {isLoading ? (
-        <div className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-      ) : (
-        <Send className="h-4 w-4" />
-      )}
+      <Mic className="h-5 w-5" />
     </Button>
-  );
-}
-
-export function ChatInputHint({
-  className,
-  ...props
-}: React.ComponentProps<"p">) {
-  return (
-    <p className={cn("text-muted-foreground text-xs", className)} {...props}>
-      Pressione Cmd/Ctrl + Enter para enviar
-    </p>
   );
 }

@@ -36,27 +36,12 @@ const SIDEBAR_KEYBOARD_SHORTCUT = "[";
 const data = {
   overview: [
     {
-      name: "Overview",
-      url: "/overview",
-      icon: LayoutGrid,
-    },
-    {
-      name: "Inbox",
-      url: "/inbox",
-      icon: Inbox,
-    },
-    {
-      name: "Contacts",
-      url: "/contacts",
-      icon: Users,
-    },
-    {
-      name: "Conversations",
-      url: "/conversations",
+      name: "Chats",
+      url: "/chats",
       icon: MessageSquare,
     },
     {
-      name: "Settings",
+      name: "Configurações",
       url: "/settings",
       icon: Settings,
     },

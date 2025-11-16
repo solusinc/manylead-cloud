@@ -12,16 +12,43 @@ export function ChatWindow({
   ...props
 }: { chatId: string } & React.ComponentProps<"div">) {
   // TODO: Fetch chat data from tRPC using chatId
-  const chat = {
-    id: chatId,
-    contact: {
-      name: "João Silva",
-      phoneNumber: "+5511999999999",
-      avatar: null as string | null,
+  const mockChats = {
+    "1": {
+      id: "1",
+      contact: {
+        name: "João Silva",
+        phoneNumber: "+5511999999999",
+        avatar: null as string | null,
+      },
+      status: "open" as const,
+      assignedTo: null,
+      source: "whatsapp" as const,
     },
-    status: "open" as const,
-    assignedTo: null,
+    "2": {
+      id: "2",
+      contact: {
+        name: "Maria Santos",
+        phoneNumber: "+5521988887777",
+        avatar: null as string | null,
+      },
+      status: "closed" as const,
+      assignedTo: "user-123",
+      source: "internal" as const,
+    },
+    "3": {
+      id: "3",
+      contact: {
+        name: "Carlos Oliveira",
+        phoneNumber: "+5531977776666",
+        avatar: null as string | null,
+      },
+      status: "open" as const,
+      assignedTo: null,
+      source: "whatsapp" as const,
+    },
   };
+
+  const chat = mockChats[chatId as keyof typeof mockChats] || mockChats["1"];
 
   return (
     <div

@@ -79,7 +79,7 @@ export function ChatSidebarFilterButton({
           <Icon className="h-6 w-6" />
         </Button>
       </TooltipTrigger>
-      <TooltipContent side="top">
+      <TooltipContent side="bottom">
         <p>{label}</p>
       </TooltipContent>
     </Tooltip>

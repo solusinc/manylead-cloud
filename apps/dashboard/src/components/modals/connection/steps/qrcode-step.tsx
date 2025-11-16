@@ -104,7 +104,7 @@ export function QRCodeStep() {
 
   return (
     <div className="grid gap-6">
-      <div className="grid grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {/* Lado esquerdo - Instruções */}
         <div className="space-y-4">
           <div>
@@ -120,13 +120,13 @@ export function QRCodeStep() {
               <strong>2.</strong> Clique em <strong className="inline-flex items-center gap-1">Ajustes <MoreVertical className="inline h-3 w-3" /></strong> ou <strong className="inline-flex items-center gap-1">Configurações <Settings className="inline h-3 w-3" /></strong> e selecione <strong>Aparelhos conectados</strong>.
             </li>
             <li>
-              <strong>3.</strong> Clique <strong>Conectar um aparelho</strong> e aponte a câmera para o código ao lado:
+              <strong>3.</strong> Clique <strong>Conectar um aparelho</strong> e aponte a câmera para o código <span className="hidden sm:inline">ao lado:</span><span className="sm:hidden">abaixo:</span>
             </li>
           </ol>
         </div>
 
         {/* Lado direito - QR Code */}
-        <div className="flex flex-col items-center justify-center gap-3">
+        <div className="flex flex-col items-center justify-center gap-3 sm:order-none order-last">
           <div className="rounded-lg border p-4">
             {!qrCode ? (
               <div className="flex h-48 w-48 items-center justify-center">

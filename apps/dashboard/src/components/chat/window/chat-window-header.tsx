@@ -1,5 +1,8 @@
 "use client";
 
+import { useState } from "react";
+import Image from "next/image";
+import { FaWhatsapp } from "react-icons/fa";
 import { cn } from "@manylead/ui";
 import { Avatar, AvatarFallback } from "@manylead/ui/avatar";
 import { Button } from "@manylead/ui/button";
@@ -13,12 +16,14 @@ import {
 } from "@manylead/ui/dropdown-menu";
 import {
   MoreVertical,
-  UserPlus,
   Archive,
   X,
   RotateCcw,
-  User,
+  ArrowRightLeft,
+  Tag,
+  CheckCircle,
 } from "lucide-react";
+import { ContactDetailsSheet } from "../contact";
 
 interface ChatWindowHeaderProps {
   chat: {
@@ -30,6 +35,7 @@ interface ChatWindowHeaderProps {
     };
     status: "open" | "closed";
     assignedTo: string | null;
+    source?: "whatsapp" | "internal";
   };
   className?: string;
 }
@@ -39,50 +45,90 @@ export function ChatWindowHeader({
   className,
   ...props
 }: ChatWindowHeaderProps & React.ComponentProps<"div">) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
+
   return (
-    <div
-      className={cn(
-        "flex h-14 shrink-0 items-center justify-between gap-4 px-4 border-b bg-background",
-        className
-      )}
-      {...props}
-    >
-      <ChatWindowHeaderInfo contact={chat.contact} />
-      <ChatWindowHeaderActions chat={chat} />
-    </div>
+    <>
+      <div
+        className={cn(
+          "flex h-14 shrink-0 items-center justify-between gap-4 px-4 border-b bg-background",
+          className
+        )}
+        {...props}
+      >
+        <ChatWindowHeaderInfo
+          contact={chat.contact}
+          source={chat.source}
+          onClick={() => setDetailsOpen(true)}
+        />
+        <ChatWindowHeaderActions chat={chat} />
+      </div>
+
+      <ContactDetailsSheet
+        open={detailsOpen}
+        onOpenChange={setDetailsOpen}
+        contact={chat.contact}
+      />
+    </>
   );
 }
 
 export function ChatWindowHeaderInfo({
   contact,
+  source = "whatsapp",
   className,
+  onClick,
 }: {
   contact: {
     name: string;
     phoneNumber: string;
     avatar: string | null;
   };
+  source?: "whatsapp" | "internal";
   className?: string;
+  onClick?: () => void;
 }) {
   return (
-    <div className={cn("flex items-center gap-3", className)}>
+    <button
+      onClick={onClick}
+      className={cn(
+        "flex items-center gap-3 cursor-pointer",
+        className
+      )}
+    >
       <Avatar className="h-10 w-10">
         {contact.avatar ? (
           <img src={contact.avatar} alt={contact.name} className="object-cover" />
         ) : (
-          <AvatarFallback className="bg-muted">
-            <User className="h-5 w-5 text-muted-foreground" />
+          <AvatarFallback className="bg-muted relative overflow-hidden">
+            <Image
+              src="/assets/no-photo.svg"
+              alt="No photo"
+              fill
+              className="object-cover"
+            />
           </AvatarFallback>
         )}
       </Avatar>
 
-      <div>
-        <h3 className="font-medium text-sm">{contact.name}</h3>
+      <div className="text-left flex-1">
+        <div className="flex items-center gap-2">
+          <h3 className="font-medium text-sm">{contact.name}</h3>
+          {source === "whatsapp" ? (
+            <div className="rounded-full p-1 flex items-center justify-center" style={{ backgroundColor: '#7de8a6' }}>
+              <FaWhatsapp className="h-3.5 w-3.5 text-black" />
+            </div>
+          ) : (
+            <div className="rounded-full px-1.5 py-0.5 flex items-center justify-center" style={{ backgroundColor: '#7de8a6' }}>
+              <span className="text-[10px] font-bold text-black">ML</span>
+            </div>
+          )}
+        </div>
         <p className="text-xs text-muted-foreground">
           {formatBrazilianPhone(contact.phoneNumber)}
         </p>
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -98,35 +144,36 @@ export function ChatWindowHeaderActions({
   className?: string;
 }) {
   return (
-    <div className={cn("flex items-center gap-2", className)}>
+    <div className={cn("flex items-center gap-1", className)}>
       <Button
-        variant="outline"
+        variant="ghost"
         size="sm"
-        aria-label="Assign conversation"
+        aria-label="Transferir"
+        className="gap-2"
       >
-        <UserPlus className="h-4 w-4 mr-2" />
-        Atribuir
+        <ArrowRightLeft className="h-4 w-4" />
+        <span className="text-sm hidden sm:inline">transferir</span>
       </Button>
 
-      {chat.status === "open" ? (
-        <Button
-          variant="outline"
-          size="sm"
-          aria-label="Close conversation"
-        >
-          <X className="h-4 w-4 mr-2" />
-          Fechar
-        </Button>
-      ) : (
-        <Button
-          variant="outline"
-          size="sm"
-          aria-label="Reopen conversation"
-        >
-          <RotateCcw className="h-4 w-4 mr-2" />
-          Reabrir
-        </Button>
-      )}
+      <Button
+        variant="ghost"
+        size="sm"
+        aria-label="Etiquetas"
+        className="gap-2"
+      >
+        <Tag className="h-4 w-4" />
+        <span className="text-sm hidden sm:inline">etiquetas</span>
+      </Button>
+
+      <Button
+        variant="ghost"
+        size="sm"
+        aria-label="Finalizar"
+        className="gap-2"
+      >
+        <CheckCircle className="h-4 w-4" />
+        <span className="text-sm hidden sm:inline">finalizar</span>
+      </Button>
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

@@ -26,7 +26,6 @@ export function NavOverview({
   const { setOpenMobile } = useSidebar();
   return (
     <SidebarGroup>
-      <SidebarGroupLabel>Workspace</SidebarGroupLabel>
       <SidebarMenu>
         {items.map((item) => (
           <SidebarMenuItem key={item.name}>

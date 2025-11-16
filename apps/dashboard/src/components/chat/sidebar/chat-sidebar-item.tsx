@@ -2,9 +2,9 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { format, isToday, isYesterday, isThisWeek } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { User } from "lucide-react";
 
 import { cn } from "@manylead/ui";
 import { Avatar, AvatarFallback } from "@manylead/ui/avatar";
@@ -74,8 +74,13 @@ export function ChatSidebarItemAvatar({
         {avatar ? (
           <img src={avatar} alt={name} className="object-cover" />
         ) : (
-          <AvatarFallback className="bg-muted">
-            <User className="h-6 w-6 text-muted-foreground" />
+          <AvatarFallback className="bg-muted relative overflow-hidden">
+            <Image
+              src="/assets/no-photo.svg"
+              alt="No photo"
+              fill
+              className="object-cover"
+            />
           </AvatarFallback>
         )}
       </Avatar>
