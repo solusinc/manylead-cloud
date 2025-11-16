@@ -424,6 +424,9 @@ importers:
       '@manylead/permissions':
         specifier: workspace:*
         version: link:../permissions
+      '@manylead/storage':
+        specifier: workspace:^
+        version: link:../storage
       '@manylead/tenant-db':
         specifier: workspace:*
         version: link:../tenant-db

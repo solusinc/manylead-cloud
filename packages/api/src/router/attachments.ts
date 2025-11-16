@@ -2,7 +2,10 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import { and, attachment, count, desc, eq, sql } from "@manylead/db";
+import { R2StorageProvider } from "@manylead/storage/providers";
+import { generateMediaPath } from "@manylead/storage/utils";
 
+import { env } from "../env";
 import { createTRPCRouter, ownerProcedure } from "../trpc";
 
 /**
@@ -192,4 +195,55 @@ export const attachmentsRouter = createTRPCRouter({
 
     return stats;
   }),
+
+  /**
+   * Gerar pre-signed URL para upload de arquivo
+   * Frontend usa isso para fazer upload direto para R2
+   */
+  getSignedUploadUrl: ownerProcedure
+    .input(
+      z.object({
+        fileName: z.string().min(1),
+        mimeType: z.string().min(1),
+        expiresIn: z.number().min(60).max(3600).default(300), // 5 minutos default
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const organizationId = ctx.session.session.activeOrganizationId;
+      if (!organizationId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Nenhuma organização ativa",
+        });
+      }
+
+      // Inicializar R2 Storage Provider
+      const storageProvider = new R2StorageProvider({
+        accountId: env.R2_ACCOUNT_ID,
+        accessKeyId: env.R2_ACCESS_KEY_ID,
+        secretAccessKey: env.R2_SECRET_ACCESS_KEY,
+        bucketName: env.R2_BUCKET_NAME,
+        publicUrl: env.R2_PUBLIC_URL,
+      });
+
+      // Gerar path único para o arquivo
+      const storagePath = generateMediaPath(
+        organizationId,
+        input.fileName,
+        input.mimeType,
+      );
+
+      // Gerar pre-signed URL
+      const signedUrl = await storageProvider.getSignedUploadUrl(
+        storagePath,
+        input.expiresIn,
+      );
+
+      return {
+        uploadUrl: signedUrl,
+        storagePath,
+        publicUrl: `${env.R2_PUBLIC_URL}/${storagePath}`,
+        expiresIn: input.expiresIn,
+      };
+    }),
 });
