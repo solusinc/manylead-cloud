@@ -18,7 +18,6 @@ import {
   MoreVertical,
   Archive,
   X,
-  RotateCcw,
   ArrowRightLeft,
   Tag,
   CheckCircle,
@@ -133,7 +132,6 @@ export function ChatWindowHeaderInfo({
 }
 
 export function ChatWindowHeaderActions({
-  chat,
   className,
 }: {
   chat: {
@@ -152,7 +150,7 @@ export function ChatWindowHeaderActions({
         className="gap-2"
       >
         <ArrowRightLeft className="h-4 w-4" />
-        <span className="text-sm hidden sm:inline">transferir</span>
+        <span className="text-sm hidden lg:inline">transferir</span>
       </Button>
 
       <Button
@@ -162,7 +160,7 @@ export function ChatWindowHeaderActions({
         className="gap-2"
       >
         <Tag className="h-4 w-4" />
-        <span className="text-sm hidden sm:inline">etiquetas</span>
+        <span className="text-sm hidden lg:inline">etiquetas</span>
       </Button>
 
       <Button
@@ -172,7 +170,7 @@ export function ChatWindowHeaderActions({
         className="gap-2"
       >
         <CheckCircle className="h-4 w-4" />
-        <span className="text-sm hidden sm:inline">finalizar</span>
+        <span className="text-sm hidden lg:inline">finalizar</span>
       </Button>
 
       <DropdownMenu>

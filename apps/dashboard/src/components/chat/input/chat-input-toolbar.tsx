@@ -74,7 +74,7 @@ export function ChatInputAttachButton({
 } & React.ComponentProps<typeof Button>) {
   const [open, setOpen] = useState(false);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: string) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, _type: string) => {
     const file = e.target.files?.[0];
     if (file) {
       onFileSelect?.(file);

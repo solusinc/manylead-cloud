@@ -48,7 +48,7 @@ export function ChatInput({
   };
 
   return (
-    <div className={cn("flex items-end gap-2", className)} {...props}>
+    <div className={cn("flex items-center gap-2 w-full", className)} {...props}>
       <ChatInputToolbar onEmojiSelect={insertEmoji} />
 
       <ChatInputArea

@@ -2,22 +2,21 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { Check, X, Plus } from "lucide-react";
+import { Check, Plus, X } from "lucide-react";
 import { FaWhatsapp } from "react-icons/fa";
 
-import { cn } from "@manylead/ui";
+import { formatBrazilianPhone } from "@manylead/shared/utils";
+import { Avatar, AvatarFallback } from "@manylead/ui/avatar";
 import { Button } from "@manylead/ui/button";
 import { Input } from "@manylead/ui/input";
 import { Label } from "@manylead/ui/label";
-import { Textarea } from "@manylead/ui/textarea";
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
 } from "@manylead/ui/sheet";
-import { Avatar, AvatarFallback } from "@manylead/ui/avatar";
-import { formatBrazilianPhone } from "@manylead/shared/utils";
+import { Textarea } from "@manylead/ui/textarea";
 
 interface ContactDetailsSheetProps {
   open: boolean;
@@ -39,14 +38,18 @@ export function ContactDetailsSheet({
   const [customName, setCustomName] = useState(contact.customName ?? "");
   const [notes, setNotes] = useState(contact.notes ?? "");
   const [customFields, setCustomFields] = useState<
-    Array<{ id: string; label: string; value: string }>
+    { id: string; label: string; value: string }[]
   >([]);
 
   const handleAddField = () => {
     const newFieldNumber = customFields.length + 1;
     setCustomFields([
       ...customFields,
-      { id: String(newFieldNumber), label: `Campo-${newFieldNumber}`, value: "" },
+      {
+        id: String(newFieldNumber),
+        label: `Campo-${newFieldNumber}`,
+        value: "",
+      },
     ]);
   };
 
@@ -62,8 +65,8 @@ export function ContactDetailsSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-md p-0 flex flex-col [&>button]:hidden">
-        <SheetHeader className="border-b px-4 py-3 flex-row items-center justify-between space-y-0">
+      <SheetContent className="flex w-full flex-col p-0 sm:max-w-md [&>button]:hidden">
+        <SheetHeader className="flex-row items-center justify-between space-y-0 border-b px-4 py-3">
           <Button
             variant="ghost"
             size="icon"
@@ -86,7 +89,7 @@ export function ContactDetailsSheet({
         <div className="flex-1 overflow-y-auto">
           <ContactDetailsAvatar contact={contact} />
 
-          <div className="px-4 py-6 space-y-6">
+          <div className="space-y-6 px-4 py-6">
             <ContactDetailsField
               label="Nome Personalizado"
               value={customName}
@@ -110,8 +113,11 @@ export function ContactDetailsSheet({
                   value={field.value}
                   onChange={(value) => {
                     const newFields = [...customFields];
-                    newFields[index].value = value;
-                    setCustomFields(newFields);
+                    const field = newFields[index];
+                    if (field) {
+                      field.value = value;
+                      setCustomFields(newFields);
+                    }
                   }}
                 />
               ))}
@@ -120,9 +126,9 @@ export function ContactDetailsSheet({
             <Button
               variant="ghost"
               onClick={handleAddField}
-              className="w-full justify-start text-muted-foreground"
+              className="text-muted-foreground w-full justify-start"
             >
-              <Plus className="h-4 w-4 mr-2" />
+              <Plus className="mr-2 h-4 w-4" />
               adicionar campo
             </Button>
           </div>
@@ -142,10 +148,15 @@ function ContactDetailsAvatar({
   };
 }) {
   return (
-    <div className="flex flex-col items-center py-8 bg-muted/20">
-      <Avatar className="h-40 w-40 mb-4">
+    <div className="bg-muted/20 flex flex-col items-center py-8">
+      <Avatar className="mb-4 h-40 w-40">
         {contact.avatar ? (
-          <img src={contact.avatar} alt={contact.name} className="object-cover" />
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={contact.avatar}
+            alt={contact.name}
+            className="object-cover"
+          />
         ) : (
           <AvatarFallback className="bg-muted relative overflow-hidden">
             <Image
@@ -158,12 +169,12 @@ function ContactDetailsAvatar({
         )}
       </Avatar>
 
-      <h2 className="text-xl font-semibold mb-1">{contact.name}</h2>
+      <h2 className="mb-1 text-xl font-semibold">{contact.name}</h2>
       <div className="flex items-center gap-1.5">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-muted-foreground text-sm">
           {formatBrazilianPhone(contact.phoneNumber)}
         </p>
-        <FaWhatsapp className="h-4 w-4 text-muted-foreground" />
+        <FaWhatsapp className="text-muted-foreground h-4 w-4" />
       </div>
     </div>
   );
@@ -184,13 +195,13 @@ function ContactDetailsField({
 }) {
   return (
     <div className="space-y-2">
-      <Label className="text-sm text-muted-foreground">{label}</Label>
+      <Label className="text-muted-foreground text-sm">{label}</Label>
       {multiline ? (
         <Textarea
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
-          className="min-h-[80px] resize-none"
+          className="min-h-20 resize-none"
         />
       ) : (
         <Input
@@ -213,7 +224,7 @@ function ContactDetailsCustomField({
   onChange: (value: string) => void;
 }) {
   return (
-    <div className="grid grid-cols-3 gap-4 items-center">
+    <div className="grid grid-cols-3 items-center gap-4">
       <Label className="text-sm">{label}</Label>
       <Input
         value={value}

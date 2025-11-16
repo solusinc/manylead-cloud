@@ -48,7 +48,7 @@ export function ChatWindow({
     },
   };
 
-  const chat = mockChats[chatId as keyof typeof mockChats] || mockChats["1"];
+  const chat = (mockChats[chatId as keyof typeof mockChats] as typeof mockChats["1"] | undefined) ?? mockChats["1"];
 
   return (
     <div
@@ -61,7 +61,7 @@ export function ChatWindow({
         <ChatMessageList chatId={chatId} />
       </ScrollArea>
 
-      <div className="border-t bg-background p-4">
+      <div className="border-t bg-background h-14 flex items-center px-4 sticky bottom-0">
         <ChatInput chatId={chatId} />
       </div>
     </div>

@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Button } from "@manylead/ui/button";
 import { ChevronLeft } from "lucide-react";
@@ -8,7 +7,7 @@ import { ChevronLeft } from "lucide-react";
 export function NavActions() {
   const pathname = usePathname();
   const router = useRouter();
-  const isOnChatPage = pathname?.startsWith("/chats/") && pathname !== "/chats";
+  const isOnChatPage = pathname.startsWith("/chats/") && pathname !== "/chats";
 
   if (isOnChatPage) {
     return (

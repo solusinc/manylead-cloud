@@ -2,11 +2,8 @@
 
 import * as React from "react";
 import {
-  Inbox,
-  LayoutGrid,
   MessageSquare,
   Settings,
-  Users,
 } from "lucide-react";
 
 import {
@@ -21,7 +18,6 @@ import {
 import {
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger,
 } from "@manylead/ui/tooltip";
 
