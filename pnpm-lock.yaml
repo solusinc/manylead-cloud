@@ -124,6 +124,9 @@ importers:
 
   apps/dashboard:
     dependencies:
+      '@aws-sdk/client-s3':
+        specifier: ^3.932.0
+        version: 3.932.0
       '@casl/react':
         specifier: 'catalog:'
         version: 5.0.0(@casl/ability@6.7.3)(react@19.2.0)
@@ -166,6 +169,9 @@ importers:
       '@tanstack/react-table':
         specifier: 'catalog:'
         version: 8.21.3(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+      '@tanstack/react-virtual':
+        specifier: ^3.13.12
+        version: 3.13.12(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
       '@trpc/client':
         specifier: 'catalog:'
         version: 11.7.1(@trpc/server@11.7.1(typescript@5.9.3))(typescript@5.9.3)
@@ -184,6 +190,9 @@ importers:
       date-fns:
         specifier: ^4.1.0
         version: 4.1.0
+      emoji-picker-react:
+        specifier: ^4.15.1
+        version: 4.15.1(react@19.2.0)
       lucide-react:
         specifier: 'catalog:'
         version: 0.525.0(react@19.2.0)
@@ -208,6 +217,9 @@ importers:
       react-qr-code:
         specifier: ^2.0.18
         version: 2.0.18(react@19.2.0)
+      react-textarea-autosize:
+        specifier: ^8.5.9
+        version: 8.5.9(@types/react@19.2.2)(react@19.2.0)
       socket.io-client:
         specifier: ^4.8.1
         version: 4.8.1(bufferutil@4.0.9)
@@ -217,6 +229,9 @@ importers:
       superjson:
         specifier: 2.2.3
         version: 2.2.3
+      use-debounce:
+        specifier: ^10.0.6
+        version: 10.0.6(react@19.2.0)
       zod:
         specifier: 'catalog:'
         version: 4.1.12
@@ -4264,12 +4279,21 @@ packages:
       react: '>=16.8'
       react-dom: '>=16.8'
 
+  '@tanstack/react-virtual@3.13.12':
+    resolution: {integrity: sha512-Gd13QdxPSukP8ZrkbgS2RwoZseTTbQPLnQEn7HY/rqtM+8Zt95f7xKC7N0EsKs7aoz0WzZ+fditZux+F8EzYxA==}
+    peerDependencies:
+      react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+      react-dom: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+
   '@tanstack/store@0.7.7':
     resolution: {integrity: sha512-xa6pTan1bcaqYDS9BDpSiS63qa6EoDkPN9RsRaxHuDdVDNntzq3xNwR5YKTU/V3SkSyC9T4YVOPh2zRQN0nhIQ==}
 
   '@tanstack/table-core@8.21.3':
     resolution: {integrity: sha512-ldZXEhOBb8Is7xLs01fR3YEc3DERiz5silj8tnGkFZytt1abEvl/GhUmCE0PMLaMPTa3Jk4HbKmRlHmu+gCftg==}
     engines: {node: '>=12'}
+
+  '@tanstack/virtual-core@3.13.12':
+    resolution: {integrity: sha512-1YBOJfRHV4sXUmWsFSf5rQor4Ss82G8dQWLRbnk3GA4jeP8hQt1hxXh0tmflpC0dz3VgEv/1+qwPyLeWkQuPFA==}
 
   '@tootallnate/quickjs-emscripten@0.23.0':
     resolution: {integrity: sha512-C5Mc6rdnsaJDjO3UpGW/CQTHtCKaYlScZTly4JIu97Jxo/odCiH0ITnDXSJPTOrEKk/ycSZ0AOgTmkDtkOsvIA==}
@@ -5459,6 +5483,12 @@ packages:
   electron-to-chromium@1.5.248:
     resolution: {integrity: sha512-zsur2yunphlyAO4gIubdJEXCK6KOVvtpiuDfCIqbM9FjcnMYiyn0ICa3hWfPr0nc41zcLWobgy1iL7VvoOyA2Q==}
 
+  emoji-picker-react@4.15.1:
+    resolution: {integrity: sha512-RYeAgutdYGbKAyLrOHLsSUubGhg6q8sK889k7G8ofWxzqUzeY2i9WR4+Fj8gsP7oPYTfFPFCG7P6/Tl5TWnqOA==}
+    engines: {node: '>=10'}
+    peerDependencies:
+      react: '>=16'
+
   emoji-regex@10.6.0:
     resolution: {integrity: sha512-toUI84YS5YmxW219erniWD0CIVOo46xGKColeNQRgOzDorgBi1v4D71/OFzgD9GO2UGKIv1C3Sp8DAn0+j5w7A==}
 
@@ -5770,6 +5800,9 @@ packages:
   find-up@5.0.0:
     resolution: {integrity: sha512-78/PXT1wlLLDgTzDs7sjq9hzz0vXD+zn+7wypEe4fXQxCmdmqfGsEPQxmiCSQI3ajFV91bVSsvNtrJRiW6nGng==}
     engines: {node: '>=10'}
+
+  flairup@1.0.0:
+    resolution: {integrity: sha512-IKlE+pNvL2R+kVL1kEhUYqRxVqeFnjiIvHWDMLFXNaqyUdFXQM2wte44EfMYJNHkW16X991t2Zg8apKkhv7OBA==}
 
   flat-cache@4.0.1:
     resolution: {integrity: sha512-f7ccFPK3SXFHpx15UIGyRJ/FJQctuKZ0zVuN3frBo4HnK3cay9VEW0R6yPYFHC0AgqhukPzKjq22t5DmAyqGyw==}
@@ -7206,6 +7239,12 @@ packages:
       '@types/react':
         optional: true
 
+  react-textarea-autosize@8.5.9:
+    resolution: {integrity: sha512-U1DGlIQN5AwgjTyOEnI1oCcMuEr1pv1qOtklB2l4nyMGbHzWrI0eFsYK0zos2YWqAolJyG0IWJaqWmWj5ETh0A==}
+    engines: {node: '>=10'}
+    peerDependencies:
+      react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+
   react-transition-group@4.4.5:
     resolution: {integrity: sha512-pZcd1MCJoiKiBR2NRxeCRg13uCXbydPnmB4EOeRrY7480qNWO8IIgQG6zlDkm6uRMsURXPuKq0GWtiM59a5Q6g==}
     peerDependencies:
@@ -7896,6 +7935,39 @@ packages:
     peerDependencies:
       '@types/react': '*'
       react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0 || ^19.0.0-rc
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+
+  use-composed-ref@1.4.0:
+    resolution: {integrity: sha512-djviaxuOOh7wkj0paeO1Q/4wMZ8Zrnag5H6yBvzN7AKKe8beOaED9SF5/ByLqsku8NP4zQqsvM2u3ew/tJK8/w==}
+    peerDependencies:
+      '@types/react': '*'
+      react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+
+  use-debounce@10.0.6:
+    resolution: {integrity: sha512-C5OtPyhAZgVoteO9heXMTdW7v/IbFI+8bSVKYCJrSmiWWCLsbUxiBSp4t9v0hNBTGY97bT72ydDIDyGSFWfwXg==}
+    engines: {node: '>= 16.0.0'}
+    peerDependencies:
+      react: '*'
+
+  use-isomorphic-layout-effect@1.2.1:
+    resolution: {integrity: sha512-tpZZ+EX0gaghDAiFR37hj5MgY6ZN55kLiPkJsKxBMZ6GZdOSPJXiOzPM984oPYZ5AnehYx5WQp1+ME8I/P/pRA==}
+    peerDependencies:
+      '@types/react': '*'
+      react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+
+  use-latest@1.3.0:
+    resolution: {integrity: sha512-mhg3xdm9NaM8q+gLT8KryJPnRFOz1/5XPBhmDEVZK1webPzDjrPk7f/mbpeLqTgB9msytYWANxgALOCJKnLvcQ==}
+    peerDependencies:
+      '@types/react': '*'
+      react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
     peerDependenciesMeta:
       '@types/react':
         optional: true
@@ -11857,9 +11929,17 @@ snapshots:
       react: 19.2.0
       react-dom: 19.2.0(react@19.2.0)
 
+  '@tanstack/react-virtual@3.13.12(react-dom@19.2.0(react@19.2.0))(react@19.2.0)':
+    dependencies:
+      '@tanstack/virtual-core': 3.13.12
+      react: 19.2.0
+      react-dom: 19.2.0(react@19.2.0)
+
   '@tanstack/store@0.7.7': {}
 
   '@tanstack/table-core@8.21.3': {}
+
+  '@tanstack/virtual-core@3.13.12': {}
 
   '@tootallnate/quickjs-emscripten@0.23.0': {}
 
@@ -13034,6 +13114,11 @@ snapshots:
 
   electron-to-chromium@1.5.248: {}
 
+  emoji-picker-react@4.15.1(react@19.2.0):
+    dependencies:
+      flairup: 1.0.0
+      react: 19.2.0
+
   emoji-regex@10.6.0: {}
 
   emoji-regex@8.0.0: {}
@@ -13535,6 +13620,8 @@ snapshots:
     dependencies:
       locate-path: 6.0.0
       path-exists: 4.0.0
+
+  flairup@1.0.0: {}
 
   flat-cache@4.0.1:
     dependencies:
@@ -15036,6 +15123,15 @@ snapshots:
     optionalDependencies:
       '@types/react': 19.2.2
 
+  react-textarea-autosize@8.5.9(@types/react@19.2.2)(react@19.2.0):
+    dependencies:
+      '@babel/runtime': 7.28.4
+      react: 19.2.0
+      use-composed-ref: 1.4.0(@types/react@19.2.2)(react@19.2.0)
+      use-latest: 1.3.0(@types/react@19.2.2)(react@19.2.0)
+    transitivePeerDependencies:
+      - '@types/react'
+
   react-transition-group@4.4.5(react-dom@19.2.0(react@19.2.0))(react@19.2.0):
     dependencies:
       '@babel/runtime': 7.28.4
@@ -15870,6 +15966,29 @@ snapshots:
     dependencies:
       react: 19.2.0
       tslib: 2.8.1
+    optionalDependencies:
+      '@types/react': 19.2.2
+
+  use-composed-ref@1.4.0(@types/react@19.2.2)(react@19.2.0):
+    dependencies:
+      react: 19.2.0
+    optionalDependencies:
+      '@types/react': 19.2.2
+
+  use-debounce@10.0.6(react@19.2.0):
+    dependencies:
+      react: 19.2.0
+
+  use-isomorphic-layout-effect@1.2.1(@types/react@19.2.2)(react@19.2.0):
+    dependencies:
+      react: 19.2.0
+    optionalDependencies:
+      '@types/react': 19.2.2
+
+  use-latest@1.3.0(@types/react@19.2.2)(react@19.2.0):
+    dependencies:
+      react: 19.2.0
+      use-isomorphic-layout-effect: 1.2.1(@types/react@19.2.2)(react@19.2.0)
     optionalDependencies:
       '@types/react': 19.2.2
 

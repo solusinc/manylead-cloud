@@ -4,6 +4,7 @@ import LocalFont from "next/font/local";
 import "./globals.css";
 import { ThemeProvider } from "@manylead/ui/theme";
 import { Toaster } from "@manylead/ui/toast";
+import { TooltipProvider } from "@manylead/ui/tooltip";
 import { cn } from "@manylead/ui";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 import { TRPCReactProvider } from "~/lib/trpc/react";
@@ -85,8 +86,10 @@ export default function RootLayout({
         <NuqsAdapter>
           <TRPCReactProvider>
             <ThemeProvider>
-              {children}
-              <Toaster richColors expand />
+              <TooltipProvider>
+                {children}
+                <Toaster richColors expand />
+              </TooltipProvider>
             </ThemeProvider>
           </TRPCReactProvider>
         </NuqsAdapter>
