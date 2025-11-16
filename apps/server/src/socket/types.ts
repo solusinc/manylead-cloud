@@ -17,15 +17,29 @@ export interface ProvisioningEvent {
 }
 
 /**
+ * Channel sync events
+ */
+export interface ChannelSyncEvent {
+  type: "channel:sync:start" | "channel:sync:complete" | "channel:sync:error";
+  organizationId: string;
+  channelId: string;
+  data: {
+    message?: string;
+    error?: string;
+  };
+}
+
+/**
  * Union type of all events
  */
-export type SocketEvent = ProvisioningEvent;
+export type SocketEvent = ProvisioningEvent | ChannelSyncEvent;
 
 /**
  * Redis channel names
  */
 export const REDIS_CHANNELS = {
   PROVISIONING: "tenant:provisioning",
+  CHANNEL_SYNC: "channel:sync",
 } as const;
 
 /**

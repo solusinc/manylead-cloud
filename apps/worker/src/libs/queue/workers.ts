@@ -1,9 +1,11 @@
 import { Worker } from "bullmq";
 import type { TenantProvisioningJobData } from "~/workers/tenant-provisioning";
+import type { ChannelSyncJobData } from "~/workers/channel-sync";
 import { env } from "~/env";
 import { getRedisClient } from "~/libs/cache/redis";
 import { logger } from "~/libs/utils/logger";
 import { processTenantProvisioning } from "~/workers/tenant-provisioning";
+import { processChannelSync } from "~/workers/channel-sync";
 
 /**
  * Create and configure all BullMQ workers
@@ -75,6 +77,56 @@ export function createWorkers(): Worker[] {
 
   logger.info(`Worker created for queue: ${env.QUEUE_TENANT_PROVISIONING}`);
   workers.push(tenantProvisioningWorker);
+
+  /**
+   * Channel Sync Worker
+   */
+  logger.info(`Creating worker for queue: ${env.QUEUE_CHANNEL_SYNC}`);
+
+  const channelSyncWorker = new Worker<ChannelSyncJobData>(
+    env.QUEUE_CHANNEL_SYNC,
+    async (job) => {
+      return await processChannelSync(job);
+    },
+    {
+      connection,
+      concurrency: env.WORKER_CONCURRENCY,
+      autorun: true,
+    }
+  );
+
+  // Event listeners for channel sync worker
+  channelSyncWorker.on("ready", () => {
+    logger.info({ queueName: env.QUEUE_CHANNEL_SYNC }, "Worker ready");
+  });
+
+  channelSyncWorker.on("error", (err) => {
+    logger.error(
+      { queueName: env.QUEUE_CHANNEL_SYNC, error: err.message },
+      "Worker error"
+    );
+  });
+
+  channelSyncWorker.on("completed", (job) => {
+    logger.info(
+      { jobId: job.id, queueName: env.QUEUE_CHANNEL_SYNC },
+      "Job completed"
+    );
+  });
+
+  channelSyncWorker.on("failed", (job, err) => {
+    logger.error(
+      {
+        jobId: job?.id,
+        queueName: env.QUEUE_CHANNEL_SYNC,
+        error: err.message,
+      },
+      "Job failed"
+    );
+  });
+
+  logger.info(`Worker created for queue: ${env.QUEUE_CHANNEL_SYNC}`);
+  workers.push(channelSyncWorker);
 
   /**
    * TODO (FASE 4): Add Tenant Migration Worker

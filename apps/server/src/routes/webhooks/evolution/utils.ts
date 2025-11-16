@@ -10,19 +10,14 @@ import { tenantManager } from "~/libs/tenant-manager";
 /**
  * Extrai slug da organização do instanceName e busca o UUID
  *
- * Format: manylead_{slug}
+ * Format: {slug}
  */
 export async function extractOrganizationId(instanceName: string): Promise<string | null> {
-  const parts = instanceName.split("_");
-
-  if (parts.length < 2 || parts[0] !== "manylead") {
-    console.warn(`[Utils] Formato de instanceName inválido: ${instanceName}`);
-    return null;
-  }
-
-  const slug = parts[1];
+  // O instanceName agora é apenas o slug da organização
+  const slug = instanceName;
 
   if (!slug) {
+    console.warn(`[Utils] instanceName vazio`);
     return null;
   }
 
@@ -34,7 +29,12 @@ export async function extractOrganizationId(instanceName: string): Promise<strin
       .where(eq(organization.slug, slug))
       .limit(1);
 
-    return org?.id ?? null;
+    if (!org) {
+      console.warn(`[Utils] Organização não encontrada para slug: ${slug}`);
+      return null;
+    }
+
+    return org.id;
   } catch (error) {
     console.error(`[Utils] Erro ao buscar organização pelo slug ${slug}:`, error);
     return null;
@@ -47,11 +47,16 @@ export async function extractOrganizationId(instanceName: string): Promise<strin
  * @returns Canal encontrado ou null
  */
 export async function findChannelByInstanceName(instanceName: string) {
+  console.log(`[Utils] Buscando canal para instanceName: ${instanceName}`);
+
   const organizationId = await extractOrganizationId(instanceName);
 
   if (!organizationId) {
+    console.log(`[Utils] organizationId não encontrado para instanceName: ${instanceName}`);
     return null;
   }
+
+  console.log(`[Utils] organizationId encontrado: ${organizationId}`);
 
   try {
     const tenantDb = await tenantManager.getConnection(organizationId);
@@ -61,6 +66,8 @@ export async function findChannelByInstanceName(instanceName: string) {
       .from(channel)
       .where(eq(channel.evolutionInstanceName, instanceName))
       .limit(1);
+
+    console.log(`[Utils] Canal encontrado:`, ch ? { id: ch.id, evolutionInstanceName: ch.evolutionInstanceName } : 'null');
 
     return ch ?? null;
   } catch (error) {

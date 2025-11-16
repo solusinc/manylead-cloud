@@ -51,6 +51,20 @@ export class InstanceMethods {
   }
 
   /**
+   * Solicita código de emparelhamento (8 dígitos) para conectar via número de telefone
+   * https://doc.evolution-api.com/v2/api-reference/instance-controller/instance-connect
+   */
+  async requestCode(
+    instanceName: string,
+    phoneNumber: string,
+  ): Promise<{ pairingCode: string; code: string; count: number }> {
+    return this.request<{ pairingCode: string; code: string; count: number }>(
+      "GET",
+      `/instance/connect/${instanceName}?number=${phoneNumber}`,
+    );
+  }
+
+  /**
    * Desconecta e faz logout da instância
    * https://doc.evolution-api.com/v2/en/endpoints/instance
    */

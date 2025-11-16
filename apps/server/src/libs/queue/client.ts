@@ -48,11 +48,31 @@ export const tenantMigrationQueue = new Queue(env.QUEUE_TENANT_MIGRATION, {
   },
 });
 
+// Channel sync queue
+export const channelSyncQueue = new Queue(env.QUEUE_CHANNEL_SYNC, {
+  connection: getRedisClient(),
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: {
+      type: "exponential",
+      delay: 2000,
+    },
+    removeOnComplete: {
+      count: 100,
+      age: 24 * 3600,
+    },
+    removeOnFail: {
+      count: 200,
+    },
+  },
+});
+
 /**
  * Close all queues
  */
 export async function closeQueues() {
   await tenantProvisioningQueue.close();
   await tenantMigrationQueue.close();
+  await channelSyncQueue.close();
   logger.info("All queues closed");
 }

@@ -37,13 +37,21 @@ export const channel = pgTable(
 
     phoneNumber: varchar("phone_number", { length: 20 }),
 
-    displayName: varchar("display_name", { length: 255 }).notNull(),
+    displayName: varchar("display_name", { length: 255 }),
 
     profilePictureUrl: text("profile_picture_url"),
 
     // Status
     status: varchar("status", { length: 50 }).notNull().default("pending"),
     // pending | connected | disconnected | error
+
+    // Message sync status
+    syncStatus: varchar("sync_status", { length: 50 })
+      .notNull()
+      .default("pending"),
+    // pending | syncing | completed | failed
+
+    syncCompletedAt: timestamp("sync_completed_at"),
 
     // Evolution API
     evolutionInstanceName: varchar("evolution_instance_name", { length: 100 })

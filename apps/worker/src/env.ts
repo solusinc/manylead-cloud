@@ -24,6 +24,7 @@ export const env = createEnv({
     // Queue Names
     QUEUE_TENANT_PROVISIONING: z.string().default("tenant-provisioning"),
     QUEUE_TENANT_MIGRATION: z.string().default("tenant-migration"),
+    QUEUE_CHANNEL_SYNC: z.string().default("channel-sync"),
 
     // Sentry (optional)
     SENTRY_DSN: z.string().optional(),

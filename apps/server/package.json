@@ -17,6 +17,7 @@
     "@manylead/auth": "workspace:*",
     "@manylead/db": "workspace:*",
     "@manylead/error": "workspace:*",
+    "@manylead/evolution-api-client": "workspace:*",
     "@manylead/tenant-db": "workspace:*",
     "@t3-oss/env-core": "catalog:",
     "bullmq": "^5.63.0",

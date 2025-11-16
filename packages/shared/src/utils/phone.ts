@@ -82,3 +82,41 @@ export function isValidE164(phone: string): boolean {
   // E.164: + followed by 1-15 digits
   return /^\+[1-9]\d{1,14}$/.test(phone);
 }
+
+/**
+ * Formats a Brazilian phone number to display format
+ *
+ * @param phone - Phone number in any format
+ * @returns Formatted phone number (e.g., "+55 11 5198-8991")
+ *
+ * @example
+ * ```ts
+ * formatBrazilianPhone("5511519889991") // "+55 11 5198-8991"
+ * formatBrazilianPhone("+5511519889991") // "+55 11 5198-8991"
+ * formatBrazilianPhone("11519889991") // "+55 11 5198-8991"
+ * ```
+ */
+export function formatBrazilianPhone(phone: string): string {
+  const normalized = normalizePhoneNumber(phone);
+
+  // Remove country code if present
+  const withoutCountryCode = normalized.startsWith("55")
+    ? normalized.slice(2)
+    : normalized;
+
+  // Extract DDD (area code) and number
+  const ddd = withoutCountryCode.slice(0, 2);
+  const number = withoutCountryCode.slice(2);
+
+  // Format based on number length
+  if (number.length === 9) {
+    // Mobile: 9XXXX-XXXX
+    return `+55 ${ddd} ${number.slice(0, 5)}-${number.slice(5)}`;
+  } else if (number.length === 8) {
+    // Landline: XXXX-XXXX
+    return `+55 ${ddd} ${number.slice(0, 4)}-${number.slice(4)}`;
+  }
+
+  // Fallback: return as E.164
+  return formatToE164(phone, "55");
+}

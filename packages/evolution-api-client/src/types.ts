@@ -83,9 +83,7 @@ export interface CreateInstanceResponse {
   };
 }
 
-export interface FetchInstanceResponse {
-  instance: EvolutionInstance;
-}
+export type FetchInstanceResponse = EvolutionInstance[] | EvolutionInstance;
 
 export interface ConnectInstanceResponse {
   code: string;

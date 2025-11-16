@@ -2,6 +2,8 @@ import { channel, CHANNEL_STATUS, eq } from "@manylead/db";
 
 import { getSocketManager } from "~/socket";
 import { tenantManager } from "~/libs/tenant-manager";
+import { getEvolutionClient } from "~/libs/evolution-client";
+import { channelSyncQueue } from "~/libs/queue/client";
 import type { ConnectionUpdateData } from "../types";
 import { findChannelByInstanceName, WebhookLogger } from "../utils";
 
@@ -15,8 +17,6 @@ export async function handleConnectionUpdate(
   data: ConnectionUpdateData,
 ) {
   const logger = new WebhookLogger("connection.update", instanceName);
-
-  logger.info("Connection state changed", { state: data.state });
 
   // Buscar canal
   const ch = await findChannelByInstanceName(instanceName);
@@ -32,17 +32,14 @@ export async function handleConnectionUpdate(
   switch (state) {
     case "open":
       newStatus = CHANNEL_STATUS.CONNECTED;
-      logger.info("Canal conectado!");
       break;
 
     case "close":
       newStatus = CHANNEL_STATUS.DISCONNECTED;
-      logger.info("Canal desconectado");
       break;
 
     case "connecting":
       newStatus = CHANNEL_STATUS.PENDING;
-      logger.info("Canal conectando...");
       break;
   }
 
@@ -50,6 +47,30 @@ export async function handleConnectionUpdate(
   let phoneNumber = ch.phoneNumber;
   if (wuid && state === "open") {
     phoneNumber = wuid.split("@")[0] ?? ch.phoneNumber;
+  }
+
+  // Buscar informações completas da instância quando conectar
+  let finalProfileName = profileName;
+  let finalProfilePictureUrl = profilePictureUrl ?? ch.profilePictureUrl;
+
+  if (state === "open") {
+    try {
+      const evolutionClient = getEvolutionClient();
+      const instanceData = await evolutionClient.instance.fetch(instanceName);
+
+      // Evolution retorna um array ou objeto, pegar o primeiro item se for array
+      const instance = Array.isArray(instanceData) ? instanceData[0] : instanceData;
+
+      if (instance) {
+        // Se profileName vier null/undefined, manter undefined
+        finalProfileName = instance.profileName ?? undefined;
+        finalProfilePictureUrl = instance.profilePictureUrl ?? finalProfilePictureUrl;
+      }
+    } catch (error) {
+      logger.error("Failed to fetch instance data from Evolution", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   // Atualizar no DB
@@ -61,18 +82,13 @@ export async function handleConnectionUpdate(
       status: newStatus,
       evolutionConnectionState: state,
       phoneNumber: phoneNumber,
-      displayName: profileName ?? ch.displayName,
-      profilePictureUrl: profilePictureUrl ?? ch.profilePictureUrl,
+      displayName: finalProfileName,
+      profilePictureUrl: finalProfilePictureUrl,
       lastConnectedAt: state === "open" ? new Date() : ch.lastConnectedAt,
       errorMessage: statusReason?.toString(),
       updatedAt: new Date(),
     })
     .where(eq(channel.id, ch.id));
-
-  logger.info("Status atualizado no DB", {
-    channelId: ch.id,
-    status: newStatus,
-  });
 
   // Emitir evento via Socket.io
   const socketManager = getSocketManager();
@@ -82,5 +98,29 @@ export async function handleConnectionUpdate(
     connectionState: state,
   });
 
-  logger.info("Evento emitido via Socket.io");
+  // Emitir evento específico quando conectado
+  if (state === "open") {
+    socketManager.emitToRoom(`org:${ch.organizationId}`, "channel:connected", {
+      channelId: ch.id,
+      phoneNumber,
+      displayName: finalProfileName,
+      profilePictureUrl: finalProfilePictureUrl,
+    });
+
+    // Disparar job de sincronização de mensagens
+    await channelSyncQueue.add(
+      "sync-messages",
+      {
+        channelId: ch.id,
+        organizationId: ch.organizationId,
+      },
+      {
+        jobId: `channel-sync-${ch.id}`,
+        removeOnComplete: true,
+        removeOnFail: false,
+      }
+    );
+
+    logger.info("Channel sync job enqueued", { channelId: ch.id });
+  }
 }

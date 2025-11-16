@@ -54,9 +54,7 @@ export class SocketManager {
 
     this.io.on("connection", (socket) => {
       const socketData = socket.data as SocketData;
-      console.log(
-        `[SocketManager] Client connected: ${socket.id} (user: ${socketData.userId ?? "unknown"})`,
-      );
+      console.log(`[Socket.io] ✓ Connected: ${socket.id}`);
 
       /**
        * Join organization room
@@ -83,7 +81,7 @@ export class SocketManager {
         void socket.join(room);
 
         console.log(
-          `[SocketManager] Client ${socket.id} (user: ${socketData.userId ?? "unknown"}) joined room: ${room}`,
+          `[Socket.io] ← ${socket.id} | join:organization → ${room}`,
         );
 
         socket.emit("joined", { room, organizationId });
@@ -98,7 +96,7 @@ export class SocketManager {
         const room = `org:${organizationId}`;
         void socket.leave(room);
 
-        console.log(`[SocketManager] Client ${socket.id} left room: ${room}`);
+        console.log(`[Socket.io] ← ${socket.id} | leave:organization → ${room}`);
       });
 
       /**
@@ -114,9 +112,7 @@ export class SocketManager {
         const room = `channel:${channelId}`;
         void socket.join(room);
 
-        console.log(
-          `[SocketManager] Client ${socket.id} joined channel room: ${room}`,
-        );
+        console.log(`[Socket.io] ← ${socket.id} | join:channel → ${room}`);
 
         socket.emit("joined:channel", { room, channelId });
       });
@@ -130,16 +126,14 @@ export class SocketManager {
         const room = `channel:${channelId}`;
         void socket.leave(room);
 
-        console.log(
-          `[SocketManager] Client ${socket.id} left channel room: ${room}`,
-        );
+        console.log(`[Socket.io] ← ${socket.id} | leave:channel → ${room}`);
       });
 
       /**
        * Disconnect handler
        */
       socket.on("disconnect", () => {
-        console.log(`[SocketManager] Client disconnected: ${socket.id}`);
+        console.log(`[Socket.io] ✗ Disconnected: ${socket.id}`);
       });
 
       /**
@@ -157,6 +151,7 @@ export class SocketManager {
    * Manually emit event to a room (useful for testing)
    */
   public emitToRoom(room: string, event: string, data: unknown): void {
+    console.log(`[Socket.io] → ${room} | ${event}`);
     this.io.to(room).emit(event, data);
   }
 

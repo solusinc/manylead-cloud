@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Building, MessageSquare, SlidersVertical, User, Users } from "lucide-react";
+import { Building, SlidersVertical, User, Users } from "lucide-react";
 
 import type { Actions, Subjects } from "@manylead/permissions";
 
@@ -20,6 +20,7 @@ import {
   SectionTitle,
 } from "~/components/content/section";
 import { usePermissions } from "~/lib/permissions";
+import { ConnectionBanner } from "~/components/modals/connection/connection-banner";
 
 const settings = [
   {
@@ -49,17 +50,6 @@ const settings = [
     permission: {
       action: "manage" as Actions,
       subject: "Department" as Subjects,
-    },
-  },
-  {
-    title: "Canais",
-    description:
-      "Conecte e gerencie seus canais de atendimento via WhatsApp.",
-    href: "/settings/channels",
-    icon: MessageSquare,
-    permission: {
-      action: "manage" as Actions,
-      subject: "Channel" as Subjects,
     },
   },
   {
@@ -97,6 +87,10 @@ export default function Page() {
             Todas as suas configurações em um só lugar.
           </SectionDescription>
         </SectionHeader>
+
+        {/* Banner de conexão */}
+        <ConnectionBanner />
+
         <ActionCardGroup>
           {visibleSettings.map((setting) => {
             const Icon = setting.icon;

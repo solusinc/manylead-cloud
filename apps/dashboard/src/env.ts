@@ -18,6 +18,8 @@ export const env = createEnv({
     DATABASE_URL: z.url(),
     REDIS_URL: z.url(),
     RESEND_API_KEY: z.string().min(1),
+    EVOLUTION_API_URL: z.url(),
+    EVOLUTION_API_KEY: z.string().min(1),
   },
 
   /**
