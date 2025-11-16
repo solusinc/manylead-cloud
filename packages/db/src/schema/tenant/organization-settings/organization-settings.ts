@@ -57,6 +57,16 @@ export const organizationSettings = pgTable(
     hidePhoneDigits: boolean("hide_phone_digits").default(false).notNull(),
     // Se true, oculta últimos 4 dígitos do telefone (ex: +55 11 98765-XXXX)
 
+    // Chat Assignment Rules (auto-atribuição de conversas)
+    chatAssignmentRules: jsonb("chat_assignment_rules").$type<
+      {
+        enabled: boolean;
+        strategy: "round_robin" | "sticky" | "availability" | "manual";
+        departmentId?: string; // Aplicar apenas para este departamento
+        priority?: number; // Ordem de aplicação (menor = primeiro)
+      }[]
+    >(),
+
     // Timestamps
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),

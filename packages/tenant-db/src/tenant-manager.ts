@@ -24,6 +24,7 @@ import {
   isValidSlug,
   retryWithBackoff,
 } from "./utils";
+import { setupPartitioning } from "./partitioning";
 
 // Migrations path from env (supports both local dev and Docker)
 const TENANT_MIGRATIONS_PATH = env.TENANT_MIGRATIONS_PATH;
@@ -306,12 +307,19 @@ export class TenantDatabaseManager {
 
       // Criar extensões
       await tenantClient.unsafe("CREATE EXTENSION IF NOT EXISTS vector");
-      await tenantClient.unsafe("CREATE EXTENSION IF NOT EXISTS pg_partman");
+      await tenantClient.unsafe("CREATE SCHEMA IF NOT EXISTS partman");
+      await tenantClient.unsafe("CREATE EXTENSION IF NOT EXISTS pg_partman SCHEMA partman");
       await tenantClient.unsafe("CREATE EXTENSION IF NOT EXISTS dblink");
 
       // Rodar migrations do tenant
       const tenantDb = drizzle(tenantClient);
       await migrate(tenantDb, { migrationsFolder: TENANT_MIGRATIONS_PATH });
+
+      // Configurar particionamento automático (pg_partman)
+      console.log(
+        `[TenantManager] Setting up partitioning for ${existingTenant.databaseName}...`,
+      );
+      await setupPartitioning(tenantClient);
 
       await tenantClient.end();
 

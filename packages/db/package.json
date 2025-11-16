@@ -22,7 +22,7 @@
     "clean": "git clean -xdf .cache .turbo dist node_modules",
     "dev": "tsc",
     "format": "prettier --check . --ignore-path ../../.gitignore",
-    "lint": "eslint --flag unstable_nodejs_ts_config",
+    "lint": "eslint",
     "generate": "pnpm with-env drizzle-kit generate",
     "migrate": "pnpm with-env tsx src/migrate.ts",
     "seed": "pnpm with-env tsx src/seed.ts",
@@ -36,6 +36,7 @@
     "@t3-oss/env-core": "catalog:",
     "drizzle-orm": "^0.44.7",
     "drizzle-zod": "^0.8.3",
+    "nanoid": "^5.1.6",
     "postgres": "^3.4.7",
     "uuid": "catalog:",
     "zod": "catalog:"

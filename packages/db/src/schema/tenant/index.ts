@@ -17,3 +17,18 @@ export * from "./agents";
 
 // Channels
 export * from "./channels";
+
+// Contacts
+export * from "./contacts";
+
+// Chats
+export * from "./chats";
+
+// Messages
+export * from "./messages";
+
+// Attachments
+export * from "./attachments";
+
+// Agent Status
+export * from "./agent-status";

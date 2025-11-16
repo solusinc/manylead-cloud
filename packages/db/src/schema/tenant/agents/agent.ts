@@ -1,13 +1,16 @@
 import {
+  boolean,
+  index,
+  jsonb,
   pgTable,
+  timestamp,
   uuid,
   varchar,
-  timestamp,
-  boolean,
-  jsonb,
-  index,
 } from "drizzle-orm/pg-core";
+import { customAlphabet } from "nanoid";
 import { v7 as uuidv7 } from "uuid";
+
+const nanoid = customAlphabet("0123456789abcdef", 10);
 
 /**
  * Agent table - Usuários com permissões granulares
@@ -18,7 +21,9 @@ import { v7 as uuidv7 } from "uuid";
 export const agent = pgTable(
   "agent",
   {
-    id: uuid("id").primaryKey().$defaultFn(() => uuidv7()),
+    id: uuid("id")
+      .primaryKey()
+      .$defaultFn(() => uuidv7()),
 
     userId: varchar("user_id", { length: 255 }).notNull().unique(),
     // ID do Better Auth user
@@ -47,6 +52,13 @@ export const agent = pgTable(
 
     isActive: boolean("is_active").default(true).notNull(),
 
+    // Instance Code (para comunicação interna manylead-to-manylead)
+    instanceCode: varchar("instance_code", { length: 50 })
+      .notNull()
+      .unique()
+      .$defaultFn(() => `manylead-${nanoid()}`),
+    // Formato: manylead-477a286676 (sem hífen no ID, só lowercase hex)
+
     // Timestamps
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -54,5 +66,6 @@ export const agent = pgTable(
   (table) => [
     index("agent_user_idx").on(table.userId),
     index("agent_active_idx").on(table.isActive),
+    index("agent_instance_code_idx").on(table.instanceCode),
   ],
 );
