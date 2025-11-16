@@ -11,12 +11,16 @@ export type MediaType = "image" | "video" | "audio" | "document";
 
 /**
  * Gera um caminho único para armazenar mídia no R2
- * Formato: {organizationId}/{year}/{month}/media/{nanoid}{ext}
- * Exemplo: org_123/2025/01/media/x7k2n9p4q1r8s5t6u9v2w.jpg
+ * Formato com prefixo por tipo (para Lifecycle Policies):
+ * - Videos: {organizationId}/{year}/{month}/videos/{nanoid}{ext}
+ * - Outros: {organizationId}/{year}/{month}/media/{nanoid}{ext}
+ *
+ * Exemplo: org_123/2025/01/videos/x7k2n9p4q1r8s5t6u9v2w.mp4
  */
 export function generateMediaPath(
   organizationId: string,
   fileName: string,
+  mimeType?: string,
 ): string {
   const now = new Date();
   const year = now.getFullYear();
@@ -24,7 +28,11 @@ export function generateMediaPath(
   const id = nanoid();
   const ext = path.extname(fileName);
 
-  return `${organizationId}/${year}/${month}/media/${id}${ext}`;
+  // Determinar prefixo baseado no tipo de mídia
+  const mediaType = mimeType ? getMediaTypeFromMimeType(mimeType) : "document";
+  const folder = mediaType === "video" ? "videos" : "media";
+
+  return `${organizationId}/${year}/${month}/${folder}/${id}${ext}`;
 }
 
 /**

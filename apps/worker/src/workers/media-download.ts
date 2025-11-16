@@ -106,8 +106,8 @@ export async function processMediaDownload(
     const buffer = Buffer.from(mediaData.base64, "base64");
     const fileSize = buffer.length;
 
-    // Generate storage path
-    const storagePath = generateMediaPath(organizationId, fileName);
+    // Generate storage path (com mimeType para usar prefixo correto)
+    const storagePath = generateMediaPath(organizationId, fileName, mimeType);
     const mediaType = getMediaTypeFromMimeType(mimeType);
     const tags = getR2TagsForMedia(mediaType);
 
