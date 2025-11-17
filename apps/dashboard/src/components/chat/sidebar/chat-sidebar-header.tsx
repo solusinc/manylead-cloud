@@ -79,7 +79,7 @@ export function ChatSidebarNewButton({
         <Button
           variant="ghost"
           size="icon"
-          className={cn("h-9 w-9 flex-shrink-0", className)}
+          className={cn("h-9 w-9 flex-shrink-0 text-muted-foreground", className)}
           aria-label="Iniciar contato"
           onClick={onClick}
           {...props}
@@ -104,9 +104,13 @@ export function ChatSidebarUnreadButton({
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
-          variant={showUnreadOnly ? "default" : "ghost"}
+          variant="ghost"
           size="icon"
-          className={cn("h-9 w-9 flex-shrink-0", className)}
+          className={cn(
+            "h-9 w-9 flex-shrink-0 text-muted-foreground",
+            showUnreadOnly && "bg-accent",
+            className
+          )}
           aria-label="Conversas não lidas"
           onClick={() => setShowUnreadOnly(!showUnreadOnly)}
           {...props}
@@ -133,7 +137,7 @@ export function ChatSidebarFilterButton({
         <Button
           variant="ghost"
           size="icon"
-          className={cn("h-9 w-9 flex-shrink-0", className)}
+          className={cn("h-9 w-9 flex-shrink-0 text-muted-foreground", className)}
           aria-label="Filtros"
           onClick={isOpen ? close : open}
           {...props}

@@ -61,7 +61,7 @@ export function ChatWindow({
         <ChatMessageList chatId={chatId} />
       </ScrollArea>
 
-      <div className="border-t bg-background h-14 flex items-center px-4 sticky bottom-0">
+      <div className="bg-background h-14 flex items-center px-4 sticky bottom-0">
         <ChatInput chatId={chatId} />
       </div>
     </div>

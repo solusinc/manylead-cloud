@@ -69,8 +69,8 @@ export function ChatSidebarFilterButton({
           variant="ghost"
           size="icon"
           className={cn(
-            "h-12 flex-1 rounded-none border-b-2 border-transparent",
-            active && "border-b-primary",
+            "h-12 flex-1 rounded-none border-b-2 border-transparent text-muted-foreground",
+            active && "border-b-primary text-foreground",
             className
           )}
           aria-label={label}

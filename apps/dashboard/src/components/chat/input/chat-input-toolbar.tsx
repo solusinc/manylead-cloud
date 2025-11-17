@@ -19,9 +19,9 @@ export function ChatInputToolbar({
   onFileSelect?: (file: File) => void;
 } & React.ComponentProps<"div">) {
   return (
-    <div className={cn("flex items-center gap-1", className)} {...props}>
-      <ChatInputEmojiButton onEmojiSelect={onEmojiSelect} />
+    <div className={cn("flex items-center pl-1", className)} {...props}>
       <ChatInputAttachButton onFileSelect={onFileSelect} />
+      <ChatInputEmojiButton onEmojiSelect={onEmojiSelect} />
     </div>
   );
 }
@@ -46,7 +46,7 @@ export function ChatInputEmojiButton({
         <Button
           variant="ghost"
           size="icon"
-          className={cn("h-11 w-11 shrink-0", className)}
+          className={cn("h-9 w-9 shrink-0 rounded-full text-muted-foreground hover:text-foreground", className)}
           aria-label="Add emoji"
           {...props}
         >
@@ -88,7 +88,7 @@ export function ChatInputAttachButton({
         <Button
           variant="ghost"
           size="icon"
-          className={cn("h-11 w-11 shrink-0", className)}
+          className={cn("h-9 w-9 shrink-0 rounded-full text-muted-foreground hover:text-foreground", className)}
           aria-label="Attach"
           {...props}
         >

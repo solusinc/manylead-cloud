@@ -83,7 +83,7 @@ export function ChatFiltersSheet() {
             <Button onClick={handleApply} className="flex-1">
               Aplicar
             </Button>
-            <Button onClick={handleClearFilters} variant="ghost">
+            <Button onClick={handleClearFilters} variant="ghost" className="text-muted-foreground">
               Remover filtros
             </Button>
           </div>

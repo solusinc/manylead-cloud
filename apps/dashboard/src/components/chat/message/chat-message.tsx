@@ -1,10 +1,18 @@
 "use client";
 
+import { useState } from "react";
 import { format } from "date-fns";
-import { Check, CheckCheck, Clock } from "lucide-react";
+import { Check, CheckCheck, Clock, MessageCircle, Star, ChevronDown } from "lucide-react";
 
 import { cn } from "@manylead/ui";
 import { Avatar, AvatarFallback } from "@manylead/ui/avatar";
+import { Button } from "@manylead/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@manylead/ui/dropdown-menu";
 
 interface Message {
   id: string;
@@ -24,14 +32,18 @@ export function ChatMessage({
   showAvatar?: boolean;
 } & React.ComponentProps<"div">) {
   const isOutgoing = message.sender === "agent";
+  const [isHovered, setIsHovered] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   return (
     <div
       className={cn(
-        "mb-2 flex gap-2",
+        "mb-2 flex gap-2 group relative",
         isOutgoing ? "justify-end" : "justify-start",
         className,
       )}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
       {...props}
     >
       {!isOutgoing && showAvatar && (
@@ -40,7 +52,12 @@ export function ChatMessage({
         </Avatar>
       )}
 
-      <ChatMessageBubble message={message} isOutgoing={isOutgoing} />
+      <ChatMessageBubble
+        message={message}
+        isOutgoing={isOutgoing}
+        showActions={isHovered || isMenuOpen}
+        onMenuOpenChange={setIsMenuOpen}
+      />
     </div>
   );
 }
@@ -48,22 +65,38 @@ export function ChatMessage({
 export function ChatMessageBubble({
   message,
   isOutgoing,
+  showActions = false,
+  onMenuOpenChange,
   className,
 }: {
   message: Message;
   isOutgoing: boolean;
+  showActions?: boolean;
+  onMenuOpenChange?: (open: boolean) => void;
   className?: string;
 }) {
   return (
     <div
       className={cn(
-        "max-w-[65%] rounded-2xl px-4 py-2",
+        "max-w-[65%] rounded-2xl px-4 py-2 relative",
         isOutgoing
-          ? "bg-primary text-primary-foreground rounded-br-sm"
+          ? "bg-msg rounded-br-sm"
           : "bg-muted rounded-bl-sm",
         className,
       )}
     >
+      {showActions && (
+        <div
+          className="absolute top-1 right-1 rounded-full p-0.5 transition-all duration-200"
+          style={{
+            backgroundImage: isOutgoing
+              ? 'radial-gradient(circle at 66% 25%, var(--msg) 0%, var(--msg) 55%, transparent 70%)'
+              : 'radial-gradient(circle at 66% 25%, oklch(0.97 0 0) 0%, oklch(0.97 0 0) 55%, transparent 70%)'
+          }}
+        >
+          <ChatMessageActions isOutgoing={isOutgoing} onOpenChange={onMenuOpenChange} />
+        </div>
+      )}
       <ChatMessageContent content={message.content} />
       <ChatMessageFooter
         timestamp={message.timestamp}
@@ -144,4 +177,41 @@ export function ChatMessageStatus({
     default:
       return null;
   }
+}
+
+export function ChatMessageActions({
+  isOutgoing,
+  onOpenChange,
+  className,
+}: {
+  isOutgoing: boolean;
+  onOpenChange?: (open: boolean) => void;
+  className?: string;
+}) {
+  return (
+    <DropdownMenu onOpenChange={onOpenChange}>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn(
+            "h-6 w-6 rounded-sm hover:bg-transparent text-muted-foreground",
+            className
+          )}
+        >
+          <ChevronDown className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-48 bg-background/95 backdrop-blur-sm">
+        <DropdownMenuItem className="gap-3 cursor-pointer">
+          <MessageCircle className="h-4 w-4" />
+          <span>Responder</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem className="gap-3 cursor-pointer">
+          <Star className="h-4 w-4" />
+          <span>Favoritar</span>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 }

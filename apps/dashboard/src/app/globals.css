@@ -58,6 +58,7 @@
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-info: var(--info);
+  --color-msg: var(--msg);
 }
 
 :root {
@@ -97,6 +98,7 @@
   --success: oklch(0.72 0.19 150);
   --warning: oklch(0.77 0.16 70);
   --info: oklch(0.62 0.19 260);
+  --msg: hsl(93, 81%, 88%);
 }
 
 .dark {
@@ -135,6 +137,7 @@
   --success: oklch(0.72 0.19 150);
   --warning: oklch(0.77 0.16 70);
   --info: oklch(0.62 0.19 260);
+  --msg: hsl(93, 81%, 88%);
 }
 
 @layer base {

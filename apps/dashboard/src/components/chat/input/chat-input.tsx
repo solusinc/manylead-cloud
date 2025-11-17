@@ -48,18 +48,21 @@ export function ChatInput({
   };
 
   return (
-    <div className={cn("flex items-center gap-2 w-full", className)} {...props}>
-      <ChatInputToolbar onEmojiSelect={insertEmoji} />
+    <div className={cn("flex items-end w-full", className)} {...props}>
+      <div className="border-input bg-background flex items-center gap-1 rounded-full border px-2 flex-1">
+        <ChatInputToolbar onEmojiSelect={insertEmoji} />
 
-      <ChatInputArea
-        ref={textareaRef}
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
-        onKeyDown={handleKeyDown}
-        disabled={isSending}
-      />
+        <ChatInputArea
+          ref={textareaRef}
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          onKeyDown={handleKeyDown}
+          disabled={isSending}
+          autoFocus
+        />
 
-      <ChatInputMicButton />
+        <ChatInputMicButton />
+      </div>
     </div>
   );
 }
@@ -82,17 +85,18 @@ export const ChatInputArea = ({
       onChange={onChange}
       onKeyDown={onKeyDown}
       disabled={disabled}
-      placeholder="Digite uma mensagem..."
+      placeholder="Digite uma mensagem"
       className={cn(
-        "border-input bg-background flex-1 resize-none rounded-md border px-3 py-2",
+        "bg-transparent flex-1 resize-none border-0 px-3 py-2.5",
         "placeholder:text-muted-foreground text-sm",
-        "focus-visible:outline-none",
+        "focus-visible:outline-none focus-visible:ring-0",
         "disabled:cursor-not-allowed disabled:opacity-50",
-        "max-h-[200px] h-11",
+        "min-h-[44px] max-h-[200px]",
         className,
       )}
       minRows={1}
       maxRows={8}
+      style={{ height: 44 }}
       {...props}
     />
   );
@@ -106,7 +110,7 @@ export function ChatInputMicButton({
     <Button
       variant="ghost"
       size="icon"
-      className={cn("h-11 w-11 shrink-0", className)}
+      className={cn("h-9 w-9 shrink-0 rounded-full text-muted-foreground hover:text-foreground", className)}
       aria-label="Voice message"
       {...props}
     >

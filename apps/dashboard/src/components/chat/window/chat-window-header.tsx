@@ -147,7 +147,7 @@ export function ChatWindowHeaderActions({
         variant="ghost"
         size="sm"
         aria-label="Transferir"
-        className="gap-2"
+        className="gap-2 text-muted-foreground"
       >
         <ArrowRightLeft className="h-4 w-4" />
         <span className="text-sm hidden lg:inline">transferir</span>
@@ -157,7 +157,7 @@ export function ChatWindowHeaderActions({
         variant="ghost"
         size="sm"
         aria-label="Etiquetas"
-        className="gap-2"
+        className="gap-2 text-muted-foreground"
       >
         <Tag className="h-4 w-4" />
         <span className="text-sm hidden lg:inline">etiquetas</span>
@@ -167,7 +167,7 @@ export function ChatWindowHeaderActions({
         variant="ghost"
         size="sm"
         aria-label="Finalizar"
-        className="gap-2"
+        className="gap-2 text-muted-foreground"
       >
         <CheckCircle className="h-4 w-4" />
         <span className="text-sm hidden lg:inline">finalizar</span>
@@ -175,7 +175,7 @@ export function ChatWindowHeaderActions({
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" aria-label="More options">
+          <Button variant="ghost" size="icon" aria-label="More options" className="text-muted-foreground">
             <MoreVertical className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>
