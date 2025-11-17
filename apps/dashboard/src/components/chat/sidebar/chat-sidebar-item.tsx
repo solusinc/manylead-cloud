@@ -36,7 +36,7 @@ export function ChatSidebarItem({
     <Link
       href={`/chats/${chat.id}`}
       className={cn(
-        "hover:bg-accent flex cursor-pointer items-start gap-3 border-b p-4 transition-colors",
+        "hover:bg-accent/50 flex cursor-pointer items-start gap-3 border-b p-4 transition-colors",
         isActive && "bg-accent",
         className,
       )}

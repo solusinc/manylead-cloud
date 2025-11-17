@@ -5,7 +5,6 @@ import { format } from "date-fns";
 import { Check, CheckCheck, Clock, MessageCircle, Star, ChevronDown } from "lucide-react";
 
 import { cn } from "@manylead/ui";
-import { Avatar, AvatarFallback } from "@manylead/ui/avatar";
 import { Button } from "@manylead/ui/button";
 import {
   DropdownMenu,
@@ -46,12 +45,6 @@ export function ChatMessage({
       onMouseLeave={() => setIsHovered(false)}
       {...props}
     >
-      {!isOutgoing && showAvatar && (
-        <Avatar className="h-8 w-8 shrink-0">
-          <AvatarFallback className="text-xs">JO</AvatarFallback>
-        </Avatar>
-      )}
-
       <ChatMessageBubble
         message={message}
         isOutgoing={isOutgoing}
@@ -80,8 +73,8 @@ export function ChatMessageBubble({
       className={cn(
         "max-w-[65%] rounded-2xl px-4 py-2 relative",
         isOutgoing
-          ? "bg-msg rounded-br-sm"
-          : "bg-muted rounded-bl-sm",
+          ? "bg-msg-outgoing rounded-br-sm"
+          : "bg-msg-incoming rounded-bl-sm",
         className,
       )}
     >
@@ -90,14 +83,14 @@ export function ChatMessageBubble({
           className="absolute top-1 right-1 rounded-full p-0.5 transition-all duration-200"
           style={{
             backgroundImage: isOutgoing
-              ? 'radial-gradient(circle at 66% 25%, var(--msg) 0%, var(--msg) 55%, transparent 70%)'
-              : 'radial-gradient(circle at 66% 25%, oklch(0.97 0 0) 0%, oklch(0.97 0 0) 55%, transparent 70%)'
+              ? 'radial-gradient(circle at 66% 25%, var(--msg-outgoing) 0%, var(--msg-outgoing) 55%, transparent 70%)'
+              : 'radial-gradient(circle at 66% 25%, var(--msg-incoming) 0%, var(--msg-incoming) 55%, transparent 70%)'
           }}
         >
           <ChatMessageActions isOutgoing={isOutgoing} onOpenChange={onMenuOpenChange} />
         </div>
       )}
-      <ChatMessageContent content={message.content} />
+      <ChatMessageContent content={message.content} isOutgoing={isOutgoing} />
       <ChatMessageFooter
         timestamp={message.timestamp}
         status={message.status}
@@ -110,13 +103,19 @@ export function ChatMessageBubble({
 export function ChatMessageContent({
   content,
   className,
+  isOutgoing,
 }: {
   content: string;
   className?: string;
+  isOutgoing?: boolean;
 }) {
   return (
     <p
-      className={cn("wrap-break-words text-sm whitespace-pre-wrap", className)}
+      className={cn(
+        "wrap-break-words text-sm whitespace-pre-wrap",
+        isOutgoing && "dark:text-white",
+        className
+      )}
     >
       {content}
     </p>

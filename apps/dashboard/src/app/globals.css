@@ -58,7 +58,8 @@
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-info: var(--info);
-  --color-msg: var(--msg);
+  --color-msg-outgoing: var(--msg-outgoing);
+  --color-msg-incoming: var(--msg-incoming);
 }
 
 :root {
@@ -98,7 +99,8 @@
   --success: oklch(0.72 0.19 150);
   --warning: oklch(0.77 0.16 70);
   --info: oklch(0.62 0.19 260);
-  --msg: hsl(93, 81%, 88%);
+  --msg-outgoing: #D9FDD3;
+  --msg-incoming: #FFFFFF;
 }
 
 .dark {
@@ -137,7 +139,8 @@
   --success: oklch(0.72 0.19 150);
   --warning: oklch(0.77 0.16 70);
   --info: oklch(0.62 0.19 260);
-  --msg: hsl(93, 81%, 88%);
+  --msg-outgoing: #144D37;
+  --msg-incoming: #242626;
 }
 
 @layer base {

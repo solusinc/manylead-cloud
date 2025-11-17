@@ -2,8 +2,9 @@
 
 import { cn } from "@manylead/ui";
 import { ScrollArea } from "@manylead/ui/scroll-area";
-import { ChatMessageList } from "../message";
+
 import { ChatInput } from "../input";
+import { ChatMessageList } from "../message";
 import { ChatWindowHeader } from "./chat-window-header";
 
 export function ChatWindow({
@@ -48,20 +49,27 @@ export function ChatWindow({
     },
   };
 
-  const chat = (mockChats[chatId as keyof typeof mockChats] as typeof mockChats["1"] | undefined) ?? mockChats["1"];
+  const chat =
+    (mockChats[chatId as keyof typeof mockChats] as
+      | (typeof mockChats)["1"]
+      | undefined) ?? mockChats["1"];
 
   return (
     <div
-      className={cn("flex flex-col bg-muted/20 h-full max-h-[calc(100vh-3.5rem)] sm:max-h-full", className)}
+      className={cn(
+        "flex h-full max-h-[calc(100vh-3.5rem)] flex-col sm:max-h-full",
+        "bg-[url('/assets/chat-messages-bg-light.png')] dark:bg-[url('/assets/chat-messages-bg-dark.png')] bg-repeat bg-[length:auto]",
+        className,
+      )}
       {...props}
     >
       <ChatWindowHeader chat={chat} />
 
-      <ScrollArea className="flex-1 px-6 py-4 overflow-auto">
+      <ScrollArea className="flex-1 overflow-auto px-6 py-4">
         <ChatMessageList chatId={chatId} />
       </ScrollArea>
 
-      <div className="bg-background h-14 flex items-center px-4 sticky bottom-0">
+      <div className="sticky bottom-0 mb-2 flex h-14 items-center px-4">
         <ChatInput chatId={chatId} />
       </div>
     </div>
@@ -74,7 +82,7 @@ export function ChatWindowContainer({
   ...props
 }: React.ComponentProps<"div">) {
   return (
-    <div className={cn("flex flex-col h-full", className)} {...props}>
+    <div className={cn("flex h-full flex-col", className)} {...props}>
       {children}
     </div>
   );

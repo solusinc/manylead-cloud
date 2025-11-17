@@ -2,6 +2,7 @@
 
 import { cn } from "@manylead/ui";
 import { useRef } from "react";
+import { useParams } from "next/navigation";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ChatSidebarItem } from "./chat-sidebar-item";
 
@@ -38,6 +39,8 @@ export function ChatSidebarList({
   ...props
 }: React.ComponentProps<"div">) {
   const parentRef = useRef<HTMLDivElement>(null);
+  const params = useParams();
+  const activeChatId = params?.chatId as string | undefined;
 
   const virtualizer = useVirtualizer({
     count: mockChats.length,
@@ -75,7 +78,7 @@ export function ChatSidebarList({
                 transform: `translateY(${virtualItem.start}px)`,
               }}
             >
-              <ChatSidebarItem chat={chat} />
+              <ChatSidebarItem chat={chat} isActive={chat.id === activeChatId} />
             </div>
           );
         })}
