@@ -24,7 +24,7 @@ export default async function AuthLayout({
         </a>
         <div className="mx-auto flex w-full max-w-lg flex-1 flex-col justify-center gap-8 text-center md:text-left">
           <div className="mx-auto grid gap-3">
-            <h1 className="font-cal text-foreground text-3xl">
+            <h1 className="text-foreground text-3xl font-bold">
               All-in-one Lead Management Platform
             </h1>
             <p className="text-muted-foreground text-sm">

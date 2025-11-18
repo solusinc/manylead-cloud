@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Inter } from "next/font/google";
-import LocalFont from "next/font/local";
+import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@manylead/ui/theme";
 import { Toaster } from "@manylead/ui/toast";
@@ -10,50 +9,9 @@ import { NuqsAdapter } from "nuqs/adapters/next/app";
 import { TRPCReactProvider } from "~/lib/trpc/react";
 import { defaultMetadata, ogMetadata, twitterMetadata } from "./metadata";
 
-const cal = LocalFont({
-  src: "../../public/fonts/CalSans-SemiBold.ttf",
-  variable: "--font-cal-sans",
-});
-
-const commitMono = LocalFont({
-  src: [
-    {
-      path: "../../public/fonts/CommitMono-400-Regular.otf",
-      weight: "400",
-      style: "normal",
-    },
-    {
-      path: "../../public/fonts/CommitMono-400-Italic.otf",
-      weight: "400",
-      style: "italic",
-    },
-    {
-      path: "../../public/fonts/CommitMono-700-Regular.otf",
-      weight: "700",
-      style: "normal",
-    },
-    {
-      path: "../../public/fonts/CommitMono-700-Italic.otf",
-      weight: "700",
-      style: "italic",
-    },
-  ],
-  variable: "--font-commit-mono",
-});
-
 const inter = Inter({
   subsets: ["latin"],
   variable: "--font-inter",
-});
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
 });
 
 export const metadata: Metadata = {
@@ -75,10 +33,6 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body
         className={cn(
-          geistSans.variable,
-          geistMono.variable,
-          cal.variable,
-          commitMono.variable,
           inter.variable,
           "font-sans antialiased",
         )}

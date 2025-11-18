@@ -1,10 +1,13 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import {
+  Check,
   ChevronsUpDown,
+  Copy,
   CreditCard,
   Laptop,
   LogOut,
@@ -14,6 +17,7 @@ import {
 } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@manylead/ui/avatar";
+import { Button } from "@manylead/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -27,6 +31,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@manylead/ui/dropdown-menu";
+import { Input } from "@manylead/ui/input";
 import {
   SidebarMenu,
   SidebarMenuButton,
@@ -47,6 +52,7 @@ export function NavUser() {
   const router = useRouter();
   const trpc = useTRPC();
   const { can } = usePermissions();
+  const [copied, setCopied] = useState(false);
 
   const { data: organization, isLoading: isLoadingOrg } = useQuery(
     trpc.organization.getCurrent.queryOptions(),
@@ -54,11 +60,14 @@ export function NavUser() {
   const { data: organizations, isLoading: isLoadingOrgs } = useQuery(
     trpc.organization.list.queryOptions(),
   );
+  const { data: agent, isLoading: isLoadingAgent } = useQuery(
+    trpc.agents.getCurrent.queryOptions(),
+  );
 
   // Se não há organização ativa mas há organizações disponíveis, use a primeira
   const activeOrg = organization ?? organizations?.[0];
 
-  if (isLoadingOrg || isLoadingOrgs) {
+  if (isLoadingOrg || isLoadingOrgs || isLoadingAgent) {
     return null;
   }
 
@@ -86,14 +95,16 @@ export function NavUser() {
           <DropdownMenuTrigger asChild>
             <SidebarMenuButton
               size="lg"
-              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground h-14 rounded-none px-4 ring-inset group-data-[collapsible=icon]:mx-2!"
+              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground h-14 rounded-none px-4 ring-inset group-data-[collapsible=icon]:mx-2! focus-visible:ring-0 focus-visible:ring-offset-0"
             >
-              <Avatar className="h-8 w-8 rounded-lg">
-                <AvatarImage src={user.image ?? undefined} alt={userName} />
-                <AvatarFallback className="rounded-lg uppercase">
-                  {userName.slice(0, 2)}
-                </AvatarFallback>
-              </Avatar>
+              <div className="overflow-visible">
+                <Avatar className="h-8 w-8 rounded-lg">
+                  <AvatarImage src={user.image ?? undefined} alt={userName} />
+                  <AvatarFallback className="rounded-lg uppercase">
+                    {userName.slice(0, 2)}
+                  </AvatarFallback>
+                </Avatar>
+              </div>
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <span className="truncate font-medium">{userName}</span>
                 <span className="font-inter truncate text-xs tracking-tight">
@@ -126,6 +137,39 @@ export function NavUser() {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
+            {agent?.instanceCode && (
+              <>
+                <div className="px-2 py-2">
+                  <label className="text-muted-foreground mb-1.5 block text-xs">
+                    Código da instância
+                  </label>
+                  <div className="relative group">
+                    <Input
+                      value={agent.instanceCode}
+                      readOnly
+                      className="font-mono pr-10 text-xs focus-visible:ring-0 focus-visible:ring-offset-0 border-input hover:border-input focus:border-input group-hover:border-input"
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="absolute top-0 right-0 h-full px-3 hover:bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 outline-none border-0 focus-visible:!border-transparent hover:!border-transparent dark:hover:bg-transparent dark:focus-visible:border-transparent"
+                      onClick={() => {
+                        void navigator.clipboard.writeText(agent.instanceCode);
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 2000);
+                      }}
+                    >
+                      {copied ? (
+                        <Check className="h-4 w-4 text-green-500" />
+                      ) : (
+                        <Copy className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+                <DropdownMenuSeparator />
+              </>
+            )}
             {/* TODO: Implementar verificação de plano quando tiver billing
             {activeOrg.plan === "free" ? (
               <>

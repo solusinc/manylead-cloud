@@ -83,6 +83,7 @@ async function HydrateSidebar({
   const queryClient = getQueryClient();
   await queryClient.prefetchQuery(trpc.organization.getCurrent.queryOptions());
   await queryClient.prefetchQuery(trpc.organization.list.queryOptions());
+  await queryClient.prefetchQuery(trpc.agents.getCurrent.queryOptions());
 
   return (
     <SessionProvider session={session}>

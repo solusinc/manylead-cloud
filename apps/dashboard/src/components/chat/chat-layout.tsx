@@ -29,7 +29,7 @@ export function ChatLayoutSidebar({
   return (
     <aside
       className={cn(
-        "bg-background w-full shrink-0 border-r md:w-[345px] flex",
+        "bg-background w-full shrink-0 border-r md:w-[445px] flex",
         hasChatSelected && "hidden md:flex", // Hide on mobile when chat is selected
         className,
       )}

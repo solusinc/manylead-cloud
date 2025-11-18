@@ -28,6 +28,27 @@ import {
  */
 export const agentsRouter = createTRPCRouter({
   /**
+   * Get current agent (logged in user)
+   */
+  getCurrent: protectedProcedure.query(async ({ ctx }) => {
+    const organizationId = ctx.session.session.activeOrganizationId;
+
+    if (!organizationId) {
+      return null;
+    }
+
+    const tenantDb = await tenantManager.getConnection(organizationId);
+
+    const [agentRecord] = await tenantDb
+      .select()
+      .from(agent)
+      .where(eq(agent.userId, ctx.session.user.id))
+      .limit(1);
+
+    return agentRecord ?? null;
+  }),
+
+  /**
    * List all agents for the active organization with user data
    */
   list: ownerProcedure.query(async ({ ctx }) => {

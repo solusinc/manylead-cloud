@@ -1,9 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
 import { Check, Plus, X } from "lucide-react";
-import { FaWhatsapp } from "react-icons/fa";
+import { FaUser, FaWhatsapp } from "react-icons/fa";
 
 import { formatBrazilianPhone } from "@manylead/shared/utils";
 import { Avatar, AvatarFallback } from "@manylead/ui/avatar";
@@ -111,7 +110,15 @@ export function ContactDetailsSheet({
                   key={field.id}
                   label={field.label}
                   value={field.value}
-                  onChange={(value) => {
+                  onLabelChange={(label) => {
+                    const newFields = [...customFields];
+                    const field = newFields[index];
+                    if (field) {
+                      field.label = label;
+                      setCustomFields(newFields);
+                    }
+                  }}
+                  onValueChange={(value) => {
                     const newFields = [...customFields];
                     const field = newFields[index];
                     if (field) {
@@ -148,8 +155,8 @@ function ContactDetailsAvatar({
   };
 }) {
   return (
-    <div className="bg-muted/20 flex flex-col items-center py-8">
-      <Avatar className="mb-4 h-40 w-40">
+    <div className="flex flex-col items-center py-8">
+      <Avatar className="mb-4 h-40 w-40 border">
         {contact.avatar ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -158,13 +165,8 @@ function ContactDetailsAvatar({
             className="object-cover"
           />
         ) : (
-          <AvatarFallback className="bg-muted relative overflow-hidden">
-            <Image
-              src="/assets/no-photo.svg"
-              alt="No photo"
-              fill
-              className="object-cover"
-            />
+          <AvatarFallback className="bg-muted text-muted-foreground">
+            <FaUser className="h-16 w-16" />
           </AvatarFallback>
         )}
       </Avatar>
@@ -217,18 +219,24 @@ function ContactDetailsField({
 function ContactDetailsCustomField({
   label,
   value,
-  onChange,
+  onLabelChange,
+  onValueChange,
 }: {
   label: string;
   value: string;
-  onChange: (value: string) => void;
+  onLabelChange: (label: string) => void;
+  onValueChange: (value: string) => void;
 }) {
   return (
     <div className="grid grid-cols-3 items-center gap-4">
-      <Label className="text-sm">{label}</Label>
+      <Input
+        value={label}
+        onChange={(e) => onLabelChange(e.target.value)}
+        className="text-sm"
+      />
       <Input
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => onValueChange(e.target.value)}
         className="col-span-2"
       />
     </div>

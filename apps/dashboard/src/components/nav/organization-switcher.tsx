@@ -72,7 +72,7 @@ export function OrganizationSwitcher() {
           <DropdownMenuTrigger asChild disabled={setActiveMutation.isPending}>
             <SidebarMenuButton
               size="lg"
-              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground h-14 rounded-none px-4 ring-inset group-data-[collapsible=icon]:mx-2!"
+              className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground h-14 rounded-none px-4 ring-inset group-data-[collapsible=icon]:mx-2! focus-visible:ring-0 focus-visible:ring-offset-0"
             >
               <div className="bg-sidebar-primary flex aspect-square size-8 items-center justify-center rounded-lg">
                 <div className="size-8 overflow-hidden rounded-lg">
@@ -86,11 +86,6 @@ export function OrganizationSwitcher() {
               <div className="grid flex-1 text-left text-sm leading-tight">
                 <div className="truncate font-medium">
                   {activeOrg.name || "Organização sem nome"}
-                </div>
-                <div className="truncate text-xs">
-                  <span className="font-inter tracking-tight">
-                    {activeOrg.slug}
-                  </span>
                 </div>
               </div>
               {setActiveMutation.isPending ? (
@@ -121,9 +116,6 @@ export function OrganizationSwitcher() {
               >
                 <span className="truncate">
                   {org.name || "Organização sem nome"}
-                </span>
-                <span className="text-muted-foreground truncate font-mono text-xs">
-                  {org.slug}
                 </span>
               </DropdownMenuItem>
             ))}

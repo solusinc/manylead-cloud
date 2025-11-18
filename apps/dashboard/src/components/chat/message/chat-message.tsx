@@ -194,7 +194,8 @@ export function ChatMessageActions({
           variant="ghost"
           size="icon"
           className={cn(
-            "h-6 w-6 rounded-sm hover:bg-transparent text-muted-foreground",
+            "h-6 w-6 rounded-sm hover:!bg-transparent hover:!text-current focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=open]:!bg-transparent",
+            isOutgoing ? "text-foreground/60 dark:text-white/70" : "text-muted-foreground",
             className
           )}
         >

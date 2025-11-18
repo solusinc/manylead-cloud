@@ -2,9 +2,9 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { format, isToday, isYesterday, isThisWeek } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { FaUser } from "react-icons/fa";
 
 import { cn } from "@manylead/ui";
 import { Avatar, AvatarFallback } from "@manylead/ui/avatar";
@@ -70,17 +70,12 @@ export function ChatSidebarItemAvatar({
 }) {
   return (
     <div className={cn("relative shrink-0", className)}>
-      <Avatar className="h-12 w-12">
+      <Avatar className="h-12 w-12 border">
         {avatar ? (
           <img src={avatar} alt={name} className="object-cover" />
         ) : (
-          <AvatarFallback className="bg-muted relative overflow-hidden">
-            <Image
-              src="/assets/no-photo.svg"
-              alt="No photo"
-              fill
-              className="object-cover"
-            />
+          <AvatarFallback className="bg-muted text-muted-foreground">
+            <FaUser className="h-5 w-5" />
           </AvatarFallback>
         )}
       </Avatar>
@@ -109,7 +104,7 @@ export function ChatSidebarItemContent({
       </div>
 
       <div className="flex items-center justify-between gap-2">
-        <p className="text-muted-foreground flex-1 truncate text-xs">
+        <p className="text-muted-foreground flex-1 truncate text-sm">
           {message}
         </p>
         {unreadCount > 0 && <ChatSidebarItemBadge count={unreadCount} />}

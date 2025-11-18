@@ -8,9 +8,10 @@ import {
   CheckCircle,
   MoreVertical,
   Tag,
+  User,
   X,
 } from "lucide-react";
-import { FaWhatsapp } from "react-icons/fa";
+import { FaUser, FaWhatsapp } from "react-icons/fa";
 
 import { formatBrazilianPhone } from "@manylead/shared/utils";
 import { cn } from "@manylead/ui";
@@ -23,6 +24,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@manylead/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@manylead/ui/tooltip";
 
 import { ContactDetailsSheet } from "../contact";
 
@@ -94,7 +100,7 @@ export function ChatWindowHeaderInfo({
       onClick={onClick}
       className={cn("flex cursor-pointer items-center gap-3", className)}
     >
-      <Avatar className="h-10 w-10">
+      <Avatar className="h-10 w-10 border">
         {contact.avatar ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -103,36 +109,36 @@ export function ChatWindowHeaderInfo({
             className="object-cover"
           />
         ) : (
-          <AvatarFallback className="bg-muted relative overflow-hidden">
-            <Image
-              src="/assets/no-photo.svg"
-              alt="No photo"
-              fill
-              className="object-cover"
-            />
+          <AvatarFallback className="bg-muted text-muted-foreground">
+            <FaUser className="h-4 w-4" />
           </AvatarFallback>
         )}
       </Avatar>
 
       <div className="flex-1 text-left">
         <div className="flex items-center gap-2">
-          <h3 className="text-muted-foreground text-sm font-bold">
+          <h3 className="text-sm font-semibold">
             {contact.name}
           </h3>
           {source === "whatsapp" ? (
-            <div
-              className="flex items-center justify-center rounded-full p-1"
-              style={{ backgroundColor: "#7de8a6" }}
-            >
-              <FaWhatsapp className="h-3.5 w-3.5 text-black" />
-            </div>
+            <FaWhatsapp className="h-4 w-4" />
           ) : (
-            <div
-              className="flex items-center justify-center rounded-full px-1.5 py-0.5"
-              style={{ backgroundColor: "#7de8a6" }}
-            >
-              <span className="text-[10px] font-bold text-black">ML</span>
-            </div>
+            <>
+              <Image
+                src="/assets/manylead-icon-light.png"
+                alt="ManyLead"
+                width={16}
+                height={16}
+                className="dark:hidden"
+              />
+              <Image
+                src="/assets/manylead-icon-dark.png"
+                alt="ManyLead"
+                width={16}
+                height={16}
+                className="hidden dark:block"
+              />
+            </>
           )}
         </div>
       </div>
@@ -152,35 +158,50 @@ export function ChatWindowHeaderActions({
 }) {
   return (
     <div className={cn("flex items-center gap-1", className)}>
-      <Button
-        variant="ghost"
-        size="sm"
-        aria-label="Transferir"
-        className="text-muted-foreground gap-2"
-      >
-        <ArrowRightLeft className="h-4 w-4" />
-        <span className="hidden text-sm lg:inline">transferir</span>
-      </Button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Transferir"
+          >
+            <ArrowRightLeft className="h-4 w-4" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>Transferir</p>
+        </TooltipContent>
+      </Tooltip>
 
-      <Button
-        variant="ghost"
-        size="sm"
-        aria-label="Etiquetas"
-        className="text-muted-foreground gap-2"
-      >
-        <Tag className="h-4 w-4" />
-        <span className="hidden text-sm lg:inline">etiquetas</span>
-      </Button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Etiquetas"
+          >
+            <Tag className="h-4 w-4" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>Etiquetas</p>
+        </TooltipContent>
+      </Tooltip>
 
-      <Button
-        variant="ghost"
-        size="sm"
-        aria-label="Finalizar"
-        className="text-muted-foreground gap-2"
-      >
-        <CheckCircle className="h-4 w-4" />
-        <span className="hidden text-sm lg:inline">finalizar</span>
-      </Button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label="Finalizar"
+          >
+            <CheckCircle className="h-4 w-4" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>Finalizar</p>
+        </TooltipContent>
+      </Tooltip>
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -188,7 +209,6 @@ export function ChatWindowHeaderActions({
             variant="ghost"
             size="icon"
             aria-label="More options"
-            className="text-muted-foreground"
           >
             <MoreVertical className="h-4 w-4" />
           </Button>

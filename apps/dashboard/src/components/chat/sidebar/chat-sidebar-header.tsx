@@ -54,12 +54,12 @@ export function ChatSidebarSearch({
         placeholder="Buscar contato"
         value={search}
         onChange={(e) => setSearch(e.target.value)}
-        className="pl-10 h-8"
+        className="pl-10 h-8 focus-visible:ring-0 focus-visible:ring-offset-0"
       />
       {search && (
         <button
           onClick={() => setSearch("")}
-          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+          className="absolute right-3 top-1/2 -translate-y-1/2 hover:text-foreground"
         >
           <X className="h-4 w-4" />
         </button>
@@ -79,7 +79,7 @@ export function ChatSidebarNewButton({
         <Button
           variant="ghost"
           size="icon"
-          className={cn("h-9 w-9 flex-shrink-0 text-muted-foreground", className)}
+          className={cn("h-9 w-9 flex-shrink-0", className)}
           aria-label="Iniciar contato"
           onClick={onClick}
           {...props}
@@ -107,7 +107,7 @@ export function ChatSidebarUnreadButton({
           variant="ghost"
           size="icon"
           className={cn(
-            "h-9 w-9 flex-shrink-0 text-muted-foreground",
+            "h-9 w-9 flex-shrink-0",
             showUnreadOnly && "bg-accent",
             className
           )}
@@ -137,7 +137,7 @@ export function ChatSidebarFilterButton({
         <Button
           variant="ghost"
           size="icon"
-          className={cn("h-9 w-9 flex-shrink-0 text-muted-foreground", className)}
+          className={cn("h-9 w-9 flex-shrink-0", className)}
           aria-label="Filtros"
           onClick={isOpen ? close : open}
           {...props}
