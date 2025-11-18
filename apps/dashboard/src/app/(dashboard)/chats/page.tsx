@@ -1,11 +1,22 @@
-"use client";
-
+import { HydrateClient, getQueryClient, trpc } from "~/lib/trpc/server";
 import { ChatLayout } from "~/components/chat/chat-layout";
 
-export default function ChatsPage() {
+export default async function ChatsPage() {
+  const queryClient = getQueryClient();
+
+  // Prefetch lista de chats para hidratar
+  await queryClient.prefetchQuery(
+    trpc.chats.list.queryOptions({
+      limit: 100,
+      offset: 0,
+    })
+  );
+
   return (
-    <ChatLayout>
-      {/* No chat selected - will show empty state */}
-    </ChatLayout>
+    <HydrateClient>
+      <ChatLayout>
+        {/* No chat selected - will show empty state */}
+      </ChatLayout>
+    </HydrateClient>
   );
 }

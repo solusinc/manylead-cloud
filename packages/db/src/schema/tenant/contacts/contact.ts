@@ -11,10 +11,11 @@ import {
 import { v7 as uuidv7 } from "uuid";
 
 /**
- * Contacts - Contatos do WhatsApp
+ * Contacts - Contatos do WhatsApp e Internos
  *
- * Armazena informações de contatos que interagiram via WhatsApp
- * ou foram criados manualmente no sistema
+ * Armazena informações de contatos que interagiram via WhatsApp,
+ * foram criados manualmente no sistema, ou representam agentes
+ * internos para comunicação ManyLead-to-ManyLead
  */
 export const contact = pgTable(
   "contact",
@@ -26,8 +27,9 @@ export const contact = pgTable(
     organizationId: text("organization_id").notNull(),
 
     // Identificação
-    phoneNumber: varchar("phone_number", { length: 20 }).notNull(),
+    phoneNumber: varchar("phone_number", { length: 20 }),
     // Formato: 5511999999999 (sem símbolos)
+    // NULL para contatos internos (agentes ManyLead)
 
     name: varchar("name", { length: 255 }).notNull(),
 
@@ -41,10 +43,11 @@ export const contact = pgTable(
 
     // Metadata
     metadata: jsonb("metadata").$type<{
-      source: "whatsapp" | "manual";
+      source: "whatsapp" | "manual" | "internal";
       firstMessageAt?: Date;
       lastMessageAt?: Date;
       whatsappProfileName?: string; // pushName do WhatsApp
+      agentId?: string; // ID do agent (para source: "internal")
     }>(),
 
     // Timestamps

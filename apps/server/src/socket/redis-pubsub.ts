@@ -2,7 +2,13 @@ import type { Server as SocketIOServer } from "socket.io";
 import Redis from "ioredis";
 import { env } from "../env";
 import { REDIS_CHANNELS } from "./types";
-import { handleProvisioningEvent, handleChannelSyncEvent } from "./handlers";
+import {
+  handleProvisioningEvent,
+  handleChannelSyncEvent,
+  handleChatEvent,
+  handleMessageEvent,
+  handleTypingEvent,
+} from "./handlers";
 
 /**
  * Redis Pub/Sub Manager for Socket.io events
@@ -115,6 +121,18 @@ export class RedisPubSubManager {
 
       case REDIS_CHANNELS.CHANNEL_SYNC:
         handleChannelSyncEvent(this.io, message);
+        break;
+
+      case REDIS_CHANNELS.CHAT:
+        handleChatEvent(this.io, message);
+        break;
+
+      case REDIS_CHANNELS.MESSAGE:
+        handleMessageEvent(this.io, message);
+        break;
+
+      case REDIS_CHANNELS.TYPING:
+        handleTypingEvent(this.io, message);
         break;
 
       default:

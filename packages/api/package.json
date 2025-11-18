@@ -23,6 +23,7 @@
     "@manylead/emails": "workspace:*",
     "@manylead/evolution-api-client": "workspace:*",
     "@manylead/permissions": "workspace:*",
+    "@manylead/shared": "workspace:*",
     "@manylead/storage": "workspace:^",
     "@manylead/tenant-db": "workspace:*",
     "@t3-oss/env-core": "catalog:",

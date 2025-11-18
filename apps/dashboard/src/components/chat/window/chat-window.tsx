@@ -1,58 +1,60 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
+import { useEffect } from "react";
 import { cn } from "@manylead/ui";
 import { ScrollArea } from "@manylead/ui/scroll-area";
 
 import { ChatInput } from "../input";
 import { ChatMessageList } from "../message";
 import { ChatWindowHeader } from "./chat-window-header";
+import { useTRPC } from "~/lib/trpc/react";
+import { useChatSocketContext } from "~/components/providers/chat-socket-provider";
 
 export function ChatWindow({
   chatId,
   className,
   ...props
 }: { chatId: string } & React.ComponentProps<"div">) {
-  // TODO: Fetch chat data from tRPC using chatId
-  const mockChats = {
-    "1": {
-      id: "1",
-      contact: {
-        name: "João Silva",
-        phoneNumber: "+5511999999999",
-        avatar: null as string | null,
-      },
-      status: "open" as const,
-      assignedTo: null,
-      source: "whatsapp" as const,
-    },
-    "2": {
-      id: "2",
-      contact: {
-        name: "Maria Santos",
-        phoneNumber: "+5521988887777",
-        avatar: null as string | null,
-      },
-      status: "closed" as const,
-      assignedTo: "user-123",
-      source: "internal" as const,
-    },
-    "3": {
-      id: "3",
-      contact: {
-        name: "Carlos Oliveira",
-        phoneNumber: "+5531977776666",
-        avatar: null as string | null,
-      },
-      status: "open" as const,
-      assignedTo: null,
-      source: "whatsapp" as const,
-    },
-  };
+  const trpc = useTRPC();
+  const socket = useChatSocketContext();
+  const router = useRouter();
 
-  const chat =
-    (mockChats[chatId as keyof typeof mockChats] as
-      | (typeof mockChats)["1"]
-      | undefined) ?? mockChats["1"];
+  // Buscar chat da API
+  const { data: chatData, isLoading } = useQuery(
+    trpc.chats.list.queryOptions({
+      limit: 100,
+      offset: 0,
+    })
+  );
+
+  // Encontrar o chat específico
+  const chatItem = chatData?.items.find((item) => item.chat.id === chatId);
+
+  // Redirect para /chats se conversa não encontrada (após loading)
+  useEffect(() => {
+    if (!isLoading && !chatItem) {
+      router.replace("/chats");
+    }
+  }, [isLoading, chatItem, router]);
+
+  // Se ainda não tiver dados (edge case), não renderiza nada
+  if (!chatItem) {
+    return null;
+  }
+
+  const chat = {
+    id: chatItem.chat.id,
+    contact: {
+      name: chatItem.contact?.name ?? "Sem nome",
+      phoneNumber: chatItem.contact?.phoneNumber ?? "",
+      avatar: chatItem.contact?.avatar ?? null,
+    },
+    status: chatItem.chat.status as "open" | "closed",
+    assignedTo: chatItem.chat.assignedTo,
+    source: chatItem.chat.messageSource as "whatsapp" | "internal",
+  };
 
   return (
     <div
@@ -69,8 +71,13 @@ export function ChatWindow({
         <ChatMessageList chatId={chatId} />
       </ScrollArea>
 
-      <div className="sticky bottom-0 mb-2 flex h-14 items-center px-4">
-        <ChatInput chatId={chatId} />
+      {/* Input bar - WhatsApp style: empurra mensagens para cima ao invés de ficar sticky */}
+      <div className="mb-2 flex min-h-14 items-center px-4">
+        <ChatInput
+          chatId={chatId}
+          onTypingStart={() => socket.emitTypingStart(chatId)}
+          onTypingStop={() => socket.emitTypingStop(chatId)}
+        />
       </div>
     </div>
   );

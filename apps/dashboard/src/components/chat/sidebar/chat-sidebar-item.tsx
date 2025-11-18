@@ -2,9 +2,10 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { format, isToday, isYesterday, isThisWeek } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { FaUser } from "react-icons/fa";
+import { FaUser, FaWhatsapp } from "react-icons/fa";
 
 import { cn } from "@manylead/ui";
 import { Avatar, AvatarFallback } from "@manylead/ui/avatar";
@@ -21,14 +22,17 @@ interface ChatSidebarItemProps {
     lastMessageAt: Date;
     unreadCount: number;
     status: "open" | "closed";
+    messageSource?: "whatsapp" | "internal";
   };
   isActive?: boolean;
+  isTyping?: boolean;
   className?: string;
 }
 
 export function ChatSidebarItem({
   chat,
   isActive,
+  isTyping = false,
   className,
   ...props
 }: ChatSidebarItemProps & React.ComponentProps<"a">) {
@@ -45,6 +49,7 @@ export function ChatSidebarItem({
       <ChatSidebarItemAvatar
         name={chat.contact.name}
         avatar={chat.contact.avatar}
+        messageSource={chat.messageSource}
       />
 
       <div className="min-w-0 flex-1">
@@ -53,6 +58,7 @@ export function ChatSidebarItem({
           message={chat.lastMessage}
           timestamp={chat.lastMessageAt}
           unreadCount={chat.unreadCount}
+          isTyping={isTyping}
         />
       </div>
     </Link>
@@ -62,10 +68,12 @@ export function ChatSidebarItem({
 export function ChatSidebarItemAvatar({
   name,
   avatar,
+  messageSource = "whatsapp",
   className,
 }: {
   name: string;
   avatar: string | null;
+  messageSource?: "whatsapp" | "internal";
   className?: string;
 }) {
   return (
@@ -79,6 +87,30 @@ export function ChatSidebarItemAvatar({
           </AvatarFallback>
         )}
       </Avatar>
+
+      {/* Badge no canto inferior direito */}
+      <div className="absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full border-2 border-background bg-background">
+        {messageSource === "whatsapp" ? (
+          <FaWhatsapp className="h-3 w-3 text-green-500" />
+        ) : (
+          <>
+            <Image
+              src="/assets/manylead-icon-light.png"
+              alt="ManyLead"
+              width={12}
+              height={12}
+              className="dark:hidden"
+            />
+            <Image
+              src="/assets/manylead-icon-dark.png"
+              alt="ManyLead"
+              width={12}
+              height={12}
+              className="hidden dark:block"
+            />
+          </>
+        )}
+      </div>
     </div>
   );
 }
@@ -88,12 +120,14 @@ export function ChatSidebarItemContent({
   message,
   timestamp,
   unreadCount,
+  isTyping = false,
   className,
 }: {
   name: string;
   message: string;
   timestamp: Date;
   unreadCount: number;
+  isTyping?: boolean;
   className?: string;
 }) {
   return (
@@ -104,12 +138,62 @@ export function ChatSidebarItemContent({
       </div>
 
       <div className="flex items-center justify-between gap-2">
-        <p className="text-muted-foreground flex-1 truncate text-sm">
-          {message}
-        </p>
+        {isTyping ? (
+          <TypingIndicator />
+        ) : (
+          <p className="text-muted-foreground flex-1 truncate text-sm">
+            {message}
+          </p>
+        )}
         {unreadCount > 0 && <ChatSidebarItemBadge count={unreadCount} />}
       </div>
     </div>
+  );
+}
+
+// Versão antiga (comentada para referência)
+// function TypingIndicatorOld() {
+//   return (
+//     <div className="flex items-center gap-1">
+//       <span className="text-primary text-sm font-medium">digitando</span>
+//       <div className="flex gap-0.5">
+//         <span className="animate-bounce text-primary" style={{ animationDelay: "0ms" }}>.</span>
+//         <span className="animate-bounce text-primary" style={{ animationDelay: "150ms" }}>.</span>
+//         <span className="animate-bounce text-primary" style={{ animationDelay: "300ms" }}>.</span>
+//       </div>
+//     </div>
+//   );
+// }
+
+// Versão com bolinhas (comentada)
+// function TypingIndicatorDots() {
+//   return (
+//     <div className="flex items-center gap-1.5">
+//       <div className="flex gap-1">
+//         <span
+//           className="bg-primary h-1.5 w-1.5 rounded-full animate-bounce"
+//           style={{ animationDelay: "0ms", animationDuration: "1s" }}
+//         />
+//         <span
+//           className="bg-primary h-1.5 w-1.5 rounded-full animate-bounce"
+//           style={{ animationDelay: "200ms", animationDuration: "1s" }}
+//         />
+//         <span
+//           className="bg-primary h-1.5 w-1.5 rounded-full animate-bounce"
+//           style={{ animationDelay: "400ms", animationDuration: "1s" }}
+//         />
+//       </div>
+//       <span className="text-primary text-xs font-medium">digitando</span>
+//     </div>
+//   );
+// }
+
+// Versão WhatsApp - apenas texto em negrito
+function TypingIndicator() {
+  return (
+    <span className="text-primary flex-1 truncate text-sm font-semibold">
+      digitando...
+    </span>
   );
 }
 

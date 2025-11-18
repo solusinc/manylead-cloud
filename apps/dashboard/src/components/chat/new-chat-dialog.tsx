@@ -1,9 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useMutation } from "@tanstack/react-query";
 import { FaWhatsapp } from "react-icons/fa";
+import { toast } from "sonner";
 
 import { cn } from "@manylead/ui";
+import { Button } from "@manylead/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -11,8 +15,9 @@ import {
   DialogTitle,
 } from "@manylead/ui/dialog";
 import { Input } from "@manylead/ui/input";
-import { Button } from "@manylead/ui/button";
 import { Label } from "@manylead/ui/label";
+
+import { useTRPC } from "~/lib/trpc/react";
 
 type ChatType = "internal" | "whatsapp";
 
@@ -22,29 +27,45 @@ interface NewChatDialogProps {
 }
 
 export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
+  const router = useRouter();
+  const trpc = useTRPC();
   const [selectedType, setSelectedType] = useState<ChatType | null>(null);
   const [instanceCode, setInstanceCode] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
 
-  const handleStartChat = () => {
-    setIsLoading(true);
+  const createInternalChatMutation = useMutation(
+    trpc.chats.createInternalChat.mutationOptions({
+      onSuccess: (chat) => {
+        toast.success("Chat criado!", {
+          description: "Redirecionando para a conversa...",
+        });
+        handleClose();
+        router.push(`/chats/${chat.id}`);
+      },
+      onError: (error) => {
+        toast.error("Erro ao criar chat", {
+          description: error.message,
+        });
+      },
+    }),
+  );
 
+  const handleStartChat = async () => {
     try {
       if (selectedType === "internal") {
-        // TODO: Implement internal chat creation
-        console.log("Starting internal chat with code:", instanceCode);
+        await createInternalChatMutation.mutateAsync({
+          targetInstanceCode: instanceCode.trim(),
+        });
       } else if (selectedType === "whatsapp") {
         // TODO: Implement WhatsApp chat creation
         console.log("Starting WhatsApp chat with number:", phoneNumber);
+        toast("Em breve", {
+          description: "Criação de chat WhatsApp será implementada em breve.",
+        });
       }
-
-      // Reset and close
-      handleClose();
     } catch (error) {
+      // Error already handled by onError
       console.error("Failed to start chat:", error);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -72,16 +93,14 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
 
             <div className="space-y-2">
               <NewChatOption
-                icon={
-                  <span className="text-sm font-bold">ML</span>
-                }
+                icon={<span className="text-sm font-bold">ML</span>}
                 label="Manylead"
                 description="Conversa interna com outro usuário"
                 onClick={() => setSelectedType("internal")}
               />
 
               <NewChatOption
-                icon={<FaWhatsapp className="h-6 w-6 text-foreground" />}
+                icon={<FaWhatsapp className="text-foreground h-6 w-6" />}
                 label="WhatsApp"
                 description="Iniciar conversa no WhatsApp"
                 onClick={() => setSelectedType("whatsapp")}
@@ -109,7 +128,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
                     onChange={(e) => setInstanceCode(e.target.value)}
                     autoFocus
                   />
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-muted-foreground text-xs">
                     Digite o código da pessoa com quem deseja conversar
                   </p>
                 </div>
@@ -123,7 +142,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
                     onChange={(e) => setPhoneNumber(e.target.value)}
                     autoFocus
                   />
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-muted-foreground text-xs">
                     Digite o número com DDD (ex: +55 11 99999-9999)
                   </p>
                 </div>
@@ -134,7 +153,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
                   variant="outline"
                   onClick={handleBack}
                   className="flex-1"
-                  disabled={isLoading}
+                  disabled={createInternalChatMutation.isPending}
                 >
                   Voltar
                 </Button>
@@ -142,12 +161,14 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
                   onClick={handleStartChat}
                   className="flex-1"
                   disabled={
-                    isLoading ||
+                    createInternalChatMutation.isPending ||
                     (selectedType === "internal" && !instanceCode.trim()) ||
                     (selectedType === "whatsapp" && !phoneNumber.trim())
                   }
                 >
-                  {isLoading ? "Iniciando..." : "Iniciar conversa"}
+                  {createInternalChatMutation.isPending
+                    ? "Iniciando..."
+                    : "Iniciar conversa"}
                 </Button>
               </div>
             </div>
@@ -175,16 +196,16 @@ export function NewChatOption({
     <button
       onClick={onClick}
       className={cn(
-        "w-full flex items-center gap-3 p-4 rounded-lg border hover:bg-accent transition-colors text-left",
-        className
+        "hover:bg-accent flex w-full items-center gap-3 rounded-lg border p-4 text-left transition-colors",
+        className,
       )}
     >
-      <div className="flex-shrink-0">{icon}</div>
+      <div className="shrink-0">{icon}</div>
 
-      <div className="flex-1 min-w-0">
-        <div className="font-medium text-sm">{label}</div>
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-medium">{label}</div>
         {description && (
-          <p className="text-xs text-muted-foreground">{description}</p>
+          <p className="text-muted-foreground text-xs">{description}</p>
         )}
       </div>
     </button>

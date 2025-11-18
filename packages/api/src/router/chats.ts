@@ -1,9 +1,21 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
-import { agent, and, chat, contact, count, desc, eq, sql } from "@manylead/db";
+import {
+  agent,
+  and,
+  chat,
+  contact,
+  count,
+  desc,
+  eq,
+  sql,
+  user,
+} from "@manylead/db";
+import { publishChatEvent } from "@manylead/shared";
 
-import { createTRPCRouter, ownerProcedure } from "../trpc";
+import { createTRPCRouter, memberProcedure, ownerProcedure, protectedProcedure } from "../trpc";
+import { env } from "../env";
 
 /**
  * Chats Router
@@ -14,7 +26,7 @@ export const chatsRouter = createTRPCRouter({
   /**
    * Listar chats com filtros e paginação
    */
-  list: ownerProcedure
+  list: memberProcedure
     .input(
       z.object({
         status: z.enum(["open", "pending", "closed", "snoozed"]).optional(),
@@ -30,8 +42,26 @@ export const chatsRouter = createTRPCRouter({
       const { status, assignedTo, departmentId, messageSource, limit, offset } =
         input;
 
+      // Buscar o agent do usuário atual
+      const [currentAgent] = await ctx.tenantDb
+        .select()
+        .from(agent)
+        .where(eq(agent.userId, ctx.session.user.id))
+        .limit(1);
+
       // Construir where conditions
       const conditions = [];
+
+      // Lógica de visibilidade:
+      // 1. Chat com mensagens (totalMessages > 0): aparece para todos os participantes
+      // 2. Chat sem mensagens: só aparece para quem CRIOU (initiatorInstanceCode = current agent)
+      if (currentAgent) {
+        conditions.push(
+          sql`(${chat.totalMessages} > 0 OR ${chat.initiatorInstanceCode} = ${currentAgent.instanceCode})`
+        );
+      } else {
+        conditions.push(sql`${chat.totalMessages} > 0`);
+      }
 
       if (status) {
         conditions.push(eq(chat.status, status));
@@ -80,7 +110,7 @@ export const chatsRouter = createTRPCRouter({
   /**
    * Buscar chat por ID com informações relacionadas
    */
-  getById: ownerProcedure
+  getById: memberProcedure
     .input(
       z.object({
         id: z.string().uuid(),
@@ -159,6 +189,177 @@ export const chatsRouter = createTRPCRouter({
           message: "Falha ao criar chat",
         });
       }
+
+      return newChat;
+    }),
+
+  /**
+   * Criar chat interno via instance code
+   * Fluxo completo: buscar agent -> criar/buscar contact -> detectar duplicata -> criar chat
+   */
+  createInternalChat: protectedProcedure
+    .input(
+      z.object({
+        targetInstanceCode: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const organizationId = ctx.session.session.activeOrganizationId;
+
+      if (!organizationId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Nenhuma organização ativa",
+        });
+      }
+
+      const { tenantManager } = await import("../trpc");
+      const tenantDb = await tenantManager.getConnection(organizationId);
+
+      // 1. Buscar target agent por instanceCode
+      const [targetAgent] = await tenantDb
+        .select()
+        .from(agent)
+        .where(eq(agent.instanceCode, input.targetInstanceCode))
+        .limit(1);
+
+      if (!targetAgent) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Instance code não encontrado",
+        });
+      }
+
+      // Não pode criar chat consigo mesmo
+      if (targetAgent.userId === ctx.session.user.id) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Você não pode criar um chat consigo mesmo",
+        });
+      }
+
+      // 2. Buscar user do target agent para pegar nome e avatar
+      const [targetUser] = await ctx.db
+        .select()
+        .from(user)
+        .where(eq(user.id, targetAgent.userId))
+        .limit(1);
+
+      if (!targetUser) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Usuário não encontrado",
+        });
+      }
+
+      // 3. Criar/buscar contact interno para o target agent
+      const existingContacts = await tenantDb
+        .select()
+        .from(contact)
+        .where(eq(contact.organizationId, organizationId));
+
+      let targetContact = existingContacts.find(
+        (c) => c.metadata?.agentId === targetAgent.id,
+      );
+
+      if (!targetContact) {
+        // Criar novo contato interno
+        const [newContact] = await tenantDb
+          .insert(contact)
+          .values({
+            organizationId,
+            phoneNumber: null,
+            name: targetUser.name,
+            avatar: targetUser.image ?? undefined,
+            metadata: {
+              source: "internal" as const,
+              agentId: targetAgent.id,
+              firstMessageAt: new Date(),
+            },
+          })
+          .returning();
+
+        if (!newContact) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Falha ao criar contato interno",
+          });
+        }
+
+        targetContact = newContact;
+      }
+
+      // 4. Buscar o agent atual (criador do chat)
+      const [currentAgent] = await tenantDb
+        .select()
+        .from(agent)
+        .where(eq(agent.userId, ctx.session.user.id))
+        .limit(1);
+
+      if (!currentAgent) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Agent atual não encontrado",
+        });
+      }
+
+      // 5. Detectar chat duplicado (verificar se já existe chat interno entre os 2 agents)
+      const existingChat = await tenantDb
+        .select({
+          chat,
+          contact,
+        })
+        .from(chat)
+        .leftJoin(contact, eq(chat.contactId, contact.id))
+        .where(
+          and(
+            eq(chat.messageSource, "internal"),
+            eq(chat.contactId, targetContact.id),
+          ),
+        )
+        .limit(1);
+
+      if (existingChat.length > 0 && existingChat[0]?.chat) {
+        // Chat já existe, retornar ele
+        return existingChat[0].chat;
+      }
+
+      // 6. Criar novo chat interno
+      const now = new Date();
+      const [newChat] = await tenantDb
+        .insert(chat)
+        .values({
+          organizationId,
+          contactId: targetContact.id,
+          channelId: null, // Chats internos não têm canal
+          messageSource: "internal",
+          initiatorInstanceCode: currentAgent.instanceCode,
+          status: "open",
+          createdAt: now,
+          updatedAt: now,
+        })
+        .returning();
+
+      if (!newChat) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Falha ao criar chat",
+        });
+      }
+
+      // Emitir evento Socket.io: chat:created
+      await publishChatEvent(
+        {
+          type: "chat:created",
+          organizationId,
+          chatId: newChat.id,
+          data: {
+            chat: newChat as unknown as Record<string, unknown>,
+            contact: targetContact as unknown as Record<string, unknown>,
+          },
+        },
+        env.REDIS_URL,
+      );
 
       return newChat;
     }),

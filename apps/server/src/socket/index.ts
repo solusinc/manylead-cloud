@@ -130,6 +130,60 @@ export class SocketManager {
       });
 
       /**
+       * Typing indicators
+       */
+      socket.on("typing:start", (data: { chatId: string }) => {
+        if (!data.chatId) {
+          socket.emit("error", { message: "chatId is required" });
+          return;
+        }
+
+        console.log(`[Socket.io] ← ${socket.id} | typing:start → chat:${data.chatId}`);
+
+        // Get current user info from socket
+        const userId = socketData.userId;
+
+        // Find organization room this socket is in
+        const orgRoom = Array.from(socket.rooms).find((room) => room.startsWith("org:"));
+
+        if (orgRoom) {
+          // Broadcast to organization room (except sender)
+          socket.to(orgRoom).emit("typing:start", {
+            chatId: data.chatId,
+            agentId: userId ?? "unknown",
+            agentName: "Agent",
+          });
+
+          console.log(`[Socket.io] → ${orgRoom} | typing:start (excluding sender)`);
+        }
+      });
+
+      socket.on("typing:stop", (data: { chatId: string }) => {
+        if (!data.chatId) {
+          socket.emit("error", { message: "chatId is required" });
+          return;
+        }
+
+        console.log(`[Socket.io] ← ${socket.id} | typing:stop → chat:${data.chatId}`);
+
+        // Get current user info from socket
+        const userId = socketData.userId;
+
+        // Find organization room this socket is in
+        const orgRoom = Array.from(socket.rooms).find((room) => room.startsWith("org:"));
+
+        if (orgRoom) {
+          // Broadcast to organization room (except sender)
+          socket.to(orgRoom).emit("typing:stop", {
+            chatId: data.chatId,
+            agentId: userId ?? "unknown",
+          });
+
+          console.log(`[Socket.io] → ${orgRoom} | typing:stop (excluding sender)`);
+        }
+      });
+
+      /**
        * Disconnect handler
        */
       socket.on("disconnect", () => {

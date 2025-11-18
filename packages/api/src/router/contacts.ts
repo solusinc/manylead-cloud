@@ -1,9 +1,23 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
-import { contact, count, desc, eq, ilike, or } from "@manylead/db";
+import {
+  agent,
+  contact,
+  count,
+  desc,
+  eq,
+  ilike,
+  or,
+  user,
+} from "@manylead/db";
 
-import { createTRPCRouter, ownerProcedure } from "../trpc";
+import {
+  createTRPCRouter,
+  ownerProcedure,
+  protectedProcedure,
+  tenantManager,
+} from "../trpc";
 
 /**
  * Contacts Router
@@ -163,6 +177,97 @@ export const contactsRouter = createTRPCRouter({
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Falha ao criar contato",
+        });
+      }
+
+      return newContact;
+    }),
+
+  /**
+   * Buscar ou criar contato interno a partir de um agent
+   * Usado para comunicação interna ManyLead-to-ManyLead
+   */
+  findOrCreateInternal: protectedProcedure
+    .input(
+      z.object({
+        agentId: z.string().uuid(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const organizationId = ctx.session.session.activeOrganizationId;
+
+      if (!organizationId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Nenhuma organização ativa",
+        });
+      }
+
+      // Buscar agent para pegar userId
+      const tenantDb = await tenantManager.getConnection(organizationId);
+
+      const [agentRecord] = await tenantDb
+        .select()
+        .from(agent)
+        .where(eq(agent.id, input.agentId))
+        .limit(1);
+
+      if (!agentRecord) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Agent não encontrado",
+        });
+      }
+
+      // Buscar user para pegar nome e avatar
+      const [userData] = await ctx.db
+        .select()
+        .from(user)
+        .where(eq(user.id, agentRecord.userId))
+        .limit(1);
+
+      if (!userData) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Usuário não encontrado",
+        });
+      }
+
+      // Verificar se já existe um contact para este agent
+      // Usar JSONB query para buscar por metadata.agentId
+      const existingContacts = await tenantDb
+        .select()
+        .from(contact)
+        .where(eq(contact.organizationId, organizationId));
+
+      const existing = existingContacts.find(
+        (c) => c.metadata?.agentId === input.agentId,
+      );
+
+      if (existing) {
+        return existing;
+      }
+
+      // Criar novo contato interno
+      const [newContact] = await tenantDb
+        .insert(contact)
+        .values({
+          organizationId,
+          phoneNumber: null, // Contatos internos não têm telefone
+          name: userData.name,
+          avatar: userData.image ?? undefined,
+          metadata: {
+            source: "internal" as const,
+            agentId: input.agentId,
+            firstMessageAt: new Date(),
+          },
+        })
+        .returning();
+
+      if (!newContact) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Falha ao criar contato interno",
         });
       }
 

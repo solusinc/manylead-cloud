@@ -439,6 +439,9 @@ importers:
       '@manylead/permissions':
         specifier: workspace:*
         version: link:../permissions
+      '@manylead/shared':
+        specifier: workspace:*
+        version: link:../shared
       '@manylead/storage':
         specifier: workspace:^
         version: link:../storage

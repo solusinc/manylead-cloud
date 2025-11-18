@@ -1,11 +1,12 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
-import { and, attachment, channel, chat, contact, count, desc, eq, message, sql } from "@manylead/db";
+import { agent, and, attachment, channel, chat, contact, count, desc, eq, message, sql } from "@manylead/db";
 import { EvolutionAPIClient } from "@manylead/evolution-api-client";
+import { publishMessageEvent } from "@manylead/shared";
 
 import { env } from "../env";
-import { createTRPCRouter, ownerProcedure } from "../trpc";
+import { createTRPCRouter, memberProcedure, ownerProcedure } from "../trpc";
 
 /**
  * Messages Router
@@ -16,7 +17,7 @@ export const messagesRouter = createTRPCRouter({
   /**
    * Listar mensagens de um chat com paginação
    */
-  list: ownerProcedure
+  list: memberProcedure
     .input(
       z.object({
         chatId: z.string().uuid(),
@@ -27,6 +28,13 @@ export const messagesRouter = createTRPCRouter({
     )
     .query(async ({ ctx, input }) => {
       const { chatId, limit, offset, includeDeleted } = input;
+
+      // Buscar o agent do usuário atual para saber quem está logado
+      const [currentAgent] = await ctx.tenantDb
+        .select()
+        .from(agent)
+        .where(eq(agent.userId, ctx.session.user.id))
+        .limit(1);
 
       // Construir where clause
       const conditions = [eq(message.chatId, chatId)];
@@ -49,12 +57,18 @@ export const messagesRouter = createTRPCRouter({
           .where(where)
           .limit(limit)
           .offset(offset)
-          .orderBy(desc(message.timestamp)),
+          .orderBy(message.timestamp), // ASC - mais antigas primeiro (WhatsApp style)
         ctx.tenantDb.select({ count: count() }).from(message).where(where),
       ]);
 
+      // Mapear items para incluir se a mensagem é do usuário atual (isOwnMessage)
+      const itemsWithOwnership = items.map((item) => ({
+        ...item,
+        isOwnMessage: currentAgent ? item.message.senderId === currentAgent.id : false,
+      }));
+
       return {
-        items,
+        items: itemsWithOwnership,
         total: totalResult[0]?.count ?? 0,
         limit,
         offset,
@@ -64,7 +78,7 @@ export const messagesRouter = createTRPCRouter({
   /**
    * Buscar mensagem por ID
    */
-  getById: ownerProcedure
+  getById: memberProcedure
     .input(
       z.object({
         id: z.string().uuid(),
@@ -98,13 +112,11 @@ export const messagesRouter = createTRPCRouter({
   /**
    * Enviar mensagem de texto
    */
-  sendText: ownerProcedure
+  sendText: memberProcedure
     .input(
       z.object({
         chatId: z.string().uuid(),
         content: z.string().min(1),
-        senderId: z.string().uuid(),
-        sender: z.enum(["agent", "system"]),
         metadata: z.record(z.string(), z.unknown()).optional(),
       }),
     )
@@ -117,7 +129,26 @@ export const messagesRouter = createTRPCRouter({
         });
       }
 
+      const userId = ctx.session.user.id;
+      const userName = ctx.session.user.name;
       const now = new Date();
+
+      // Buscar o agent do usuário logado
+      const [currentAgent] = await ctx.tenantDb
+        .select()
+        .from(agent)
+        .where(eq(agent.userId, userId))
+        .limit(1);
+
+      if (!currentAgent) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Agent não encontrado para o usuário",
+        });
+      }
+
+      // Formatar mensagem com assinatura: **Nome**\nConteúdo
+      const formattedContent = `**${userName}**\n${input.content}`;
 
       // Criar mensagem (drizzle gera ID automaticamente)
       const [newMessage] = await ctx.tenantDb
@@ -125,10 +156,10 @@ export const messagesRouter = createTRPCRouter({
         .values({
           chatId: input.chatId,
           messageSource: "internal",
-          sender: input.sender,
-          senderId: input.senderId,
+          sender: "agent",
+          senderId: currentAgent.id,
           messageType: "text",
-          content: input.content,
+          content: formattedContent,
           metadata: input.metadata,
           status: "sent",
           timestamp: now,
@@ -143,7 +174,32 @@ export const messagesRouter = createTRPCRouter({
         });
       }
 
-      // TODO: Emitir evento Socket.io para atualizar UI em tempo real
+      // Atualizar chat (lastMessage, totalMessages)
+      await ctx.tenantDb
+        .update(chat)
+        .set({
+          lastMessageAt: now,
+          lastMessageContent: input.content,
+          lastMessageSender: "agent",
+          totalMessages: sql`${chat.totalMessages} + 1`,
+          updatedAt: now,
+        })
+        .where(eq(chat.id, input.chatId));
+
+      // Emitir evento Socket.io para atualizar UI em tempo real
+      await publishMessageEvent(
+        {
+          type: "message:new",
+          organizationId,
+          chatId: input.chatId,
+          messageId: newMessage.id,
+          data: {
+            message: newMessage as unknown as Record<string, unknown>,
+          },
+        },
+        env.REDIS_URL,
+      );
+
       // TODO: Se for WhatsApp, enfileirar job para enviar via Evolution API
 
       return newMessage;
@@ -249,7 +305,21 @@ export const messagesRouter = createTRPCRouter({
 
       const userId = ctx.session.user.id;
 
-      // 1. Buscar chat com canal e contato
+      // 1. Buscar o agent do usuário logado
+      const [currentAgent] = await ctx.tenantDb
+        .select()
+        .from(agent)
+        .where(eq(agent.userId, userId))
+        .limit(1);
+
+      if (!currentAgent) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Agent não encontrado para o usuário",
+        });
+      }
+
+      // 2. Buscar chat com canal e contato
       const [chatRecord] = await ctx.tenantDb
         .select({
           chat,
@@ -284,14 +354,14 @@ export const messagesRouter = createTRPCRouter({
 
       const now = new Date();
 
-      // 2. Criar mensagem no DB com status "pending"
+      // 3. Criar mensagem no DB com status "pending"
       const [newMessage] = await ctx.tenantDb
         .insert(message)
         .values({
           chatId: input.chatId,
           messageSource: "whatsapp",
           sender: "agent",
-          senderId: userId,
+          senderId: currentAgent.id,
           messageType: "text",
           content: input.content,
           status: "pending",
@@ -307,11 +377,18 @@ export const messagesRouter = createTRPCRouter({
       }
 
       try {
-        // 3. Enviar via Evolution API
+        // 4. Enviar via Evolution API
         const evolutionClient = new EvolutionAPIClient(
           env.EVOLUTION_API_URL,
           env.EVOLUTION_API_KEY,
         );
+
+        if (!chatRecord.contact.phoneNumber) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Contato não possui número de telefone",
+          });
+        }
 
         const result = await evolutionClient.message.sendText(
           chatRecord.channel.evolutionInstanceName,
@@ -321,7 +398,7 @@ export const messagesRouter = createTRPCRouter({
           },
         );
 
-        // 4. Atualizar mensagem com whatsappMessageId e status "sent"
+        // 5. Atualizar mensagem com whatsappMessageId e status "sent"
         await ctx.tenantDb
           .update(message)
           .set({
@@ -336,7 +413,7 @@ export const messagesRouter = createTRPCRouter({
             ),
           );
 
-        // 5. Atualizar chat (lastMessage, totalMessages)
+        // 6. Atualizar chat (lastMessage, totalMessages)
         await ctx.tenantDb
           .update(chat)
           .set({
@@ -353,7 +430,7 @@ export const messagesRouter = createTRPCRouter({
             ),
           );
 
-        // 6. TODO: Emitir evento Socket.io para atualizar UI em tempo real
+        // 7. TODO: Emitir evento Socket.io para atualizar UI em tempo real
 
         return {
           ...newMessage,
@@ -412,7 +489,21 @@ export const messagesRouter = createTRPCRouter({
 
       const userId = ctx.session.user.id;
 
-      // 1. Buscar chat com canal e contato
+      // 1. Buscar o agent do usuário logado
+      const [currentAgent] = await ctx.tenantDb
+        .select()
+        .from(agent)
+        .where(eq(agent.userId, userId))
+        .limit(1);
+
+      if (!currentAgent) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Agent não encontrado para o usuário",
+        });
+      }
+
+      // 2. Buscar chat com canal e contato
       const [chatRecord] = await ctx.tenantDb
         .select({
           chat,
@@ -460,14 +551,14 @@ export const messagesRouter = createTRPCRouter({
       else if (input.mimeType.startsWith("video/")) evolutionMediaType = "video";
       else if (input.mimeType.startsWith("audio/")) evolutionMediaType = "audio";
 
-      // 2. Criar mensagem no DB com status "pending"
+      // 3. Criar mensagem no DB com status "pending"
       const [newMessage] = await ctx.tenantDb
         .insert(message)
         .values({
           chatId: input.chatId,
           messageSource: "whatsapp",
           sender: "agent",
-          senderId: userId,
+          senderId: currentAgent.id,
           messageType,
           content: input.caption ?? `[${messageType}]`,
           status: "pending",
@@ -482,7 +573,7 @@ export const messagesRouter = createTRPCRouter({
         });
       }
 
-      // 3. Criar attachment no DB
+      // 4. Criar attachment no DB
       const [newAttachment] = await ctx.tenantDb
         .insert(attachment)
         .values({
@@ -497,11 +588,18 @@ export const messagesRouter = createTRPCRouter({
         .returning();
 
       try {
-        // 4. Enviar via Evolution API
+        // 5. Enviar via Evolution API
         const evolutionClient = new EvolutionAPIClient(
           env.EVOLUTION_API_URL,
           env.EVOLUTION_API_KEY,
         );
+
+        if (!chatRecord.contact.phoneNumber) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Contato não possui número de telefone",
+          });
+        }
 
         const result = await evolutionClient.message.sendMedia(
           chatRecord.channel.evolutionInstanceName,
@@ -514,7 +612,7 @@ export const messagesRouter = createTRPCRouter({
           },
         );
 
-        // 5. Atualizar mensagem com whatsappMessageId e status "sent"
+        // 6. Atualizar mensagem com whatsappMessageId e status "sent"
         await ctx.tenantDb
           .update(message)
           .set({
@@ -529,7 +627,7 @@ export const messagesRouter = createTRPCRouter({
             ),
           );
 
-        // 6. Atualizar chat (lastMessage, totalMessages)
+        // 7. Atualizar chat (lastMessage, totalMessages)
         await ctx.tenantDb
           .update(chat)
           .set({

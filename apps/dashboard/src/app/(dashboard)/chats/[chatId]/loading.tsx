@@ -3,8 +3,8 @@ import { Skeleton } from "@manylead/ui/skeleton";
 export default function Loading() {
   return (
     <div className="flex h-full">
-      {/* Sidebar skeleton */}
-      <aside className="w-[380px] border-r p-4 space-y-4">
+      {/* Sidebar skeleton - escondida no mobile quando chat selecionado */}
+      <aside className="hidden md:flex w-full md:w-[445px] shrink-0 border-r p-4 space-y-4 flex-col">
         <Skeleton className="h-10 w-full" />
         <Skeleton className="h-12 w-full" />
         {Array.from({ length: 8 }).map((_, i) => (
@@ -19,7 +19,7 @@ export default function Loading() {
       </aside>
 
       {/* Window skeleton */}
-      <main className="flex-1 flex flex-col">
+      <main className="flex flex-1 flex-col">
         <div className="border-b p-4">
           <Skeleton className="h-6 w-48" />
         </div>

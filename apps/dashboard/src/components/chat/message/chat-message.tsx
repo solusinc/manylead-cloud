@@ -23,7 +23,7 @@ interface Message {
 
 export function ChatMessage({
   message,
-  showAvatar = true,
+  showAvatar: _showAvatar = true,
   className,
   ...props
 }: {
@@ -71,7 +71,7 @@ export function ChatMessageBubble({
   return (
     <div
       className={cn(
-        "max-w-[65%] rounded-2xl px-4 py-2 relative",
+        "max-w-[280px] sm:max-w-md md:max-w-lg lg:max-w-xl rounded-2xl px-4 py-2 relative overflow-hidden",
         isOutgoing
           ? "bg-msg-outgoing rounded-br-sm"
           : "bg-msg-incoming rounded-bl-sm",
@@ -109,15 +109,28 @@ export function ChatMessageContent({
   className?: string;
   isOutgoing?: boolean;
 }) {
+  // Renderizar markdown simples: **texto** -> <strong>texto</strong>
+  const renderContent = (text: string) => {
+    const parts = text.split(/(\*\*.*?\*\*)/g);
+
+    return parts.map((part, index) => {
+      if (part.startsWith("**") && part.endsWith("**")) {
+        const boldText = part.slice(2, -2);
+        return <strong key={index}>{boldText}</strong>;
+      }
+      return part;
+    });
+  };
+
   return (
     <p
       className={cn(
-        "wrap-break-words text-sm whitespace-pre-wrap",
+        "break-words text-sm whitespace-pre-wrap overflow-wrap-anywhere",
         isOutgoing && "dark:text-white",
         className
       )}
     >
-      {content}
+      {renderContent(content)}
     </p>
   );
 }

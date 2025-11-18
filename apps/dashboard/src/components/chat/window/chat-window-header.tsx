@@ -8,12 +8,9 @@ import {
   CheckCircle,
   MoreVertical,
   Tag,
-  User,
   X,
 } from "lucide-react";
 import { FaUser, FaWhatsapp } from "react-icons/fa";
-
-import { formatBrazilianPhone } from "@manylead/shared/utils";
 import { cn } from "@manylead/ui";
 import { Avatar, AvatarFallback } from "@manylead/ui/avatar";
 import { Button } from "@manylead/ui/button";
@@ -83,6 +80,7 @@ export function ChatWindowHeader({
 export function ChatWindowHeaderInfo({
   contact,
   source = "whatsapp",
+  isTyping = false,
   className,
   onClick,
 }: {
@@ -92,6 +90,7 @@ export function ChatWindowHeaderInfo({
     avatar: string | null;
   };
   source?: "whatsapp" | "internal";
+  isTyping?: boolean;
   className?: string;
   onClick?: () => void;
 }) {
@@ -141,6 +140,9 @@ export function ChatWindowHeaderInfo({
             </>
           )}
         </div>
+        {isTyping && (
+          <p className="text-muted-foreground text-xs">digitando...</p>
+        )}
       </div>
     </button>
   );
