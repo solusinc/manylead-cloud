@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@manylead/ui";
+import { Skeleton } from "@manylead/ui/skeleton";
 import { useRef, useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
@@ -101,8 +102,23 @@ export function ChatSidebarList({
     overscan: 5,
   });
 
-  // Removido loading state - dados são prefetched no servidor
-  if (chats.length === 0 && !isLoading) {
+  if (isLoading) {
+    return (
+      <div className={cn("space-y-0", className)}>
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="flex items-center gap-3 p-4">
+            <Skeleton className="h-12 w-12 rounded-full" />
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-4 w-3/4" />
+              <Skeleton className="h-3 w-1/2" />
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  if (chats.length === 0) {
     return (
       <div className={cn("flex h-full items-center justify-center p-4", className)}>
         <p className="text-muted-foreground text-center text-sm">

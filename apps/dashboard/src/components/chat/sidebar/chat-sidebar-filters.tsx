@@ -3,6 +3,7 @@
 import { cn } from "@manylead/ui";
 import { Badge } from "@manylead/ui/badge";
 import { Button } from "@manylead/ui/button";
+import { Skeleton } from "@manylead/ui/skeleton";
 import {
   Tooltip,
   TooltipContent,
@@ -34,7 +35,7 @@ export function ChatSidebarFilters({
   const role = currentAgent?.role;
 
   // Buscar todos os chats para contar pending
-  const { data: chatsData } = useQuery(
+  const { data: chatsData, isLoading: isLoadingChats } = useQuery(
     trpc.chats.list.queryOptions({
       limit: 100,
       offset: 0,
@@ -42,6 +43,22 @@ export function ChatSidebarFilters({
   );
 
   const pendingCount = chatsData?.items.filter((item) => item.chat.status === "pending").length ?? 0;
+
+  // Loading skeleton
+  if (isLoadingChats) {
+    return (
+      <div
+        className={cn("flex items-center border-b bg-background", className)}
+        {...props}
+      >
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="flex h-12 flex-1 items-center justify-center">
+            <Skeleton className="h-6 w-6 rounded-full" />
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   // Member não precisa de filtros (só vê seus próprios chats)
   if (role === "member") {

@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { cn } from "@manylead/ui";
 import { ScrollArea } from "@manylead/ui/scroll-area";
+import { Skeleton } from "@manylead/ui/skeleton";
 
 import { useChatSocketContext } from "~/components/providers/chat-socket-provider";
 import { useTRPC } from "~/lib/trpc/react";
@@ -45,9 +46,49 @@ export function ChatWindow({
     }
   }, [isLoading, chatItem, router]);
 
-  // Se ainda não tiver dados (edge case), não renderiza nada
-  if (!chatItem) {
-    return null;
+  // Loading skeleton
+  if (isLoading || !chatItem) {
+    return (
+      <div
+        className={cn(
+          "flex h-full max-h-[calc(100vh-3.5rem)] flex-col sm:max-h-full",
+          "bg-auto] bg-[url('/assets/chat-messages-bg-light.png')] bg-repeat dark:bg-[url('/assets/chat-messages-bg-dark.png')]",
+          className,
+        )}
+        {...props}
+      >
+        {/* Header skeleton */}
+        <div className="bg-background flex h-14 shrink-0 items-center gap-4 border-b px-4">
+          <Skeleton className="h-10 w-10 rounded-full" />
+          <div className="flex-1 space-y-2">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-3 w-24" />
+          </div>
+        </div>
+
+        {/* Messages skeleton */}
+        <ScrollArea className="flex-1 overflow-auto px-6 py-4">
+          <div className="space-y-4">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div
+                key={i}
+                className={cn(
+                  "flex gap-2",
+                  i % 2 === 0 ? "justify-start" : "justify-end"
+                )}
+              >
+                <Skeleton className="h-16 w-64 rounded-2xl" />
+              </div>
+            ))}
+          </div>
+        </ScrollArea>
+
+        {/* Input skeleton */}
+        <div className="mb-2 flex min-h-14 items-center px-4">
+          <Skeleton className="h-11 w-full rounded-full" />
+        </div>
+      </div>
+    );
   }
 
   const chat = {

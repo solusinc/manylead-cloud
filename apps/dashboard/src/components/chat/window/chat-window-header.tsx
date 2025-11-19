@@ -29,6 +29,7 @@ import {
 
 import { ContactDetailsSheet } from "../contact";
 import { ChatTransferDropdown } from "./chat-transfer-dropdown";
+import { usePermissions } from "~/lib/permissions/use-permissions";
 
 interface ChatWindowHeaderProps {
   chat: {
@@ -168,9 +169,14 @@ export function ChatWindowHeaderActions({
   chatCreatedAt: Date;
   className?: string;
 }) {
+  const { isOwner, isAdmin } = usePermissions();
+  const canTransfer = isOwner || isAdmin;
+
   return (
     <div className={cn("flex items-center gap-1", className)}>
-      <ChatTransferDropdown chatId={chatId} chatCreatedAt={chatCreatedAt} />
+      {canTransfer && (
+        <ChatTransferDropdown chatId={chatId} chatCreatedAt={chatCreatedAt} />
+      )}
 
       <Tooltip>
         <TooltipTrigger asChild>

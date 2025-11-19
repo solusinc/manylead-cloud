@@ -4,7 +4,7 @@ import { ChatLayout } from "~/components/chat/chat-layout";
 export default async function ChatsPage() {
   const queryClient = getQueryClient();
 
-  // Prefetch lista de chats para hidratar
+  // Prefetch dados essenciais
   await Promise.all([
     queryClient.prefetchQuery(
       trpc.chats.list.queryOptions({

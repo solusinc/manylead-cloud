@@ -15,6 +15,7 @@ import { Loader2 } from "lucide-react";
 import { isSameDay } from "date-fns";
 
 import { cn } from "@manylead/ui";
+import { Skeleton } from "@manylead/ui/skeleton";
 
 import { useChatSocketContext } from "~/components/providers/chat-socket-provider";
 import { useTRPC } from "~/lib/trpc/react";
@@ -276,6 +277,25 @@ export function ChatMessageList({
       previousMessageCountRef.current = messages.length;
     }
   }, [messages.length]);
+
+  // Loading skeleton
+  if (isLoading) {
+    return (
+      <div className={cn("space-y-4", className)} {...props}>
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div
+            key={i}
+            className={cn(
+              "flex gap-2",
+              i % 2 === 0 ? "justify-start" : "justify-end"
+            )}
+          >
+            <Skeleton className="h-16 w-64 rounded-2xl" />
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className={cn("relative space-y-4", className)} {...props}>
