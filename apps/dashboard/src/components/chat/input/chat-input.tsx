@@ -14,6 +14,7 @@ import { Button } from "@manylead/ui/button";
 import { ChatInputToolbar } from "./chat-input-toolbar";
 import { useTRPC } from "~/lib/trpc/react";
 import { useMessageDeduplication } from "~/hooks/use-message-deduplication";
+import { useServerSession } from "~/components/providers/session-provider";
 
 export function ChatInput({
   chatId,
@@ -32,9 +33,19 @@ export function ChatInput({
   const [rows, setRows] = useState(1);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const shouldFocusRef = useRef(false);
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const { register } = useMessageDeduplication();
+  const session = useServerSession();
+
+  // PROFESSIONAL: Auto-focus after sending (runs after all React updates)
+  useEffect(() => {
+    if (shouldFocusRef.current && !isSending) {
+      textareaRef.current?.focus();
+      shouldFocusRef.current = false;
+    }
+  }, [isSending]);
 
   // Mutation para enviar mensagem de texto
   const sendMessageMutation = useMutation(
@@ -162,10 +173,15 @@ export function ChatInput({
     // === TRUE OPTIMISTIC UPDATE ===
     // 1. Generate tempId BEFORE sending (UUIDv7 - time-sortable)
     const tempId = uuidv7();
+
+    // Format message with signature: **UserName**\nContent (same as backend)
+    const userName = session.user.name ?? "Unknown";
+    const formattedContent = `**${userName}**\n${content.trim()}`;
+
     const tempMessage = {
       id: tempId,
       chatId,
-      content: content.trim(),
+      content: formattedContent,
       timestamp: new Date(),
       status: "pending" as const,
       sender: "agent" as const,
@@ -228,23 +244,21 @@ export function ChatInput({
     const messageContent = content.trim();
     setContent("");
     setRows(1);
-    textareaRef.current?.focus();
 
-    try {
-      // 4. Send to server (with tempId)
-      await sendMessageMutation.mutateAsync({
-        chatId,
-        content: messageContent,
-        tempId,
-      });
+    // Mark that we need to restore focus after sending completes
+    shouldFocusRef.current = true;
 
-      // onSuccess will replace tempId → serverId in cache
-    } catch (error) {
-      // onError will remove optimistic message
+    // 4. Send to server (with tempId) - NO AWAIT, fire and forget
+    sendMessageMutation.mutateAsync({
+      chatId,
+      content: messageContent,
+      tempId,
+    }).catch((error) => {
       console.error("Failed to send message:", error);
-    } finally {
+    }).finally(() => {
       setIsSending(false);
-    }
+      // useEffect will handle focus restoration when isSending becomes false
+    });
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
