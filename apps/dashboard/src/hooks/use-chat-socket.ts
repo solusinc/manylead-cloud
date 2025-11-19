@@ -231,30 +231,14 @@ export function useChatSocket(): UseChatSocketReturn {
 
   // Emit typing events
   const emitTypingStart = (chatId: string) => {
-    console.log("[useChatSocket] emitTypingStart:", {
-      chatId,
-      socketExists: !!socketRef.current,
-      isConnected: socketRef.current?.connected
-    });
     if (socketRef.current?.connected) {
       socketRef.current.emit("typing:start", { chatId });
-      console.log("[useChatSocket] ✓ typing:start emitted");
-    } else {
-      console.log("[useChatSocket] ✗ Socket not connected, cannot emit typing:start");
     }
   };
 
   const emitTypingStop = (chatId: string) => {
-    console.log("[useChatSocket] emitTypingStop:", {
-      chatId,
-      socketExists: !!socketRef.current,
-      isConnected: socketRef.current?.connected
-    });
     if (socketRef.current?.connected) {
       socketRef.current.emit("typing:stop", { chatId });
-      console.log("[useChatSocket] ✓ typing:stop emitted");
-    } else {
-      console.log("[useChatSocket] ✗ Socket not connected, cannot emit typing:stop");
     }
   };
 

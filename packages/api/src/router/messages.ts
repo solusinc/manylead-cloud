@@ -1,7 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
-import { agent, and, attachment, channel, chat, contact, count, desc, eq, message, sql } from "@manylead/db";
+import { agent, and, attachment, channel, chat, contact, desc, eq, lt, message, sql } from "@manylead/db";
 import { EvolutionAPIClient } from "@manylead/evolution-api-client";
 import { publishMessageEvent } from "@manylead/shared";
 
@@ -15,19 +15,27 @@ import { createTRPCRouter, memberProcedure, ownerProcedure } from "../trpc";
  */
 export const messagesRouter = createTRPCRouter({
   /**
-   * Listar mensagens de um chat com paginação
+   * Listar mensagens de um chat com cursor-based pagination
+   * Cursor = UUIDv7 (time-sortable)
+   * Se cursor fornecido, retorna mensagens MAIS ANTIGAS que o cursor (para infinite scroll)
    */
   list: memberProcedure
     .input(
       z.object({
         chatId: z.string().uuid(),
-        limit: z.number().min(1).max(100).default(50),
-        offset: z.number().min(0).default(0),
+        limit: z.number().min(1).max(100).default(50), // Para páginas subsequentes
+        firstPageLimit: z.number().min(1).max(100).optional(), // Para primeira página (opcional)
+        cursor: z.string().uuid().optional(), // UUIDv7 da mensagem mais antiga carregada
         includeDeleted: z.boolean().default(false),
       }),
     )
     .query(async ({ ctx, input }) => {
-      const { chatId, limit, offset, includeDeleted } = input;
+      const { chatId, cursor, includeDeleted } = input;
+
+      // Usar firstPageLimit apenas quando NÃO há cursor (primeira página)
+      const effectiveLimit = !cursor && input.firstPageLimit
+        ? input.firstPageLimit
+        : input.limit;
 
       // Buscar o agent do usuário atual para saber quem está logado
       const [currentAgent] = await ctx.tenantDb
@@ -43,35 +51,54 @@ export const messagesRouter = createTRPCRouter({
         conditions.push(eq(message.isDeleted, false));
       }
 
+      // Se SEM cursor: buscar as N mais recentes
+      // Se COM cursor: buscar mensagens MAIS ANTIGAS que o cursor (para infinite scroll ao scrollar pro topo)
+      // UUIDv7 é time-sortable, então lt(message.id, cursor) funciona
+      if (cursor) {
+        conditions.push(lt(message.id, cursor));
+      }
+
       const where = and(...conditions);
 
-      // Executar queries em paralelo
-      const [items, totalResult] = await Promise.all([
-        ctx.tenantDb
-          .select({
-            message,
-            attachment,
-          })
-          .from(message)
-          .leftJoin(attachment, eq(message.id, attachment.messageId))
-          .where(where)
-          .limit(limit)
-          .offset(offset)
-          .orderBy(message.timestamp), // ASC - mais antigas primeiro (WhatsApp style)
-        ctx.tenantDb.select({ count: count() }).from(message).where(where),
-      ]);
+      // Buscar effectiveLimit + 1 para saber se há mais mensagens
+      // Ordenar DESC primeiro para pegar as mais recentes (ou mais recentes antes do cursor)
+      const items = await ctx.tenantDb
+        .select({
+          message,
+          attachment,
+        })
+        .from(message)
+        .leftJoin(attachment, eq(message.id, attachment.messageId))
+        .where(where)
+        .limit(effectiveLimit + 1)
+        .orderBy(desc(message.id)); // DESC - pegar as mais recentes primeiro
+
+      // Verificar se há próxima página
+      const hasMore = items.length > effectiveLimit;
+      const itemsToReturn = hasMore ? items.slice(0, effectiveLimit) : items;
+
+      // Reverter para ASC (mais antigas primeira) - ordem de exibição
+      const reversedItems = [...itemsToReturn].reverse();
+
+      // CURSOR CALCULATION:
+      // O cursor deve ser a mensagem MAIS ANTIGA que vamos RETORNAR (reversedItems[0])
+      // Porque quando o cliente pedir a próxima página, usaremos lt(message.id, cursor)
+      // para buscar mensagens MAIS ANTIGAS que essa
+      // PORÉM: items[effectiveLimit] seria a próxima mensagem (a descartada)
+      // Mas como já revertemos, reversedItems[0] é a mais antiga que mostramos
+      // E queremos que a próxima página carregue mensagens ANTES dessa
+      const nextCursor = hasMore ? reversedItems[0]?.message.id : undefined;
 
       // Mapear items para incluir se a mensagem é do usuário atual (isOwnMessage)
-      const itemsWithOwnership = items.map((item) => ({
+      const itemsWithOwnership = reversedItems.map((item) => ({
         ...item,
         isOwnMessage: currentAgent ? item.message.senderId === currentAgent.id : false,
       }));
 
       return {
         items: itemsWithOwnership,
-        total: totalResult[0]?.count ?? 0,
-        limit,
-        offset,
+        nextCursor,
+        hasMore,
       };
     }),
 

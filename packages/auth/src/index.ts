@@ -21,6 +21,12 @@ export function initAuth<
     emailAndPassword: {
       enabled: true,
     },
+    // TODO: se quiser manter o controle do id (nanoid) para usar uuid
+    // advanced: {
+    //     database: {
+    //         generateId: false,
+    //     }
+    // },
     plugins: [
       organization({
         allowUserToCreateOrganization: true,

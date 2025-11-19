@@ -52,19 +52,96 @@ function ChatLayoutInner({
     if (!socket.isConnected) return;
 
     // Quando um novo chat é criado ou uma nova mensagem chega
-    const unsubscribeNewMessage = socket.onMessageNew(() => {
-      // Invalidar queries para atualizar lista de chats e mensagens
-      void queryClient.invalidateQueries({ queryKey: [["chats"]] });
-      void queryClient.invalidateQueries({ queryKey: [["messages"]] });
+    const unsubscribeNewMessage = socket.onMessageNew((event) => {
+      // PROFESSIONAL SOLUTION: Optimistic update for incoming socket messages
+      // Same pattern as chat-input.tsx but with proper TypeScript types
+
+      const messageData = event.message;
+
+      // CRITICAL: Add small delay to allow optimistic updates to settle
+      // This prevents race condition where socket arrives before React re-renders
+      setTimeout(() => {
+        // Find all queries for messages.list
+        const queries = queryClient.getQueryCache().findAll({
+          queryKey: [["messages", "list"]],
+          exact: false,
+        });
+
+        queries.forEach((query) => {
+          const queryState = query.state.data as {
+          pages: {
+            items: {
+              message: Record<string, unknown>;
+              attachment: Record<string, unknown> | null;
+              isOwnMessage: boolean;
+            }[];
+            nextCursor: string | undefined;
+            hasMore: boolean;
+          }[];
+          pageParams: unknown[];
+        } | undefined;
+
+        if (!queryState?.pages) return;
+
+        // Extract chatId from query key to check if this message belongs to this query
+        // tRPC query key structure: [["messages", "list"], { input: { chatId: "..." } }]
+        const queryKey = query.queryKey as unknown[];
+        const queryOptions = queryKey[1] as { input?: { chatId?: string } } | undefined;
+        const queryChatId = queryOptions?.input?.chatId;
+
+        // Only update if message belongs to this chat
+        if (!queryChatId || messageData.chatId !== queryChatId) return;
+
+        // Check if message already exists (avoid duplicates from own sends)
+        const messageExists = queryState.pages.some((page) =>
+          page.items.some((item) => item.message.id === messageData.id)
+        );
+
+        if (messageExists) return;
+
+        // Add message to the FIRST page (index 0 - most recent messages)
+        const newPages = [...queryState.pages];
+        const firstPage = newPages[0];
+
+        if (firstPage) {
+          newPages[0] = {
+            ...firstPage,
+            items: [
+              ...firstPage.items,
+              {
+                message: messageData,
+                attachment: null,
+                isOwnMessage: false, // Socket messages are from other users
+              },
+            ],
+          };
+
+          queryClient.setQueryData(query.queryKey, {
+            ...queryState,
+            pages: newPages,
+            pageParams: queryState.pageParams,
+          });
+
+          // Force re-render without refetch
+          void queryClient.invalidateQueries({
+            queryKey: query.queryKey,
+            refetchType: "none",
+          });
+        }
+        });
+
+        // Invalidate chats list to update last message preview
+        void queryClient.invalidateQueries({
+          queryKey: [["chats", "list"]],
+        });
+      }, 50); // 50ms delay to allow optimistic updates to settle
     });
 
     const unsubscribeChatCreated = socket.onChatCreated(() => {
-      // Invalidar lista de chats
       void queryClient.invalidateQueries({ queryKey: [["chats"]] });
     });
 
     const unsubscribeChatUpdated = socket.onChatUpdated(() => {
-      // Invalidar lista de chats
       void queryClient.invalidateQueries({ queryKey: [["chats"]] });
     });
 
@@ -93,8 +170,8 @@ export function ChatLayoutSidebar({
   return (
     <aside
       className={cn(
-        "bg-background w-full shrink-0 border-r md:w-[445px] flex",
-        hasChatSelected && "hidden md:flex", // Hide on mobile when chat is selected
+        "bg-background w-full md:w-[445px] shrink-0 border-r flex",
+        hasChatSelected && "hidden lg:flex", // Hide on mobile/tablet when chat is selected
         className,
       )}
       {...props}
@@ -114,7 +191,7 @@ export function ChatLayoutMain({
     <main
       className={cn(
         "flex flex-1 flex-col overflow-hidden",
-        !hasChatSelected && "hidden md:flex", // Hide on mobile when no chat selected
+        !hasChatSelected && "hidden md:flex", // Hide on mobile when no chat selected, show on tablet/desktop
         className
       )}
       {...props}

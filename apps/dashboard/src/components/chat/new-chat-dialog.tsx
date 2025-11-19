@@ -36,9 +36,6 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
   const createInternalChatMutation = useMutation(
     trpc.chats.createInternalChat.mutationOptions({
       onSuccess: (chat) => {
-        toast.success("Chat criado!", {
-          description: "Redirecionando para a conversa...",
-        });
         handleClose();
         router.push(`/chats/${chat.id}`);
       },

@@ -48,7 +48,7 @@ export function NavBreadcrumb({ items }: NavBreadcrumbProps) {
   return (
     <Breadcrumb>
       <BreadcrumbList>
-        <BreadcrumbSeparator className="hidden md:block" />
+        {items.length > 0 && <BreadcrumbSeparator className="hidden md:block" />}
         {items.map((item, i) => (
           <Fragment key={`${item.type}-${i}`}>
             <BreadcrumbItem>

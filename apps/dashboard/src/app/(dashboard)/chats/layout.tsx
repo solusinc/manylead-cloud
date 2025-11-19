@@ -11,7 +11,7 @@ import { NavActions } from "./nav-actions";
 export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex flex-col h-screen">
-      <AppHeader className="sm:hidden">
+      <AppHeader className="lg:hidden">
         <AppHeaderContent>
           <AppSidebarTrigger />
           <Breadcrumb />

@@ -12,6 +12,7 @@ import { Button } from "@manylead/ui/button";
 
 import { ChatInputToolbar } from "./chat-input-toolbar";
 import { useTRPC } from "~/lib/trpc/react";
+import { useScrollToBottom } from "~/components/chat/window/chat-window";
 
 export function ChatInput({
   chatId,
@@ -32,17 +33,71 @@ export function ChatInput({
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const trpc = useTRPC();
   const queryClient = useQueryClient();
+  const scrollToBottom = useScrollToBottom();
 
   // Mutation para enviar mensagem de texto
   const sendMessageMutation = useMutation(
     trpc.messages.sendText.mutationOptions({
-      onSuccess: () => {
-        // Invalidar queries para atualizar a lista de mensagens e chats
-        void queryClient.invalidateQueries({
-          queryKey: [["messages"]],
+      onSuccess: (newMessage) => {
+        // PROFESSIONAL SOLUTION: Manually update cache - NO refetches at all
+        // This is how WhatsApp/Telegram/Discord do it - zero API calls on send
+
+        const queries = queryClient.getQueryCache().findAll({
+          queryKey: [["messages", "list"]],
+          exact: false,
         });
+
+        queries.forEach((query) => {
+          const queryState = query.state.data as {
+            pages: {
+              items: {
+                message: Record<string, unknown>;
+                attachment: Record<string, unknown> | null;
+                isOwnMessage: boolean;
+              }[];
+              nextCursor: string | undefined;
+              hasMore: boolean;
+            }[];
+            pageParams: unknown[];
+          } | undefined;
+
+          if (!queryState?.pages) return;
+
+          // Add message to the FIRST page (index 0 - most recent messages)
+          // Backend returns pages in reverse order, so page[0] has the newest messages
+          const newPages = [...queryState.pages];
+          const firstPage = newPages[0];
+
+          if (firstPage) {
+            newPages[0] = {
+              ...firstPage,
+              items: [
+                ...firstPage.items,
+                {
+                  message: newMessage,
+                  attachment: null,
+                  isOwnMessage: true,
+                },
+              ],
+            };
+
+            queryClient.setQueryData(query.queryKey, {
+              ...queryState,
+              pages: newPages,
+              pageParams: queryState.pageParams,
+            });
+
+            // Force re-render by invalidating this specific query (but it won't refetch because staleTime: Infinity)
+            void queryClient.invalidateQueries({
+              queryKey: query.queryKey,
+              refetchType: 'none', // Don't refetch, just mark as stale to trigger re-render
+            });
+          }
+        });
+
+        // Only invalidate chats list (lightweight)
         void queryClient.invalidateQueries({
-          queryKey: [["chats"]],
+          queryKey: [["chats", "list"]],
         });
       },
       onError: (error) => {
@@ -60,7 +115,6 @@ export function ChatInput({
 
     // Stop typing indicator
     if (isTyping) {
-      console.log("[ChatInput] Calling onTypingStop (send)");
       onTypingStop?.();
       setIsTyping(false);
     }
@@ -75,6 +129,11 @@ export function ChatInput({
       setContent("");
       setRows(1); // Reset para 1 linha
       textareaRef.current?.focus();
+
+      // Scroll to bottom after sending
+      setTimeout(() => {
+        scrollToBottom?.();
+      }, 100);
     } catch (error) {
       // Error already handled by onError
       console.error("Failed to send message:", error);
@@ -106,8 +165,6 @@ export function ChatInput({
 
     // Typing indicator logic
     if (value.trim() && !isTyping) {
-      // Start typing
-      console.log("[ChatInput] Calling onTypingStart");
       onTypingStart?.();
       setIsTyping(true);
     }
@@ -121,14 +178,11 @@ export function ChatInput({
     if (value.trim()) {
       typingTimeoutRef.current = setTimeout(() => {
         if (isTyping) {
-          console.log("[ChatInput] Calling onTypingStop (timeout)");
           onTypingStop?.();
           setIsTyping(false);
         }
       }, 3000);
     } else if (isTyping) {
-      // Stop typing if input is empty
-      console.log("[ChatInput] Calling onTypingStop (empty)");
       onTypingStop?.();
       setIsTyping(false);
     }

@@ -18,12 +18,12 @@ export default async function ChatPage({
     })
   );
 
-  // Prefetch mensagens do chat específico
-  await queryClient.prefetchQuery(
-    trpc.messages.list.queryOptions({
+  // Prefetch mensagens do chat específico (TEMPORÁRIO: 10 mensagens iniciais, 2 por scroll)
+  await queryClient.prefetchInfiniteQuery(
+    trpc.messages.list.infiniteQueryOptions({
       chatId,
-      limit: 100,
-      offset: 0,
+      firstPageLimit: 10,
+      limit: 2,
     })
   );
 

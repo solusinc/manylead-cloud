@@ -2,7 +2,7 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useRef, createContext, useContext } from "react";
 import { cn } from "@manylead/ui";
 import { ScrollArea } from "@manylead/ui/scroll-area";
 
@@ -12,6 +12,10 @@ import { ChatWindowHeader } from "./chat-window-header";
 import { useTRPC } from "~/lib/trpc/react";
 import { useChatSocketContext } from "~/components/providers/chat-socket-provider";
 
+// Context for scroll to bottom function
+const ScrollToBottomContext = createContext<(() => void) | null>(null);
+export const useScrollToBottom = () => useContext(ScrollToBottomContext);
+
 export function ChatWindow({
   chatId,
   className,
@@ -20,6 +24,7 @@ export function ChatWindow({
   const trpc = useTRPC();
   const socket = useChatSocketContext();
   const router = useRouter();
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   // Buscar chat da API
   const { data: chatData, isLoading } = useQuery(
@@ -56,30 +61,44 @@ export function ChatWindow({
     source: chatItem.chat.messageSource as "whatsapp" | "internal",
   };
 
+  const scrollToBottom = () => {
+    if (scrollAreaRef.current) {
+      const viewport = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
+      if (viewport) {
+        viewport.scrollTo({
+          top: viewport.scrollHeight,
+          behavior: 'smooth',
+        });
+      }
+    }
+  };
+
   return (
-    <div
-      className={cn(
-        "flex h-full max-h-[calc(100vh-3.5rem)] flex-col sm:max-h-full",
-        "bg-[url('/assets/chat-messages-bg-light.png')] dark:bg-[url('/assets/chat-messages-bg-dark.png')] bg-repeat bg-[length:auto]",
-        className,
-      )}
-      {...props}
-    >
-      <ChatWindowHeader chat={chat} />
+    <ScrollToBottomContext.Provider value={scrollToBottom}>
+      <div
+        className={cn(
+          "flex h-full max-h-[calc(100vh-3.5rem)] flex-col sm:max-h-full",
+          "bg-[url('/assets/chat-messages-bg-light.png')] dark:bg-[url('/assets/chat-messages-bg-dark.png')] bg-repeat bg-[length:auto]",
+          className,
+        )}
+        {...props}
+      >
+        <ChatWindowHeader chat={chat} />
 
-      <ScrollArea className="flex-1 overflow-auto px-6 py-4">
-        <ChatMessageList chatId={chatId} />
-      </ScrollArea>
+        <ScrollArea ref={scrollAreaRef} className="flex-1 overflow-auto px-6 py-4">
+          <ChatMessageList chatId={chatId} />
+        </ScrollArea>
 
-      {/* Input bar - WhatsApp style: empurra mensagens para cima ao invés de ficar sticky */}
-      <div className="mb-2 flex min-h-14 items-center px-4">
-        <ChatInput
-          chatId={chatId}
-          onTypingStart={() => socket.emitTypingStart(chatId)}
-          onTypingStop={() => socket.emitTypingStop(chatId)}
-        />
+        {/* Input bar - WhatsApp style: empurra mensagens para cima ao invés de ficar sticky */}
+        <div className="mb-2 flex min-h-14 items-center px-4">
+          <ChatInput
+            chatId={chatId}
+            onTypingStart={() => socket.emitTypingStart(chatId)}
+            onTypingStop={() => socket.emitTypingStop(chatId)}
+          />
+        </div>
       </div>
-    </div>
+    </ScrollToBottomContext.Provider>
   );
 }
 
