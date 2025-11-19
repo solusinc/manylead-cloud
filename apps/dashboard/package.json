@@ -49,6 +49,7 @@
     "sonner": "^2.0.7",
     "superjson": "2.2.3",
     "use-debounce": "^10.0.6",
+    "uuid": "catalog:",
     "zod": "catalog:",
     "zustand": "^5.0.8"
   },

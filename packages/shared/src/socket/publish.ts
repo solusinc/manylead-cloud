@@ -19,6 +19,7 @@ export interface MessageEvent {
   organizationId: string;
   chatId: string;
   messageId: string;
+  senderId?: string; // Agent ID who sent the message (for filtering/deduplication)
   data: {
     message: Record<string, unknown>;
     sender?: Record<string, unknown>;

@@ -1,16 +1,17 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { createContext, useContext, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, createContext, useContext } from "react";
+import { useQuery } from "@tanstack/react-query";
+
 import { cn } from "@manylead/ui";
 import { ScrollArea } from "@manylead/ui/scroll-area";
 
+import { useChatSocketContext } from "~/components/providers/chat-socket-provider";
+import { useTRPC } from "~/lib/trpc/react";
 import { ChatInput } from "../input";
 import { ChatMessageList } from "../message";
 import { ChatWindowHeader } from "./chat-window-header";
-import { useTRPC } from "~/lib/trpc/react";
-import { useChatSocketContext } from "~/components/providers/chat-socket-provider";
 
 // Context for scroll to bottom function
 const ScrollToBottomContext = createContext<(() => void) | null>(null);
@@ -31,7 +32,7 @@ export function ChatWindow({
     trpc.chats.list.queryOptions({
       limit: 100,
       offset: 0,
-    })
+    }),
   );
 
   // Encontrar o chat específico
@@ -63,11 +64,13 @@ export function ChatWindow({
 
   const scrollToBottom = () => {
     if (scrollAreaRef.current) {
-      const viewport = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
+      const viewport = scrollAreaRef.current.querySelector(
+        "[data-radix-scroll-area-viewport]",
+      );
       if (viewport) {
         viewport.scrollTo({
           top: viewport.scrollHeight,
-          behavior: 'smooth',
+          behavior: "smooth",
         });
       }
     }
@@ -78,14 +81,17 @@ export function ChatWindow({
       <div
         className={cn(
           "flex h-full max-h-[calc(100vh-3.5rem)] flex-col sm:max-h-full",
-          "bg-[url('/assets/chat-messages-bg-light.png')] dark:bg-[url('/assets/chat-messages-bg-dark.png')] bg-repeat bg-[length:auto]",
+          "bg-auto] bg-[url('/assets/chat-messages-bg-light.png')] bg-repeat dark:bg-[url('/assets/chat-messages-bg-dark.png')]",
           className,
         )}
         {...props}
       >
         <ChatWindowHeader chat={chat} />
 
-        <ScrollArea ref={scrollAreaRef} className="flex-1 overflow-auto px-6 py-4">
+        <ScrollArea
+          ref={scrollAreaRef}
+          className="flex-1 overflow-auto px-6 py-0"
+        >
           <ChatMessageList chatId={chatId} />
         </ScrollArea>
 

@@ -144,6 +144,7 @@ export const messagesRouter = createTRPCRouter({
       z.object({
         chatId: z.string().uuid(),
         content: z.string().min(1),
+        tempId: z.string().uuid(), // Client-generated UUID for deduplication
         metadata: z.record(z.string(), z.unknown()).optional(),
       }),
     )
@@ -187,7 +188,10 @@ export const messagesRouter = createTRPCRouter({
           senderId: currentAgent.id,
           messageType: "text",
           content: formattedContent,
-          metadata: input.metadata,
+          metadata: {
+            ...input.metadata,
+            tempId: input.tempId, // Save client tempId for deduplication
+          },
           status: "sent",
           timestamp: now,
           sentAt: now,
@@ -220,6 +224,7 @@ export const messagesRouter = createTRPCRouter({
           organizationId,
           chatId: input.chatId,
           messageId: newMessage.id,
+          senderId: currentAgent.id, // For socket filtering (optional)
           data: {
             message: newMessage as unknown as Record<string, unknown>,
           },

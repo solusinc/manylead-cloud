@@ -6,6 +6,7 @@ import { cn } from "@manylead/ui";
 
 import { ChatSocketProvider, useChatSocketContext } from "~/components/providers/chat-socket-provider";
 import { useServerSession } from "~/components/providers/session-provider";
+import { useMessageDeduplication } from "~/hooks/use-message-deduplication";
 import { ChatSidebar } from "./sidebar";
 import { ChatWindowEmpty } from "./window";
 
@@ -33,6 +34,7 @@ function ChatLayoutInner({
   const queryClient = useQueryClient();
   const session = useServerSession();
   const socket = useChatSocketContext();
+  const { register, isAnyProcessed } = useMessageDeduplication();
 
   // Conectar ao Socket.io quando o layout montar
   useEffect(() => {
@@ -53,22 +55,28 @@ function ChatLayoutInner({
 
     // Quando um novo chat é criado ou uma nova mensagem chega
     const unsubscribeNewMessage = socket.onMessageNew((event) => {
-      // PROFESSIONAL SOLUTION: Optimistic update for incoming socket messages
-      // Same pattern as chat-input.tsx but with proper TypeScript types
+      // HYBRID APPROACH: Triple deduplication (dedup store + cache + tempId)
+      // REMOVED setTimeout - instant processing with robust deduplication
 
       const messageData = event.message;
+      const serverId = messageData.id as string;
+      const tempId = (messageData.metadata as Record<string, unknown> | undefined)?.tempId as string | undefined;
 
-      // CRITICAL: Add small delay to allow optimistic updates to settle
-      // This prevents race condition where socket arrives before React re-renders
-      setTimeout(() => {
-        // Find all queries for messages.list
-        const queries = queryClient.getQueryCache().findAll({
-          queryKey: [["messages", "list"]],
-          exact: false,
-        });
+      // === LAYER 1: Dedup Store (Primary) ===
+      // Check if serverId OR tempId was already processed
+      if (isAnyProcessed([serverId, tempId])) {
+        console.log("[Dedup] Message already processed:", { serverId, tempId });
+        return;
+      }
 
-        queries.forEach((query) => {
-          const queryState = query.state.data as {
+      // Find all queries for messages.list
+      const queries = queryClient.getQueryCache().findAll({
+        queryKey: [["messages", "list"]],
+        exact: false,
+      });
+
+      queries.forEach((query) => {
+        const queryState = query.state.data as {
           pages: {
             items: {
               message: Record<string, unknown>;
@@ -92,12 +100,25 @@ function ChatLayoutInner({
         // Only update if message belongs to this chat
         if (!queryChatId || messageData.chatId !== queryChatId) return;
 
-        // Check if message already exists (avoid duplicates from own sends)
+        // === LAYER 2: Cache Check (Secondary) ===
+        // Check if message exists in cache (by serverId OR tempId)
         const messageExists = queryState.pages.some((page) =>
-          page.items.some((item) => item.message.id === messageData.id)
+          page.items.some((item) =>
+            item.message.id === serverId ||
+            (tempId && item.message.id === tempId)
+          )
         );
 
-        if (messageExists) return;
+        if (messageExists) {
+          console.log("[Dedup] Message exists in cache:", { serverId, tempId });
+          return;
+        }
+
+        // === PASSED ALL CHECKS: Add message ===
+
+        // Register in dedup store
+        register(serverId);
+        if (tempId) register(tempId);
 
         // Add message to the FIRST page (index 0 - most recent messages)
         const newPages = [...queryState.pages];
@@ -128,13 +149,12 @@ function ChatLayoutInner({
             refetchType: "none",
           });
         }
-        });
+      });
 
-        // Invalidate chats list to update last message preview
-        void queryClient.invalidateQueries({
-          queryKey: [["chats", "list"]],
-        });
-      }, 50); // 50ms delay to allow optimistic updates to settle
+      // Invalidate chats list to update last message preview
+      void queryClient.invalidateQueries({
+        queryKey: [["chats", "list"]],
+      });
     });
 
     const unsubscribeChatCreated = socket.onChatCreated(() => {
@@ -150,7 +170,7 @@ function ChatLayoutInner({
       unsubscribeChatCreated();
       unsubscribeChatUpdated();
     };
-  }, [socket, socket.isConnected, queryClient]);
+  }, [socket, socket.isConnected, queryClient, register, isAnyProcessed]);
 
   return (
     <div className={cn("flex h-full overflow-hidden", className)} {...props}>

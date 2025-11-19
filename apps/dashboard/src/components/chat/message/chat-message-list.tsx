@@ -1,17 +1,28 @@
 "use client";
 
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
+import { Loader2 } from "lucide-react";
+
 import { cn } from "@manylead/ui";
-import { useRef, useEffect, useLayoutEffect, useCallback, useState, createContext, useContext } from "react";
+
+import { useChatSocketContext } from "~/components/providers/chat-socket-provider";
+import { useTRPC } from "~/lib/trpc/react";
 import { ChatMessage } from "./chat-message";
 import { ChatMessageDateDivider } from "./chat-message-date";
-import { useTRPC } from "~/lib/trpc/react";
-import { useChatSocketContext } from "~/components/providers/chat-socket-provider";
-import { Loader2 } from "lucide-react";
 
 // Context to expose refetch function to parent components
 const ChatMessageRefetchContext = createContext<(() => void) | null>(null);
-export const useChatMessageRefetch = () => useContext(ChatMessageRefetchContext);
+export const useChatMessageRefetch = () =>
+  useContext(ChatMessageRefetchContext);
 
 const INITIAL_LIMIT = 10; // TEMPORÁRIO: 10 mensagens iniciais para testar (WhatsApp usa ~50)
 const LOAD_MORE_LIMIT = 2; // TEMPORÁRIO: 2 mensagens por scroll para testar (WhatsApp usa ~30)
@@ -34,22 +45,17 @@ export function ChatMessageList({
   const [isTyping, setIsTyping] = useState(false);
 
   // TanStack Query handles ALL the complexity for us
-  const {
-    data,
-    isLoading,
-    isFetchingNextPage,
-    fetchNextPage,
-    hasNextPage,
-  } = useInfiniteQuery({
-    ...trpc.messages.list.infiniteQueryOptions({
-      chatId,
-      firstPageLimit: INITIAL_LIMIT,
-      limit: LOAD_MORE_LIMIT,
-    }),
-    getNextPageParam: (lastPage) => lastPage.nextCursor,
-    staleTime: Infinity, // NEVER mark as stale - we'll manually refetch first page only
-    gcTime: Infinity, // Keep in cache forever
-  });
+  const { data, isLoading, isFetchingNextPage, fetchNextPage, hasNextPage } =
+    useInfiniteQuery({
+      ...trpc.messages.list.infiniteQueryOptions({
+        chatId,
+        firstPageLimit: INITIAL_LIMIT,
+        limit: LOAD_MORE_LIMIT,
+      }),
+      getNextPageParam: (lastPage) => lastPage.nextCursor,
+      staleTime: Infinity, // NEVER mark as stale - we'll manually refetch first page only
+      gcTime: Infinity, // Keep in cache forever
+    });
 
   // Flatten pages - backend returns ASC, we reverse pages to get chronological order
   const messages = (
@@ -59,7 +65,12 @@ export function ChatMessageList({
     content: item.message.content,
     sender: item.isOwnMessage ? ("agent" as const) : ("contact" as const),
     timestamp: item.message.timestamp,
-    status: item.message.status as "pending" | "sent" | "delivered" | "read" | undefined,
+    status: item.message.status as
+      | "pending"
+      | "sent"
+      | "delivered"
+      | "read"
+      | undefined,
   }));
 
   // Scroll to bottom on initial load
@@ -95,7 +106,10 @@ export function ChatMessageList({
 
     // Find the Radix ScrollArea viewport
     let scrollViewport = sentinelRef.current.parentElement;
-    while (scrollViewport && !scrollViewport.hasAttribute('data-radix-scroll-area-viewport')) {
+    while (
+      scrollViewport &&
+      !scrollViewport.hasAttribute("data-radix-scroll-area-viewport")
+    ) {
       scrollViewport = scrollViewport.parentElement;
     }
 
@@ -115,7 +129,8 @@ export function ChatMessageList({
         if (entry.isIntersecting && !isFetchingNextPage) {
           // CRITICAL: Store scroll height BEFORE fetching
           if (scrollViewportRef.current) {
-            previousScrollHeightRef.current = scrollViewportRef.current.scrollHeight;
+            previousScrollHeightRef.current =
+              scrollViewportRef.current.scrollHeight;
             previousMessageCountRef.current = messages.length;
           }
 
@@ -124,9 +139,9 @@ export function ChatMessageList({
       },
       {
         root: scrollViewport, // Watch within Radix ScrollArea viewport
-        rootMargin: '200px 0px 0px 0px', // Trigger 200px before sentinel is visible (smoother UX)
+        rootMargin: "200px 0px 0px 0px", // Trigger 200px before sentinel is visible (smoother UX)
         threshold: 0, // Fire as soon as any part is visible
-      }
+      },
     );
 
     // Start observing the sentinel
@@ -162,6 +177,37 @@ export function ChatMessageList({
     };
   }, [socket.isConnected, chatId, socket]);
 
+  // Auto-scroll when new messages arrive (only if user is near bottom)
+  const previousMessagesLengthRef = useRef(messages.length);
+  useEffect(() => {
+    const currentLength = messages.length;
+    const previousLength = previousMessagesLengthRef.current;
+
+    // Only scroll if messages were ADDED (not initial load, not loading older messages)
+    if (
+      currentLength > previousLength &&
+      !isInitialLoadRef.current &&
+      !isFetchingNextPage
+    ) {
+      const viewport = scrollViewportRef.current;
+      if (!viewport) return;
+
+      // Check if user is near bottom (within 200px)
+      const distanceFromBottom =
+        viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+      const isNearBottom = distanceFromBottom < 200;
+
+      // Only auto-scroll if user is near bottom (don't interrupt manual scrolling up)
+      if (isNearBottom) {
+        setTimeout(() => {
+          scrollToBottom("smooth");
+        }, 50);
+      }
+    }
+
+    previousMessagesLengthRef.current = currentLength;
+  }, [messages.length, isFetchingNextPage, scrollToBottom]);
+
   // Scroll quando typing indicator aparecer/desaparecer
   useEffect(() => {
     if (isTyping) {
@@ -182,7 +228,8 @@ export function ChatMessageList({
     if (messages.length > previousMessageCountRef.current) {
       const viewport = scrollViewportRef.current;
       const currentScrollHeight = viewport.scrollHeight;
-      const heightDifference = currentScrollHeight - previousScrollHeightRef.current;
+      const heightDifference =
+        currentScrollHeight - previousScrollHeightRef.current;
 
       // Adjust scroll position to maintain visual position
       if (heightDifference > 0) {
@@ -196,18 +243,15 @@ export function ChatMessageList({
   }, [messages.length]);
 
   return (
-    <div
-      className={cn("relative space-y-4", className)}
-      {...props}
-    >
+    <div className={cn("relative space-y-4", className)} {...props}>
       {/* SENTINEL ELEMENT - IntersectionObserver watches this */}
       {hasNextPage && <div ref={sentinelRef} className="h-px" />}
 
       {/* Loading indicator at top - floating, doesn't push content */}
       {isFetchingNextPage && (
-        <div className="absolute left-1/2 top-2 z-10 -translate-x-1/2">
-          <div className="bg-background/80 backdrop-blur-sm rounded-full px-3 py-2 shadow-lg border">
-            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+        <div className="absolute top-2 left-1/2 z-10 -translate-x-1/2">
+          <div className="bg-background/80 rounded-full border px-3 py-2 shadow-lg backdrop-blur-sm">
+            <Loader2 className="text-muted-foreground h-4 w-4 animate-spin" />
           </div>
         </div>
       )}
@@ -217,7 +261,8 @@ export function ChatMessageList({
       <div className="space-y-2">
         {messages.map((message, index) => {
           const prevMessage = messages[index - 1];
-          const showAvatar = !prevMessage || prevMessage.sender !== message.sender;
+          const showAvatar =
+            !prevMessage || prevMessage.sender !== message.sender;
 
           return (
             <ChatMessage
@@ -232,7 +277,7 @@ export function ChatMessageList({
         {isTyping && <ChatMessageTypingIndicator />}
 
         {/* Anchor for scroll-to-bottom */}
-        <div ref={messagesEndRef} className="h-0" />
+        <div ref={messagesEndRef} className="h-4" />
       </div>
     </div>
   );
@@ -244,7 +289,7 @@ export function ChatMessageList({
  */
 function ChatMessageTypingIndicator() {
   return (
-    <div className="mb-2 flex gap-2 justify-start">
+    <div className="mb-2 flex justify-start gap-2">
       <div className="bg-msg-incoming max-w-[65%] rounded-2xl rounded-bl-sm px-4 py-2">
         <div className="flex items-center gap-0.5">
           <span

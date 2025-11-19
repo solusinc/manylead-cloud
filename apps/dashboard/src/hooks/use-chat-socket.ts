@@ -81,8 +81,12 @@ export interface UseChatSocketReturn {
 export function useChatSocket(): UseChatSocketReturn {
   const socketRef = useRef<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
+  const organizationIdRef = useRef<string | null>(null);
 
   const connect = async (organizationId: string) => {
+    // Store organizationId for reconnection
+    organizationIdRef.current = organizationId;
+
     // Se já estiver conectado, não reconectar
     if (socketRef.current?.connected) {
       return;
@@ -93,6 +97,7 @@ export function useChatSocket(): UseChatSocketReturn {
     const token = result.data?.session.token;
 
     if (!token) {
+      console.warn("[Socket] No token available, cannot connect");
       return;
     }
 
@@ -102,26 +107,63 @@ export function useChatSocket(): UseChatSocketReturn {
         token,
       },
       transports: ["websocket", "polling"],
+      // PROFESSIONAL RECONNECTION STRATEGY (WhatsApp/Slack pattern)
       reconnection: true,
-      reconnectionAttempts: 5,
-      reconnectionDelay: 1000,
+      reconnectionAttempts: Infinity, // Never give up (like WhatsApp)
+      reconnectionDelay: 1000,        // Start with 1s
+      reconnectionDelayMax: 5000,     // Max 5s between attempts
+      timeout: 20000,                 // 20s connection timeout
     });
 
     socketRef.current = socket;
 
     // Handlers de conexão
     socket.on("connect", () => {
+      console.log("[Socket] Connected successfully");
       setIsConnected(true);
-      // Entrar na room da organização
-      socket.emit("join:organization", organizationId);
+
+      // CRITICAL: Re-join organization room after reconnect
+      if (organizationIdRef.current) {
+        socket.emit("join:organization", organizationIdRef.current);
+      }
     });
 
-    socket.on("disconnect", () => {
+    socket.on("disconnect", (reason) => {
+      console.log("[Socket] Disconnected:", reason);
+      setIsConnected(false);
+
+      // If disconnected by server, try to reconnect manually
+      if (reason === "io server disconnect") {
+        socket.connect();
+      }
+    });
+
+    socket.on("connect_error", (error) => {
+      console.error("[Socket] Connection error:", error.message);
       setIsConnected(false);
     });
 
-    socket.on("connect_error", () => {
-      setIsConnected(false);
+    socket.on("reconnect_attempt", (attemptNumber) => {
+      console.log(`[Socket] Reconnection attempt #${attemptNumber}`);
+    });
+
+    socket.on("reconnect", (attemptNumber) => {
+      console.log(`[Socket] Reconnected after ${attemptNumber} attempts`);
+      setIsConnected(true);
+
+      // Re-join organization room
+      if (organizationIdRef.current) {
+        socket.emit("join:organization", organizationIdRef.current);
+      }
+    });
+
+    socket.on("reconnect_error", (error: Error) => {
+      console.error("[Socket] Reconnection error:", error.message);
+    });
+
+    socket.on("reconnect_failed", () => {
+      console.error("[Socket] Reconnection failed after all attempts");
+      // This will never happen with Infinity attempts, but kept for safety
     });
   };
 

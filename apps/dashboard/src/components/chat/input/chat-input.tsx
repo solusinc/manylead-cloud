@@ -6,13 +6,14 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Mic } from "lucide-react";
 import TextareaAutosize from "react-textarea-autosize";
 import { toast } from "sonner";
+import { v7 as uuidv7 } from "uuid";
 
 import { cn } from "@manylead/ui";
 import { Button } from "@manylead/ui/button";
 
 import { ChatInputToolbar } from "./chat-input-toolbar";
 import { useTRPC } from "~/lib/trpc/react";
-import { useScrollToBottom } from "~/components/chat/window/chat-window";
+import { useMessageDeduplication } from "~/hooks/use-message-deduplication";
 
 export function ChatInput({
   chatId,
@@ -33,14 +34,16 @@ export function ChatInput({
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-  const scrollToBottom = useScrollToBottom();
+  const { register } = useMessageDeduplication();
 
   // Mutation para enviar mensagem de texto
   const sendMessageMutation = useMutation(
     trpc.messages.sendText.mutationOptions({
-      onSuccess: (newMessage) => {
-        // PROFESSIONAL SOLUTION: Manually update cache - NO refetches at all
-        // This is how WhatsApp/Telegram/Discord do it - zero API calls on send
+      onSuccess: (serverMessage, variables) => {
+        // HYBRID APPROACH: Replace tempId with serverId
+        // tempId is in variables.tempId, serverId is in serverMessage.id
+
+        const tempId = variables.tempId;
 
         const queries = queryClient.getQueryCache().findAll({
           queryKey: [["messages", "list"]],
@@ -63,44 +66,81 @@ export function ChatInput({
 
           if (!queryState?.pages) return;
 
-          // Add message to the FIRST page (index 0 - most recent messages)
-          // Backend returns pages in reverse order, so page[0] has the newest messages
-          const newPages = [...queryState.pages];
-          const firstPage = newPages[0];
+          // REPLACE tempId with serverId in cache
+          const newPages = queryState.pages.map((page) => ({
+            ...page,
+            items: page.items.map((item) =>
+              item.message.id === tempId
+                ? {
+                    ...item,
+                    message: {
+                      ...serverMessage,
+                      _isOptimistic: false,
+                    } as unknown as Record<string, unknown>,
+                  }
+                : item
+            ),
+          }));
 
-          if (firstPage) {
-            newPages[0] = {
-              ...firstPage,
-              items: [
-                ...firstPage.items,
-                {
-                  message: newMessage,
-                  attachment: null,
-                  isOwnMessage: true,
-                },
-              ],
-            };
+          queryClient.setQueryData(query.queryKey, {
+            ...queryState,
+            pages: newPages,
+            pageParams: queryState.pageParams,
+          });
 
-            queryClient.setQueryData(query.queryKey, {
-              ...queryState,
-              pages: newPages,
-              pageParams: queryState.pageParams,
-            });
-
-            // Force re-render by invalidating this specific query (but it won't refetch because staleTime: Infinity)
-            void queryClient.invalidateQueries({
-              queryKey: query.queryKey,
-              refetchType: 'none', // Don't refetch, just mark as stale to trigger re-render
-            });
-          }
+          // Force re-render
+          void queryClient.invalidateQueries({
+            queryKey: query.queryKey,
+            refetchType: "none",
+          });
         });
 
-        // Only invalidate chats list (lightweight)
+        // Register serverId in dedup store
+        register(serverMessage.id);
+
+        // Invalidate chats list
         void queryClient.invalidateQueries({
           queryKey: [["chats", "list"]],
         });
       },
-      onError: (error) => {
+      onError: (error, variables) => {
+        // REMOVE optimistic message on error
+        const tempId = variables.tempId;
+
+        const queries = queryClient.getQueryCache().findAll({
+          queryKey: [["messages", "list"]],
+          exact: false,
+        });
+
+        queries.forEach((query) => {
+          const queryState = query.state.data as {
+            pages: {
+              items: {
+                message: Record<string, unknown>;
+                attachment: Record<string, unknown> | null;
+                isOwnMessage: boolean;
+              }[];
+              nextCursor: string | undefined;
+              hasMore: boolean;
+            }[];
+            pageParams: unknown[];
+          } | undefined;
+
+          if (!queryState?.pages) return;
+
+          // Remove optimistic message
+          const newPages = queryState.pages.map((page) => ({
+            ...page,
+            items: page.items.filter((item) => item.message.id !== tempId),
+          }));
+
+          queryClient.setQueryData(query.queryKey, {
+            ...queryState,
+            pages: newPages,
+            pageParams: queryState.pageParams,
+          });
+        });
+
         toast.error("Erro ao enviar mensagem", {
           description: error.message,
         });
@@ -119,23 +159,88 @@ export function ChatInput({
       setIsTyping(false);
     }
 
+    // === TRUE OPTIMISTIC UPDATE ===
+    // 1. Generate tempId BEFORE sending (UUIDv7 - time-sortable)
+    const tempId = uuidv7();
+    const tempMessage = {
+      id: tempId,
+      chatId,
+      content: content.trim(),
+      timestamp: new Date(),
+      status: "pending" as const,
+      sender: "agent" as const,
+      senderId: null as string | null,
+      messageType: "text" as const,
+      isOwnMessage: true,
+      _isOptimistic: true,
+    };
+
+    // 2. Add to cache BEFORE mutateAsync (instant UI update)
+    const queries = queryClient.getQueryCache().findAll({
+      queryKey: [["messages", "list"]],
+      exact: false,
+    });
+
+    queries.forEach((query) => {
+      const queryState = query.state.data as {
+        pages: {
+          items: {
+            message: Record<string, unknown>;
+            attachment: Record<string, unknown> | null;
+            isOwnMessage: boolean;
+          }[];
+          nextCursor: string | undefined;
+          hasMore: boolean;
+        }[];
+        pageParams: unknown[];
+      } | undefined;
+
+      if (!queryState?.pages) return;
+
+      const newPages = [...queryState.pages];
+      const firstPage = newPages[0];
+
+      if (firstPage) {
+        newPages[0] = {
+          ...firstPage,
+          items: [
+            ...firstPage.items,
+            {
+              message: tempMessage as unknown as Record<string, unknown>,
+              attachment: null,
+              isOwnMessage: true,
+            },
+          ],
+        };
+
+        queryClient.setQueryData(query.queryKey, {
+          ...queryState,
+          pages: newPages,
+          pageParams: queryState.pageParams,
+        });
+      }
+    });
+
+    // 3. Register tempId in dedup store
+    register(tempId);
+
+    // Clear input BEFORE sending (instant feedback)
+    const messageContent = content.trim();
+    setContent("");
+    setRows(1);
+    textareaRef.current?.focus();
+
     try {
+      // 4. Send to server (with tempId)
       await sendMessageMutation.mutateAsync({
         chatId,
-        content: content.trim(),
+        content: messageContent,
+        tempId,
       });
 
-      // Clear input
-      setContent("");
-      setRows(1); // Reset para 1 linha
-      textareaRef.current?.focus();
-
-      // Scroll to bottom after sending
-      setTimeout(() => {
-        scrollToBottom?.();
-      }, 100);
+      // onSuccess will replace tempId → serverId in cache
     } catch (error) {
-      // Error already handled by onError
+      // onError will remove optimistic message
       console.error("Failed to send message:", error);
     } finally {
       setIsSending(false);
