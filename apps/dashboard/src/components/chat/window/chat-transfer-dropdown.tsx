@@ -41,7 +41,7 @@ export function ChatTransferDropdown({
     trpc.chats.transfer.mutationOptions({
       onSuccess: () => {
         // Invalidar queries para atualizar a lista
-        queryClient.invalidateQueries({ queryKey: [["chats", "list"]] });
+        void queryClient.invalidateQueries({ queryKey: [["chats", "list"]] });
         toast.success("Chat transferido com sucesso!");
         setOpen(false);
       },
@@ -53,7 +53,7 @@ export function ChatTransferDropdown({
 
   // Filtrar usuários baseado na busca
   const filteredAgents = agents?.filter((agent) =>
-    agent.user?.name?.toLowerCase().includes(searchQuery.toLowerCase())
+    agent.user?.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   // Filtrar departamentos baseado na busca

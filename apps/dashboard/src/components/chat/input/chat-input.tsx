@@ -2,7 +2,7 @@
 
 import type { KeyboardEvent } from "react";
 import { useEffect, useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Mic, MessageSquare, UserCheck } from "lucide-react";
 import TextareaAutosize from "react-textarea-autosize";
 import { toast } from "sonner";
@@ -19,6 +19,7 @@ import { useServerSession } from "~/components/providers/session-provider";
 export function ChatInput({
   chatId,
   chatCreatedAt,
+  chatStatus,
   assignedTo,
   onTypingStart,
   onTypingStop,
@@ -27,6 +28,7 @@ export function ChatInput({
 }: {
   chatId: string;
   chatCreatedAt: Date;
+  chatStatus: "open" | "closed";
   assignedTo: string | null;
   onTypingStart?: () => void;
   onTypingStop?: () => void;
@@ -52,6 +54,17 @@ export function ChatInput({
   const { data: assignedAgent } = useQuery({
     ...trpc.agents.getById.queryOptions({ id: assignedTo ?? "" }),
     enabled: !!assignedTo,
+  });
+
+  // Buscar mensagens para pegar info de fechamento (se chat estiver fechado)
+  const { data: messagesData } = useInfiniteQuery({
+    ...trpc.messages.list.infiniteQueryOptions({
+      chatId,
+      firstPageLimit: 50,
+      limit: 50,
+    }),
+    getNextPageParam: (lastPage) => lastPage.nextCursor,
+    enabled: chatStatus === "closed",
   });
 
   // Mutation para atribuir chat ao agent atual
@@ -388,6 +401,42 @@ export function ChatInput({
           >
             <UserCheck className="mr-2 h-4 w-4" />
             {assignMutation.isPending ? "Atribuindo..." : "Atender"}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Se o chat está fechado, mostrar "Atendimento finalizado por..."
+  if (chatStatus === "closed") {
+    // Buscar mensagem de sistema de fechamento
+    const closedMessage = messagesData?.pages
+      .flatMap((page) => page.items)
+      .find(
+        (item) =>
+          item.message.sender === "system" &&
+          (item.message.metadata as Record<string, unknown> | undefined)?.systemEventType === "session_closed"
+      );
+
+    const closedMetadata = closedMessage?.message.metadata as Record<string, string> | undefined;
+    const closedBy = closedMetadata?.agentName ?? "Agente";
+    const closedAt = closedMetadata?.closedAt ?? new Date().toISOString();
+    const closedDate = new Date(closedAt);
+    const formattedClosedAt = `${closedDate.toLocaleDateString("pt-BR")} às ${closedDate.toLocaleTimeString("pt-BR")}`;
+
+    return (
+      <div className={cn("flex w-full flex-col items-center gap-3 rounded-lg border bg-muted/30 py-4", className)} {...props}>
+        <p className="text-sm text-muted-foreground">
+          Atendimento finalizado por <span className="font-bold">{closedBy}</span> {formattedClosedAt}
+        </p>
+        <div className="flex gap-2">
+          <Button variant="outline" size="default">
+            <MessageSquare className="mr-2 h-4 w-4" />
+            Comentário
+          </Button>
+          <Button variant="default" size="default">
+            <UserCheck className="mr-2 h-4 w-4" />
+            Novo atendimento
           </Button>
         </div>
       </div>

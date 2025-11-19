@@ -30,7 +30,8 @@ import { ContactDetailsSheet } from "../contact";
 import { ChatTransferDropdown } from "./chat-transfer-dropdown";
 import { useServerSession } from "~/components/providers/session-provider";
 import { useTRPC } from "~/lib/trpc/react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 interface ChatWindowHeaderProps {
   chat: {
@@ -173,10 +174,25 @@ export function ChatWindowHeaderActions({
 }) {
   const session = useServerSession();
   const trpc = useTRPC();
+  const queryClient = useQueryClient();
 
   // Buscar agent atual para verificar se está assigned
   const { data: currentAgent } = useQuery(
     trpc.agents.getByUserId.queryOptions({ userId: session.user.id })
+  );
+
+  // Mutation para fechar chat
+  const closeMutation = useMutation(
+    trpc.chats.close.mutationOptions({
+      onSuccess: () => {
+        void queryClient.invalidateQueries({ queryKey: [["chats"]] });
+        void queryClient.invalidateQueries({ queryKey: [["messages"]] });
+        toast.success("Atendimento finalizado com sucesso!");
+      },
+      onError: (error) => {
+        toast.error(error.message || "Erro ao finalizar atendimento");
+      },
+    }),
   );
 
   // APENAS quem está assigned pode transferir, adicionar tags ou finalizar
@@ -186,6 +202,13 @@ export function ChatWindowHeaderActions({
   if (!isAssigned) {
     return null;
   }
+
+  const handleCloseChat = () => {
+    closeMutation.mutate({
+      id: chatId,
+      createdAt: chatCreatedAt,
+    });
+  };
 
   return (
     <div className={cn("flex items-center gap-1", className)}>
@@ -212,6 +235,8 @@ export function ChatWindowHeaderActions({
             variant="ghost"
             size="icon"
             aria-label="Finalizar"
+            onClick={handleCloseChat}
+            disabled={closeMutation.isPending || chat.status === "closed"}
           >
             <CheckCircle className="h-4 w-4" />
           </Button>

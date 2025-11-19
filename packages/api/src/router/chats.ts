@@ -4,9 +4,11 @@ import { z } from "zod";
 import {
   agent,
   and,
+  asc,
   chat,
   contact,
   count,
+  department,
   desc,
   eq,
   inArray,
@@ -16,7 +18,7 @@ import {
   sql,
   user,
 } from "@manylead/db";
-import { publishChatEvent, formatTime } from "@manylead/shared";
+import { publishChatEvent, formatTime, formatDateTime, calculateDuration } from "@manylead/shared";
 
 import { env } from "../env";
 import {
@@ -1028,9 +1030,10 @@ export const chatsRouter = createTRPCRouter({
     }),
 
   /**
-   * Fechar chat
+   * Fechar chat e gerar mensagem de sistema com protocolo
+   * Permissões: Owner, Admin, ou Agent assigned ao chat
    */
-  close: ownerProcedure
+  close: memberProcedure
     .input(
       z.object({
         id: z.string().uuid(),
@@ -1038,11 +1041,87 @@ export const chatsRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      // 1. Buscar chat atual
+      const [currentChat] = await ctx.tenantDb
+        .select()
+        .from(chat)
+        .where(and(eq(chat.id, input.id), eq(chat.createdAt, input.createdAt)))
+        .limit(1);
+
+      if (!currentChat) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Chat não encontrado",
+        });
+      }
+
+      // 2. Buscar agent do usuário logado
+      const [currentAgent] = await ctx.tenantDb
+        .select()
+        .from(agent)
+        .where(eq(agent.userId, ctx.session.user.id))
+        .limit(1);
+
+      if (!currentAgent) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Agent não encontrado",
+        });
+      }
+
+      // 3. Verificar permissões: owner, admin, ou assigned
+      const isOwner = currentAgent.role === "owner";
+      const isAdmin = currentAgent.role === "admin";
+      const isAssigned = currentChat.assignedTo === currentAgent.id;
+
+      if (!isOwner && !isAdmin && !isAssigned) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Apenas o agent responsável pelo atendimento pode finalizar este chat",
+        });
+      }
+
+      // 4. Buscar informações do agent para a mensagem de sistema
+      const [agentUser] = await ctx.db
+        .select()
+        .from(user)
+        .where(eq(user.id, currentAgent.userId))
+        .limit(1);
+
+      const agentName = agentUser?.name ?? "Agente";
+
+      // 5. Buscar departamento (se houver)
+      let departmentName = "";
+      if (currentChat.departmentId) {
+        const [deptData] = await ctx.tenantDb
+          .select()
+          .from(department)
+          .where(eq(department.id, currentChat.departmentId))
+          .limit(1);
+
+        departmentName = deptData?.name ?? "";
+      }
+
+      // 6. Buscar primeira mensagem enviada (não de sistema) para pegar "Atendido em"
+      const [firstMessage] = await ctx.tenantDb
+        .select()
+        .from(message)
+        .where(
+          and(
+            eq(message.chatId, input.id),
+            sql`${message.sender} != 'system'`, // Ignorar mensagens de sistema
+          ),
+        )
+        .orderBy(asc(message.timestamp))
+        .limit(1);
+
+      // 7. Fechar o chat
+      const closedAt = new Date();
       const [updated] = await ctx.tenantDb
         .update(chat)
         .set({
           status: "closed",
-          updatedAt: new Date(),
+          updatedAt: closedAt,
         })
         .where(and(eq(chat.id, input.id), eq(chat.createdAt, input.createdAt)))
         .returning();
@@ -1052,6 +1131,57 @@ export const chatsRouter = createTRPCRouter({
           code: "NOT_FOUND",
           message: "Chat não encontrado",
         });
+      }
+
+      // 8. Calcular duração (entre primeira mensagem e finalizado)
+      const attendedAt = firstMessage?.timestamp ?? currentChat.createdAt;
+      const duration = calculateDuration(new Date(attendedAt), closedAt);
+
+      // 9. Gerar mensagem de sistema formatada
+      const systemMessageContent = `Protocolo: ${currentChat.id}
+Usuário: ${agentName}
+Departamento: ${departmentName}
+Iniciado em: ${formatDateTime(currentChat.createdAt)}
+Atendido em: ${formatDateTime(new Date(attendedAt))}
+Finalizado em: ${formatDateTime(closedAt)}
+Duração: ${duration}`;
+
+      await ctx.tenantDb.insert(message).values({
+        chatId: updated.id,
+        messageSource: updated.messageSource,
+        sender: "system",
+        senderId: null,
+        messageType: "system",
+        content: systemMessageContent,
+        status: "sent",
+        timestamp: closedAt,
+        metadata: {
+          systemEventType: "session_closed",
+          agentId: currentAgent.id,
+          agentName,
+          protocol: currentChat.id,
+          departmentName,
+          startedAt: currentChat.createdAt.toISOString(),
+          attendedAt: new Date(attendedAt).toISOString(),
+          closedAt: closedAt.toISOString(),
+          duration,
+        },
+      });
+
+      // 10. Publicar evento de atualização para todos da organização
+      const organizationId = ctx.session.session.activeOrganizationId;
+      if (organizationId) {
+        await publishChatEvent(
+          {
+            type: "chat:updated",
+            organizationId,
+            chatId: updated.id,
+            data: {
+              chat: updated as unknown as Record<string, unknown>,
+            },
+          },
+          env.REDIS_URL,
+        );
       }
 
       return updated;

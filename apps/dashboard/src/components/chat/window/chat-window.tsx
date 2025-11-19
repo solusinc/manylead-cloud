@@ -142,6 +142,7 @@ export function ChatWindow({
           <ChatInput
             chatId={chatId}
             chatCreatedAt={chatItem.chat.createdAt}
+            chatStatus={chat.status}
             assignedTo={chat.assignedTo}
             onTypingStart={() => socket.emitTypingStart(chatId)}
             onTypingStop={() => socket.emitTypingStop(chatId)}

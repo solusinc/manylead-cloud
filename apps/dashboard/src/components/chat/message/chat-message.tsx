@@ -233,6 +233,7 @@ export function ChatMessageActions({
 /**
  * Mensagem de sistema (ex: "Sessão criada", "Transferida de X para Y")
  * Renderizada como badge centralizado na timeline
+ * Suporta multi-linha para mensagens de fechamento com layout em 2 colunas (lg/md)
  */
 export function ChatMessageSystem({
   message,
@@ -241,6 +242,81 @@ export function ChatMessageSystem({
   message: Message;
   className?: string;
 }) {
+  // Detectar se é mensagem de fechamento (tem quebras de linha)
+  const isClosedMessage = message.content.includes("\n");
+
+  // Se for mensagem de fechamento, parsear os campos
+  if (isClosedMessage) {
+    const lines = message.content.split("\n");
+    const fields = lines.reduce((acc, line) => {
+      const [key, ...valueParts] = line.split(": ");
+      if (key && valueParts.length > 0) {
+        acc[key.trim()] = valueParts.join(": ").trim();
+      }
+      return acc;
+    }, {} as Record<string, string>);
+
+    return (
+      <div className={cn("mb-4 flex justify-center", className)}>
+        <div className="rounded-lg bg-white dark:bg-muted/50 px-4 py-3 text-sm shadow-sm max-w-2xl w-full">
+          {/* Layout em 2 colunas em md/lg */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
+            {/* Coluna 1 */}
+            <div className="space-y-2">
+              {fields.Protocolo && (
+                <div>
+                  <span className="text-muted-foreground">Protocolo:</span>{" "}
+                  <span className="font-semibold break-all">{fields.Protocolo}</span>
+                </div>
+              )}
+              {fields.Usuário && (
+                <div>
+                  <span className="text-muted-foreground">Usuário:</span>{" "}
+                  <span className="font-semibold">{fields.Usuário}</span>
+                </div>
+              )}
+              {fields.Departamento !== undefined && (
+                <div>
+                  <span className="text-muted-foreground">Departamento:</span>{" "}
+                  <span className="font-semibold">{fields.Departamento || "-"}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Coluna 2 */}
+            <div className="space-y-2">
+              {fields["Iniciado em"] && (
+                <div>
+                  <span className="text-muted-foreground">Iniciado em:</span>{" "}
+                  <span className="font-semibold">{fields["Iniciado em"]}</span>
+                </div>
+              )}
+              {fields["Atendido em"] && (
+                <div>
+                  <span className="text-muted-foreground">Atendido em:</span>{" "}
+                  <span className="font-semibold">{fields["Atendido em"]}</span>
+                </div>
+              )}
+              {fields["Finalizado em"] && (
+                <div>
+                  <span className="text-muted-foreground">Finalizado em:</span>{" "}
+                  <span className="font-semibold">{fields["Finalizado em"]}</span>
+                </div>
+              )}
+              {fields.Duração && (
+                <div>
+                  <span className="text-muted-foreground">Duração:</span>{" "}
+                  <span className="font-semibold">{fields.Duração}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Mensagens simples (Sessão criada, Transferida, etc.)
   return (
     <div className={cn("mb-4 flex justify-center", className)}>
       <div className="flex items-center gap-2 rounded-lg bg-white dark:bg-muted/50 px-3 py-1.5 text-sm font-semibold shadow-sm">
