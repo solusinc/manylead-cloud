@@ -28,10 +28,12 @@ import {
 } from "@manylead/ui/tooltip";
 
 import { ContactDetailsSheet } from "../contact";
+import { ChatTransferDropdown } from "./chat-transfer-dropdown";
 
 interface ChatWindowHeaderProps {
   chat: {
     id: string;
+    createdAt: Date;
     contact: {
       name: string;
       phoneNumber: string;
@@ -65,7 +67,11 @@ export function ChatWindowHeader({
           source={chat.source}
           onClick={() => setDetailsOpen(true)}
         />
-        <ChatWindowHeaderActions chat={chat} />
+        <ChatWindowHeaderActions
+          chat={chat}
+          chatId={chat.id}
+          chatCreatedAt={chat.createdAt}
+        />
       </div>
 
       <ContactDetailsSheet
@@ -149,6 +155,8 @@ export function ChatWindowHeaderInfo({
 }
 
 export function ChatWindowHeaderActions({
+  chatId,
+  chatCreatedAt,
   className,
 }: {
   chat: {
@@ -156,24 +164,13 @@ export function ChatWindowHeaderActions({
     status: "open" | "closed";
     assignedTo: string | null;
   };
+  chatId: string;
+  chatCreatedAt: Date;
   className?: string;
 }) {
   return (
     <div className={cn("flex items-center gap-1", className)}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Transferir"
-          >
-            <ArrowRightLeft className="h-4 w-4" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>Transferir</p>
-        </TooltipContent>
-      </Tooltip>
+      <ChatTransferDropdown chatId={chatId} chatCreatedAt={chatCreatedAt} />
 
       <Tooltip>
         <TooltipTrigger asChild>

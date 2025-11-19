@@ -52,6 +52,7 @@ export function ChatWindow({
 
   const chat = {
     id: chatItem.chat.id,
+    createdAt: chatItem.chat.createdAt,
     contact: {
       name: chatItem.contact?.name ?? "Sem nome",
       phoneNumber: chatItem.contact?.phoneNumber ?? "",
@@ -99,6 +100,9 @@ export function ChatWindow({
         <div className="mb-2 flex min-h-14 items-center px-4">
           <ChatInput
             chatId={chatId}
+            chatCreatedAt={chatItem.chat.createdAt}
+            chatStatus={chat.status}
+            assignedTo={chat.assignedTo}
             onTypingStart={() => socket.emitTypingStart(chatId)}
             onTypingStop={() => socket.emitTypingStop(chatId)}
           />

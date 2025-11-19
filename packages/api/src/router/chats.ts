@@ -10,13 +10,20 @@ import {
   desc,
   eq,
   inArray,
+  isNull,
+  or,
   sql,
   user,
 } from "@manylead/db";
 import { publishChatEvent } from "@manylead/shared";
 
-import { createTRPCRouter, memberProcedure, ownerProcedure, protectedProcedure } from "../trpc";
 import { env } from "../env";
+import {
+  createTRPCRouter,
+  memberProcedure,
+  ownerProcedure,
+  protectedProcedure,
+} from "../trpc";
 
 /**
  * Chats Router
@@ -58,10 +65,35 @@ export const chatsRouter = createTRPCRouter({
       // 2. Chat sem mensagens: só aparece para quem CRIOU (initiatorAgentId = current agent)
       if (currentAgent) {
         conditions.push(
-          sql`(${chat.totalMessages} > 0 OR ${chat.initiatorAgentId} = ${currentAgent.id})`
+          sql`(${chat.totalMessages} > 0 OR ${chat.initiatorAgentId} = ${currentAgent.id})`,
         );
       } else {
         conditions.push(sql`${chat.totalMessages} > 0`);
+      }
+
+      // Filtro de departamento baseado em permissões do agent
+      if (currentAgent?.permissions.departments) {
+        const deptPermissions = currentAgent.permissions.departments;
+
+        // Se for "specific", aplica 3 regras:
+        // 1. Chats do(s) departamento(s) permitido(s)
+        // 2. OU chats atribuídos a mim (mesmo que de outro departamento)
+        // 3. OU chats sem departamento (ainda não atribuídos)
+        if (
+          deptPermissions.type === "specific" &&
+          deptPermissions.ids &&
+          deptPermissions.ids.length > 0
+        ) {
+          const departmentFilter = or(
+            inArray(chat.departmentId, deptPermissions.ids),
+            eq(chat.assignedTo, currentAgent.id),
+            isNull(chat.departmentId),
+          );
+          if (departmentFilter) {
+            conditions.push(departmentFilter);
+          }
+        }
+        // Se for "all", não adiciona filtro (vê todos)
       }
 
       if (status) {
@@ -115,7 +147,7 @@ export const chatsRouter = createTRPCRouter({
               }
               return null;
             })
-            .filter((id): id is string => id !== null)
+            .filter((id): id is string => id !== null),
         ),
       ];
 
@@ -644,10 +676,22 @@ export const chatsRouter = createTRPCRouter({
         });
       }
 
+      // Determinar departmentId do chat baseado nas permissões do agent
+      // Se agent tem permissões específicas de departamento, usa o primeiro da lista
+      let chatDepartmentId: string | null = null;
+      if (
+        agentExists.permissions.departments.type === "specific" &&
+        agentExists.permissions.departments.ids &&
+        agentExists.permissions.departments.ids.length > 0
+      ) {
+        chatDepartmentId = agentExists.permissions.departments.ids[0] ?? null;
+      }
+
       const [updated] = await ctx.tenantDb
         .update(chat)
         .set({
           assignedTo: input.agentId,
+          departmentId: chatDepartmentId,
           status: "open",
           updatedAt: new Date(),
         })
@@ -662,6 +706,105 @@ export const chatsRouter = createTRPCRouter({
       }
 
       return updated;
+    }),
+
+  /**
+   * Transferir chat para outro agent ou departamento
+   * Se transferir para agent: atribui ao agent e seta departmentId baseado nas permissões
+   * Se transferir para departamento: seta departmentId e remove assignedTo
+   */
+  transfer: ownerProcedure
+    .input(
+      z
+        .object({
+          id: z.string().uuid(),
+          createdAt: z.date(),
+          targetAgentId: z.string().uuid().optional(),
+          targetDepartmentId: z.string().uuid().optional(),
+        })
+        .refine((data) => data.targetAgentId ?? data.targetDepartmentId, {
+          message: "Deve especificar targetAgentId ou targetDepartmentId",
+        }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Caso 1: Transferir para um agent específico
+      if (input.targetAgentId) {
+        // Verificar se agent existe
+        const [agentExists] = await ctx.tenantDb
+          .select()
+          .from(agent)
+          .where(eq(agent.id, input.targetAgentId))
+          .limit(1);
+
+        if (!agentExists) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Agent não encontrado",
+          });
+        }
+
+        // Determinar departmentId baseado nas permissões do agent
+        let chatDepartmentId: string | null = null;
+        if (
+          agentExists.permissions.departments.type === "specific" &&
+          agentExists.permissions.departments.ids &&
+          agentExists.permissions.departments.ids.length > 0
+        ) {
+          chatDepartmentId = agentExists.permissions.departments.ids[0] ?? null;
+        }
+
+        const [updated] = await ctx.tenantDb
+          .update(chat)
+          .set({
+            assignedTo: input.targetAgentId,
+            departmentId: chatDepartmentId,
+            status: "open",
+            updatedAt: new Date(),
+          })
+          .where(
+            and(eq(chat.id, input.id), eq(chat.createdAt, input.createdAt)),
+          )
+          .returning();
+
+        if (!updated) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Chat não encontrado",
+          });
+        }
+
+        return updated;
+      }
+
+      // Caso 2: Transferir para um departamento (sem agent específico)
+      if (input.targetDepartmentId) {
+        const [updated] = await ctx.tenantDb
+          .update(chat)
+          .set({
+            assignedTo: null,
+            departmentId: input.targetDepartmentId,
+            status: "pending",
+            updatedAt: new Date(),
+          })
+          .where(
+            and(eq(chat.id, input.id), eq(chat.createdAt, input.createdAt)),
+          )
+          .returning();
+
+        if (!updated) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Chat não encontrado",
+          });
+        }
+
+        return updated;
+      }
+
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Deve especificar targetAgentId ou targetDepartmentId",
+      });
     }),
 
   /**

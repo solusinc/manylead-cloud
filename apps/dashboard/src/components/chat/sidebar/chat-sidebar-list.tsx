@@ -8,23 +8,51 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { ChatSidebarItem } from "./chat-sidebar-item";
 import { useTRPC } from "~/lib/trpc/react";
 import { useChatSocketContext } from "~/components/providers/chat-socket-provider";
+import { useServerSession } from "~/components/providers/session-provider";
+
+type FilterType = "all" | "pending" | "open" | "mine";
 
 export function ChatSidebarList({
+  activeFilter,
   className,
   ...props
-}: React.ComponentProps<"div">) {
+}: {
+  activeFilter?: FilterType;
+} & React.ComponentProps<"div">) {
   const parentRef = useRef<HTMLDivElement>(null);
   const params = useParams();
   const activeChatId = params.chatId as string | undefined;
   const trpc = useTRPC();
   const socket = useChatSocketContext();
+  const session = useServerSession();
 
   // Estado para rastrear quem está digitando (chatId -> true/false)
   const [typingChats, setTypingChats] = useState<Set<string>>(new Set());
 
-  // Buscar chats da API
+  // Buscar agent atual para obter o ID quando o filtro for "mine"
+  const { data: currentAgent } = useQuery(
+    trpc.agents.getByUserId.queryOptions({ userId: session.user.id })
+  );
+
+  // Determinar os parâmetros do filtro baseado no activeFilter
+  const filterParams = (() => {
+    if (activeFilter === "pending") {
+      return { status: "pending" as const };
+    }
+    if (activeFilter === "open") {
+      return { status: "open" as const };
+    }
+    if (activeFilter === "mine" && currentAgent?.id) {
+      return { assignedTo: currentAgent.id };
+    }
+    // "all" ou default: sem filtros específicos
+    return {};
+  })();
+
+  // Buscar chats da API com filtros
   const { data: chatsData, isLoading } = useQuery(
     trpc.chats.list.queryOptions({
+      ...filterParams,
       limit: 100,
       offset: 0,
     })

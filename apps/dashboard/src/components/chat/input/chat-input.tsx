@@ -2,8 +2,8 @@
 
 import type { KeyboardEvent } from "react";
 import { useEffect, useRef, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Mic } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Mic, MessageSquare, UserCheck } from "lucide-react";
 import TextareaAutosize from "react-textarea-autosize";
 import { toast } from "sonner";
 import { v7 as uuidv7 } from "uuid";
@@ -18,12 +18,18 @@ import { useServerSession } from "~/components/providers/session-provider";
 
 export function ChatInput({
   chatId,
+  chatCreatedAt,
+  chatStatus,
+  assignedTo,
   onTypingStart,
   onTypingStop,
   className,
   ...props
 }: {
   chatId: string;
+  chatCreatedAt: Date;
+  chatStatus: "open" | "closed";
+  assignedTo: string | null;
   onTypingStart?: () => void;
   onTypingStop?: () => void;
 } & React.ComponentProps<"div">) {
@@ -38,6 +44,37 @@ export function ChatInput({
   const queryClient = useQueryClient();
   const { register } = useMessageDeduplication();
   const session = useServerSession();
+
+  // Buscar agent atual para pegar ID ao atribuir
+  const { data: currentAgent } = useQuery(
+    trpc.agents.getByUserId.queryOptions({ userId: session.user.id })
+  );
+
+  // Mutation para atribuir chat ao agent atual
+  const assignMutation = useMutation(
+    trpc.chats.assign.mutationOptions({
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: [["chats", "list"]] });
+        toast.success("Chat atribuído com sucesso!");
+      },
+      onError: (error) => {
+        toast.error(error.message || "Erro ao atribuir chat");
+      },
+    })
+  );
+
+  const handleAtender = () => {
+    if (!currentAgent?.id) {
+      toast.error("Erro ao identificar agent");
+      return;
+    }
+
+    assignMutation.mutate({
+      id: chatId,
+      createdAt: chatCreatedAt,
+      agentId: currentAgent.id,
+    });
+  };
 
   // PROFESSIONAL: Auto-focus after sending (runs after all React updates)
   useEffect(() => {
@@ -328,6 +365,30 @@ export function ChatInput({
   // Determina se deve usar rounded-full ou rounded-3xl (WhatsApp style)
   // Só muda após 2 linhas (quando vai para a 3ª linha)
   const isMultiLine = rows > 2;
+
+  // Se não está atribuído, mostrar UI de "Aguardando atendimento"
+  if (!assignedTo) {
+    return (
+      <div className={cn("flex w-full flex-col items-center gap-3 rounded-lg border bg-muted/30 py-4", className)} {...props}>
+        <p className="text-sm text-muted-foreground">Aguardando atendimento</p>
+        <div className="flex gap-2">
+          <Button variant="outline" size="default">
+            <MessageSquare className="mr-2 h-4 w-4" />
+            Comentário
+          </Button>
+          <Button
+            variant="default"
+            size="default"
+            onClick={handleAtender}
+            disabled={assignMutation.isPending}
+          >
+            <UserCheck className="mr-2 h-4 w-4" />
+            {assignMutation.isPending ? "Atribuindo..." : "Atender"}
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={cn("flex w-full items-end", className)} {...props}>
