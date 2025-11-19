@@ -41,10 +41,18 @@ export const chat = pgTable(
     contactId: uuid("contact_id")
       .notNull()
       .references(() => contact.id, { onDelete: "cascade" }),
+    // Para chats WhatsApp: o contato externo
+    // Para chats internos: o contact que representa o TARGET (destinatário)
 
     // Tipo de mensagem
     messageSource: varchar("message_source", { length: 20 }).notNull(),
     // "whatsapp" | "internal"
+
+    // Participante iniciador de chats internos
+    initiatorAgentId: uuid("initiator_agent_id").references(() => agent.id, {
+      onDelete: "set null",
+    }),
+    // Agent que CRIOU o chat interno (NULL para chats WhatsApp)
 
     // Atribuição
     assignedTo: uuid("assigned_to").references(() => agent.id, {
@@ -78,10 +86,6 @@ export const chat = pgTable(
 
     snoozedUntil: timestamp("snoozed_until"),
     // Quando status=snoozed, data/hora para reativar automaticamente
-
-    // Instance code (para chats internos)
-    initiatorInstanceCode: varchar("initiator_instance_code", { length: 50 }),
-    // Código do agent que iniciou o chat interno
 
     // Timestamps
     createdAt: timestamp("created_at").notNull().defaultNow(),

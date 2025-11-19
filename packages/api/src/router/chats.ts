@@ -9,6 +9,7 @@ import {
   count,
   desc,
   eq,
+  inArray,
   sql,
   user,
 } from "@manylead/db";
@@ -54,10 +55,10 @@ export const chatsRouter = createTRPCRouter({
 
       // Lógica de visibilidade:
       // 1. Chat com mensagens (totalMessages > 0): aparece para todos os participantes
-      // 2. Chat sem mensagens: só aparece para quem CRIOU (initiatorInstanceCode = current agent)
+      // 2. Chat sem mensagens: só aparece para quem CRIOU (initiatorAgentId = current agent)
       if (currentAgent) {
         conditions.push(
-          sql`(${chat.totalMessages} > 0 OR ${chat.initiatorInstanceCode} = ${currentAgent.instanceCode})`
+          sql`(${chat.totalMessages} > 0 OR ${chat.initiatorAgentId} = ${currentAgent.id})`
         );
       } else {
         conditions.push(sql`${chat.totalMessages} > 0`);
@@ -99,8 +100,92 @@ export const chatsRouter = createTRPCRouter({
         ctx.tenantDb.select({ count: count() }).from(chat).where(where),
       ]);
 
+      // BATCH OPTIMIZATION: Resolver "outro participante" para chats internos
+      // Coletar IDs únicos de initiators que precisam ser buscados
+      const initiatorAgentIds = [
+        ...new Set(
+          items
+            .map((i) => {
+              if (
+                i.chat.messageSource === "internal" &&
+                i.chat.initiatorAgentId &&
+                i.chat.initiatorAgentId !== currentAgent?.id
+              ) {
+                return i.chat.initiatorAgentId;
+              }
+              return null;
+            })
+            .filter((id): id is string => id !== null)
+        ),
+      ];
+
+      // Se não tem nenhum para resolver, retorna direto
+      if (initiatorAgentIds.length === 0) {
+        return { items, total: totalResult[0]?.count ?? 0, limit, offset };
+      }
+
+      // Buscar TODOS initiator agents (1 query ao invés de N)
+      const initiatorAgents = await ctx.tenantDb
+        .select()
+        .from(agent)
+        .where(inArray(agent.id, initiatorAgentIds));
+
+      // Buscar TODOS initiator users (1 query no catalog)
+      const initiatorUserIds = initiatorAgents.map((a) => a.userId);
+      const initiatorUsers = await ctx.db
+        .select()
+        .from(user)
+        .where(inArray(user.id, initiatorUserIds));
+
+      // Maps para lookup O(1) - muito mais rápido que Array.find()
+      const agentMap = new Map(initiatorAgents.map((a) => [a.id, a]));
+      const userMap = new Map(initiatorUsers.map((u) => [u.id, u]));
+
+      // Resolver contatos (100% síncrono!)
+      const resolvedItems = items.map((item) => {
+        // WhatsApp ou sem current agent: retorna contact normal
+        if (item.chat.messageSource !== "internal" || !currentAgent) {
+          return item;
+        }
+
+        // Usuário é INICIADOR: retorna contact (target)
+        if (item.chat.initiatorAgentId === currentAgent.id) {
+          return item;
+        }
+
+        // Usuário é TARGET: buscar initiator nos Maps
+        if (!item.chat.initiatorAgentId) {
+          return item;
+        }
+
+        const initiatorAgent = agentMap.get(item.chat.initiatorAgentId);
+        if (!initiatorAgent) {
+          return item;
+        }
+
+        const initiatorUser = userMap.get(initiatorAgent.userId);
+        if (!initiatorUser || !item.contact) {
+          return item;
+        }
+
+        // Substituir contact pelos dados do INITIATOR
+        return {
+          ...item,
+          contact: {
+            id: item.contact.id,
+            organizationId: item.contact.organizationId,
+            phoneNumber: null,
+            name: initiatorUser.name,
+            avatar: initiatorUser.image,
+            createdAt: item.contact.createdAt,
+            updatedAt: item.contact.updatedAt,
+            metadata: item.contact.metadata,
+          },
+        };
+      });
+
       return {
-        items,
+        items: resolvedItems,
         total: totalResult[0]?.count ?? 0,
         limit,
         offset,
@@ -138,7 +223,66 @@ export const chatsRouter = createTRPCRouter({
         });
       }
 
-      return chatRecord;
+      // Resolver "outro participante" para chats internos
+      if (chatRecord.chat.messageSource !== "internal") {
+        return chatRecord;
+      }
+
+      // Buscar o agent do usuário atual
+      const [currentAgent] = await ctx.tenantDb
+        .select()
+        .from(agent)
+        .where(eq(agent.userId, ctx.session.user.id))
+        .limit(1);
+
+      if (!currentAgent) {
+        return chatRecord;
+      }
+
+      // Se usuário atual é o INICIADOR, retornar contact (target)
+      if (chatRecord.chat.initiatorAgentId === currentAgent.id) {
+        return chatRecord;
+      }
+
+      // Se usuário atual é o TARGET, buscar dados do INICIADOR
+      if (!chatRecord.chat.initiatorAgentId) {
+        return chatRecord;
+      }
+
+      const [initiatorAgent] = await ctx.tenantDb
+        .select()
+        .from(agent)
+        .where(eq(agent.id, chatRecord.chat.initiatorAgentId))
+        .limit(1);
+
+      if (!initiatorAgent) {
+        return chatRecord;
+      }
+
+      const [initiatorUser] = await ctx.db
+        .select()
+        .from(user)
+        .where(eq(user.id, initiatorAgent.userId))
+        .limit(1);
+
+      if (!initiatorUser || !chatRecord.contact) {
+        return chatRecord;
+      }
+
+      // Substituir contact pelos dados do INICIADOR
+      return {
+        ...chatRecord,
+        contact: {
+          id: chatRecord.contact.id,
+          organizationId: chatRecord.contact.organizationId,
+          phoneNumber: null,
+          name: initiatorUser.name,
+          avatar: initiatorUser.image,
+          createdAt: chatRecord.contact.createdAt,
+          updatedAt: chatRecord.contact.updatedAt,
+          metadata: chatRecord.contact.metadata,
+        },
+      };
     }),
 
   /**
@@ -152,7 +296,7 @@ export const chatsRouter = createTRPCRouter({
         messageSource: z.enum(["whatsapp", "internal"]),
         assignedTo: z.string().uuid().optional(),
         departmentId: z.string().uuid().optional(),
-        initiatorInstanceCode: z.string().optional(),
+        initiatorAgentId: z.string().uuid().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -176,7 +320,7 @@ export const chatsRouter = createTRPCRouter({
           messageSource: input.messageSource,
           assignedTo: input.assignedTo,
           departmentId: input.departmentId,
-          initiatorInstanceCode: input.initiatorInstanceCode,
+          initiatorAgentId: input.initiatorAgentId,
           status: "open",
           createdAt: now,
           updatedAt: now,
@@ -333,7 +477,7 @@ export const chatsRouter = createTRPCRouter({
           contactId: targetContact.id,
           channelId: null, // Chats internos não têm canal
           messageSource: "internal",
-          initiatorInstanceCode: currentAgent.instanceCode,
+          initiatorAgentId: currentAgent.id,
           status: "open",
           createdAt: now,
           updatedAt: now,
@@ -347,15 +491,56 @@ export const chatsRouter = createTRPCRouter({
         });
       }
 
-      // Emitir evento Socket.io: chat:created
+      // Emitir eventos Socket.io PERSONALIZADOS para cada participante
+
+      // Buscar dados do initiator para enviar pro target
+      const [currentUser] = await ctx.db
+        .select()
+        .from(user)
+        .where(eq(user.id, currentAgent.userId))
+        .limit(1);
+
+      if (!currentUser) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Usuário atual não encontrado",
+        });
+      }
+
+      // Evento para o INICIADOR - mostrar target contact
       await publishChatEvent(
         {
           type: "chat:created",
           organizationId,
           chatId: newChat.id,
+          targetAgentId: currentAgent.id,
           data: {
             chat: newChat as unknown as Record<string, unknown>,
             contact: targetContact as unknown as Record<string, unknown>,
+          },
+        },
+        env.REDIS_URL,
+      );
+
+      // Evento para o TARGET - mostrar initiator data
+      await publishChatEvent(
+        {
+          type: "chat:created",
+          organizationId,
+          chatId: newChat.id,
+          targetAgentId: targetAgent.id,
+          data: {
+            chat: newChat as unknown as Record<string, unknown>,
+            contact: {
+              id: targetContact.id,
+              organizationId: targetContact.organizationId,
+              phoneNumber: null,
+              name: currentUser.name,
+              avatar: currentUser.image,
+              createdAt: targetContact.createdAt,
+              updatedAt: targetContact.updatedAt,
+              metadata: targetContact.metadata,
+            } as unknown as Record<string, unknown>,
           },
         },
         env.REDIS_URL,

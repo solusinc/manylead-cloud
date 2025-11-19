@@ -36,6 +36,7 @@ export interface ChatEvent {
   type: "chat:created" | "chat:updated" | "chat:deleted";
   organizationId: string;
   chatId: string;
+  targetAgentId?: string; // Para enviar evento apenas para um agent específico
   data: {
     chat: Record<string, unknown>;
     contact?: Record<string, unknown>;
@@ -51,6 +52,7 @@ export interface MessageEvent {
   organizationId: string;
   chatId: string;
   messageId: string;
+  targetAgentId?: string; // Para enviar evento apenas para um agent específico (chats internos)
   data: {
     message: Record<string, unknown>;
     sender?: Record<string, unknown>;
@@ -98,4 +100,5 @@ export interface SocketData {
   userId?: string;
   userEmail?: string;
   organizationIds?: string[];
+  agentIds?: Map<string, string>; // Map de organizationId -> agentId
 }

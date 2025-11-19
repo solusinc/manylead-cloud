@@ -5,6 +5,8 @@ import type { SocketData } from "./types";
 import { env } from "../env";
 import { authMiddleware, validateOrganizationAccess } from "./middleware";
 import { RedisPubSubManager } from "./redis-pubsub";
+import { agent, chat, contact, eq } from "@manylead/db";
+import { tenantManager } from "../libs/tenant-manager";
 
 /**
  * Socket.io Manager
@@ -60,7 +62,7 @@ export class SocketManager {
        * Join organization room
        * Clients must join their organization's room to receive events
        */
-      socket.on("join:organization", (organizationId: string) => {
+      socket.on("join:organization", async (organizationId: string) => {
         if (!organizationId) {
           socket.emit("error", { message: "organizationId is required" });
           return;
@@ -80,9 +82,56 @@ export class SocketManager {
         const room = `org:${organizationId}`;
         void socket.join(room);
 
-        console.log(
-          `[Socket.io] ← ${socket.id} | join:organization → ${room}`,
-        );
+        // Buscar agentId e fazer join no room do agent
+        try {
+          const tenant = await tenantManager.getTenantByOrganization(organizationId);
+
+          if (!tenant) {
+            console.log(
+              `[Socket.io] ← ${socket.id} | joined → ${room} (tenant not found)`,
+            );
+            socket.emit("joined", { room, organizationId });
+            return;
+          }
+
+          if (tenant.status !== "active") {
+            console.log(
+              `[Socket.io] ← ${socket.id} | joined → ${room} (tenant not active: ${tenant.status})`,
+            );
+            socket.emit("joined", { room, organizationId, provisioning: true });
+            return;
+          }
+
+          const tenantDb = await tenantManager.getConnection(organizationId);
+          const [userAgent] = await tenantDb
+            .select()
+            .from(agent)
+            .where(eq(agent.userId, socketData.userId ?? ""))
+            .limit(1);
+
+          if (userAgent) {
+            // Join no room do agent (para eventos personalizados)
+            const agentRoom = `agent:${userAgent.id}`;
+            void socket.join(agentRoom);
+
+            // Armazenar agentId no socket data
+            socketData.agentIds ??= new Map();
+            socketData.agentIds.set(organizationId, userAgent.id);
+
+            console.log(
+              `[Socket.io] ← ${socket.id} | joined → ${room}, ${agentRoom}`,
+            );
+          } else {
+            console.log(
+              `[Socket.io] ← ${socket.id} | joined → ${room} (no agent)`,
+            );
+          }
+        } catch (error) {
+          console.error(`[Socket] Error fetching agent:`, error);
+          console.log(
+            `[Socket.io] ← ${socket.id} | joined → ${room}`,
+          );
+        }
 
         socket.emit("joined", { room, organizationId });
       });
@@ -130,9 +179,9 @@ export class SocketManager {
       });
 
       /**
-       * Typing indicators
+       * Typing indicators - send only to chat participants
        */
-      socket.on("typing:start", (data: { chatId: string }) => {
+      socket.on("typing:start", async (data: { chatId: string }) => {
         if (!data.chatId) {
           socket.emit("error", { message: "chatId is required" });
           return;
@@ -140,25 +189,81 @@ export class SocketManager {
 
         console.log(`[Socket.io] ← ${socket.id} | typing:start → chat:${data.chatId}`);
 
-        // Get current user info from socket
         const userId = socketData.userId;
-
-        // Find organization room this socket is in
         const orgRoom = Array.from(socket.rooms).find((room) => room.startsWith("org:"));
 
-        if (orgRoom) {
-          // Broadcast to organization room (except sender)
-          socket.to(orgRoom).emit("typing:start", {
-            chatId: data.chatId,
-            agentId: userId ?? "unknown",
-            agentName: "Agent",
-          });
+        if (!orgRoom) return;
 
-          console.log(`[Socket.io] → ${orgRoom} | typing:start (excluding sender)`);
+        const organizationId = orgRoom.replace("org:", "");
+
+        try {
+          const tenantDb = await tenantManager.getConnection(organizationId);
+
+          // Buscar chat para identificar participantes
+          const [chatRecord] = await tenantDb
+            .select()
+            .from(chat)
+            .where(eq(chat.id, data.chatId))
+            .limit(1);
+
+          if (!chatRecord) {
+            console.warn(`[Socket] Chat not found: ${data.chatId}`);
+            return;
+          }
+
+          // Se for chat interno, enviar apenas para o outro participante
+          if (chatRecord.messageSource === "internal" && chatRecord.initiatorAgentId) {
+            // Buscar agent do usuário atual
+            const [currentAgent] = await tenantDb
+              .select()
+              .from(agent)
+              .where(eq(agent.userId, userId ?? ""))
+              .limit(1);
+
+            if (!currentAgent) {
+              console.warn(`[Socket] Agent not found for user: ${userId}`);
+              return;
+            }
+
+            // Identificar o outro participante
+            const isInitiator = currentAgent.id === chatRecord.initiatorAgentId;
+            const targetAgentId = isInitiator
+              ? (await tenantDb
+                  .select()
+                  .from(contact)
+                  .where(eq(contact.id, chatRecord.contactId))
+                  .limit(1)
+                  .then((rows) => {
+                    const metadata = rows[0]?.metadata as { agentId?: string } | null;
+                    return metadata?.agentId;
+                  }))
+              : chatRecord.initiatorAgentId;
+
+            if (targetAgentId) {
+              // Enviar APENAS para o agent room do outro participante
+              const targetRoom = `agent:${targetAgentId}`;
+              this.io.to(targetRoom).emit("typing:start", {
+                chatId: data.chatId,
+                agentId: currentAgent.id,
+                agentName: "Agent",
+              });
+              console.log(`[Socket.io] → ${targetRoom} | typing:start (private)`);
+            }
+          } else {
+            // Chat WhatsApp - broadcast para toda a org
+            socket.to(orgRoom).emit("typing:start", {
+              chatId: data.chatId,
+              agentId: userId ?? "unknown",
+              agentName: "Agent",
+            });
+            console.log(`[Socket.io] → ${orgRoom} | typing:start (broadcast)`);
+          }
+        } catch (error) {
+          console.error("[Socket] Error handling typing:start:", error);
         }
       });
 
-      socket.on("typing:stop", (data: { chatId: string }) => {
+      socket.on("typing:stop", async (data: { chatId: string }) => {
         if (!data.chatId) {
           socket.emit("error", { message: "chatId is required" });
           return;
@@ -166,20 +271,75 @@ export class SocketManager {
 
         console.log(`[Socket.io] ← ${socket.id} | typing:stop → chat:${data.chatId}`);
 
-        // Get current user info from socket
         const userId = socketData.userId;
-
-        // Find organization room this socket is in
         const orgRoom = Array.from(socket.rooms).find((room) => room.startsWith("org:"));
 
-        if (orgRoom) {
-          // Broadcast to organization room (except sender)
-          socket.to(orgRoom).emit("typing:stop", {
-            chatId: data.chatId,
-            agentId: userId ?? "unknown",
-          });
+        if (!orgRoom) return;
 
-          console.log(`[Socket.io] → ${orgRoom} | typing:stop (excluding sender)`);
+        const organizationId = orgRoom.replace("org:", "");
+
+        try {
+          const tenantDb = await tenantManager.getConnection(organizationId);
+
+          // Buscar chat para identificar participantes
+          const [chatRecord] = await tenantDb
+            .select()
+            .from(chat)
+            .where(eq(chat.id, data.chatId))
+            .limit(1);
+
+          if (!chatRecord) {
+            console.warn(`[Socket] Chat not found: ${data.chatId}`);
+            return;
+          }
+
+          // Se for chat interno, enviar apenas para o outro participante
+          if (chatRecord.messageSource === "internal" && chatRecord.initiatorAgentId) {
+            // Buscar agent do usuário atual
+            const [currentAgent] = await tenantDb
+              .select()
+              .from(agent)
+              .where(eq(agent.userId, userId ?? ""))
+              .limit(1);
+
+            if (!currentAgent) {
+              console.warn(`[Socket] Agent not found for user: ${userId}`);
+              return;
+            }
+
+            // Identificar o outro participante
+            const isInitiator = currentAgent.id === chatRecord.initiatorAgentId;
+            const targetAgentId = isInitiator
+              ? (await tenantDb
+                  .select()
+                  .from(contact)
+                  .where(eq(contact.id, chatRecord.contactId))
+                  .limit(1)
+                  .then((rows) => {
+                    const metadata = rows[0]?.metadata as { agentId?: string } | null;
+                    return metadata?.agentId;
+                  }))
+              : chatRecord.initiatorAgentId;
+
+            if (targetAgentId) {
+              // Enviar APENAS para o agent room do outro participante
+              const targetRoom = `agent:${targetAgentId}`;
+              this.io.to(targetRoom).emit("typing:stop", {
+                chatId: data.chatId,
+                agentId: currentAgent.id,
+              });
+              console.log(`[Socket.io] → ${targetRoom} | typing:stop (private)`);
+            }
+          } else {
+            // Chat WhatsApp - broadcast para toda a org
+            socket.to(orgRoom).emit("typing:stop", {
+              chatId: data.chatId,
+              agentId: userId ?? "unknown",
+            });
+            console.log(`[Socket.io] → ${orgRoom} | typing:stop (broadcast)`);
+          }
+        } catch (error) {
+          console.error("[Socket] Error handling typing:stop:", error);
         }
       });
 

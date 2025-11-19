@@ -159,7 +159,7 @@ export function ChatInput({
     })
   );
 
-  const handleSend = async () => {
+  const handleSend = () => {
     if (!content.trim() || isSending) return;
 
     setIsSending(true);
@@ -175,7 +175,7 @@ export function ChatInput({
     const tempId = uuidv7();
 
     // Format message with signature: **UserName**\nContent (same as backend)
-    const userName = session.user.name ?? "Unknown";
+    const userName = session.user.name;
     const formattedContent = `**${userName}**\n${content.trim()}`;
 
     const tempMessage = {

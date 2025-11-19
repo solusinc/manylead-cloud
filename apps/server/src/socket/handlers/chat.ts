@@ -10,12 +10,18 @@ export function handleChatEvent(
 ): void {
   try {
     const event = JSON.parse(message) as ChatEvent;
-    const room = `org:${event.organizationId}`;
 
-    console.log(`[Chat] Broadcasting ${event.type} to room: ${room}`);
-
-    // Broadcast to all clients in the organization's room
-    io.to(room).emit(event.type, event.data);
+    // Se tem targetAgentId, enviar APENAS para aquele agent
+    if (event.targetAgentId) {
+      const agentRoom = `agent:${event.targetAgentId}`;
+      console.log(`[Chat] Sending ${event.type} to room: ${agentRoom}`);
+      io.to(agentRoom).emit(event.type, event.data);
+    } else {
+      // Sem targetAgentId, broadcast para TODA a organização
+      const room = `org:${event.organizationId}`;
+      console.log(`[Chat] Broadcasting ${event.type} to room: ${room}`);
+      io.to(room).emit(event.type, event.data);
+    }
   } catch (error) {
     console.error("[Chat] Failed to parse event:", error);
   }
@@ -30,12 +36,18 @@ export function handleMessageEvent(
 ): void {
   try {
     const event = JSON.parse(message) as MessageEvent;
-    const room = `org:${event.organizationId}`;
 
-    console.log(`[Message] Broadcasting ${event.type} to room: ${room}`);
-
-    // Broadcast to all clients in the organization's room
-    io.to(room).emit(event.type, event.data);
+    // Se tem targetAgentId, enviar APENAS para aquele agent (chat interno)
+    if (event.targetAgentId) {
+      const agentRoom = `agent:${event.targetAgentId}`;
+      console.log(`[Message] Sending ${event.type} to room: ${agentRoom} (private)`);
+      io.to(agentRoom).emit(event.type, event.data);
+    } else {
+      // Sem targetAgentId, broadcast para TODA a organização (chat WhatsApp)
+      const room = `org:${event.organizationId}`;
+      console.log(`[Message] Broadcasting ${event.type} to room: ${room}`);
+      io.to(room).emit(event.type, event.data);
+    }
   } catch (error) {
     console.error("[Message] Failed to parse event:", error);
   }

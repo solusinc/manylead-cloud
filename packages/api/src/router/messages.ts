@@ -205,6 +205,20 @@ export const messagesRouter = createTRPCRouter({
         });
       }
 
+      // Buscar chat para verificar se é interno
+      const [chatRecord] = await ctx.tenantDb
+        .select()
+        .from(chat)
+        .where(eq(chat.id, input.chatId))
+        .limit(1);
+
+      if (!chatRecord) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Chat não encontrado",
+        });
+      }
+
       // Atualizar chat (lastMessage, totalMessages)
       await ctx.tenantDb
         .update(chat)
@@ -217,20 +231,56 @@ export const messagesRouter = createTRPCRouter({
         })
         .where(eq(chat.id, input.chatId));
 
-      // Emitir evento Socket.io para atualizar UI em tempo real
-      await publishMessageEvent(
-        {
-          type: "message:new",
-          organizationId,
-          chatId: input.chatId,
-          messageId: newMessage.id,
-          senderId: currentAgent.id, // For socket filtering (optional)
-          data: {
-            message: newMessage as unknown as Record<string, unknown>,
+      // Se for chat interno, enviar evento personalizado para cada participante
+      if (chatRecord.messageSource === "internal" && chatRecord.initiatorAgentId) {
+        const isInitiator = currentAgent.id === chatRecord.initiatorAgentId;
+
+        // Buscar o outro participante
+        const targetAgentId = isInitiator
+          ? (await ctx.tenantDb
+              .select()
+              .from(contact)
+              .where(eq(contact.id, chatRecord.contactId))
+              .limit(1)
+              .then((rows) => {
+                const metadata = rows[0]?.metadata as { agentId?: string } | null;
+                return metadata?.agentId;
+              }))
+          : chatRecord.initiatorAgentId;
+
+        if (targetAgentId) {
+          // Enviar evento APENAS para o outro participante
+          await publishMessageEvent(
+            {
+              type: "message:new",
+              organizationId,
+              chatId: input.chatId,
+              messageId: newMessage.id,
+              senderId: currentAgent.id,
+              targetAgentId, // Evento privado
+              data: {
+                message: newMessage as unknown as Record<string, unknown>,
+              },
+            },
+            env.REDIS_URL,
+          );
+        }
+      } else {
+        // Chat WhatsApp - broadcast para toda a org
+        await publishMessageEvent(
+          {
+            type: "message:new",
+            organizationId,
+            chatId: input.chatId,
+            messageId: newMessage.id,
+            senderId: currentAgent.id,
+            data: {
+              message: newMessage as unknown as Record<string, unknown>,
+            },
           },
-        },
-        env.REDIS_URL,
-      );
+          env.REDIS_URL,
+        );
+      }
 
       // TODO: Se for WhatsApp, enfileirar job para enviar via Evolution API
 

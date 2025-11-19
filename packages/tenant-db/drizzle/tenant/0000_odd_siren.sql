@@ -68,7 +68,7 @@ CREATE TABLE "channel" (
 CREATE TABLE "contact" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"organization_id" text NOT NULL,
-	"phone_number" varchar(20) NOT NULL,
+	"phone_number" varchar(20),
 	"name" varchar(255) NOT NULL,
 	"avatar" text,
 	"email" varchar(255),
@@ -85,6 +85,7 @@ CREATE TABLE "chat" (
 	"channel_id" uuid,
 	"contact_id" uuid NOT NULL,
 	"message_source" varchar(20) NOT NULL,
+	"initiator_agent_id" uuid,
 	"assigned_to" uuid,
 	"department_id" uuid,
 	"status" varchar(20) DEFAULT 'open' NOT NULL,
@@ -97,7 +98,6 @@ CREATE TABLE "chat" (
 	"is_archived" boolean DEFAULT false NOT NULL,
 	"is_pinned" boolean DEFAULT false NOT NULL,
 	"snoozed_until" timestamp,
-	"initiator_instance_code" varchar(50),
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
 	CONSTRAINT "chat_id_created_at_pk" PRIMARY KEY("id","created_at")
@@ -155,6 +155,7 @@ CREATE TABLE "agent_status" (
 --> statement-breakpoint
 ALTER TABLE "chat" ADD CONSTRAINT "chat_channel_id_channel_id_fk" FOREIGN KEY ("channel_id") REFERENCES "public"."channel"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "chat" ADD CONSTRAINT "chat_contact_id_contact_id_fk" FOREIGN KEY ("contact_id") REFERENCES "public"."contact"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "chat" ADD CONSTRAINT "chat_initiator_agent_id_agent_id_fk" FOREIGN KEY ("initiator_agent_id") REFERENCES "public"."agent"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "chat" ADD CONSTRAINT "chat_assigned_to_agent_id_fk" FOREIGN KEY ("assigned_to") REFERENCES "public"."agent"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "agent_status" ADD CONSTRAINT "agent_status_agent_id_agent_id_fk" FOREIGN KEY ("agent_id") REFERENCES "public"."agent"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "organization_settings_org_idx" ON "organization_settings" USING btree ("organization_id");--> statement-breakpoint

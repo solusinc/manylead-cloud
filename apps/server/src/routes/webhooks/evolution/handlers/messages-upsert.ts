@@ -125,7 +125,6 @@ export async function handleMessagesUpsert(
             channelId: ch.id,
             messageSource: "whatsapp",
             status: "open",
-            initiatorInstanceCode: instanceName,
           })
           .returning();
 

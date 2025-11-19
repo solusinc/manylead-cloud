@@ -1,5 +1,5 @@
 {
-  "id": "08206a19-498c-4b99-b898-6b8997698a72",
+  "id": "88d1cf88-cee3-4f2e-a8c5-81d3b50fab41",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -623,7 +623,7 @@
           "name": "phone_number",
           "type": "varchar(20)",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "name": {
           "name": "name",
@@ -788,6 +788,12 @@
           "primaryKey": false,
           "notNull": true
         },
+        "initiator_agent_id": {
+          "name": "initiator_agent_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "assigned_to": {
           "name": "assigned_to",
           "type": "uuid",
@@ -866,12 +872,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "initiator_instance_code": {
-          "name": "initiator_instance_code",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": false
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -913,6 +913,19 @@
             "id"
           ],
           "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "chat_initiator_agent_id_agent_id_fk": {
+          "name": "chat_initiator_agent_id_agent_id_fk",
+          "tableFrom": "chat",
+          "tableTo": "agent",
+          "columnsFrom": [
+            "initiator_agent_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
           "onUpdate": "no action"
         },
         "chat_assigned_to_agent_id_fk": {

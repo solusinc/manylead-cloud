@@ -634,9 +634,10 @@ export class TenantDatabaseManager {
       .set({ status })
       .where(eq(tenant.id, tenantId));
 
-    // Invalidate Redis cache if tenant is no longer active
-    if (status !== "active" && tenantRecord) {
+    // ALWAYS invalidate cache when status changes (fresh data on next getConnection)
+    if (tenantRecord) {
       await this.tenantCache.invalidate(tenantRecord.organizationId);
+      console.log(`[TenantManager] ✅ Invalidated cache for ${tenantRecord.organizationId} (new status: ${status})`);
     }
   }
 
