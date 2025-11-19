@@ -11,11 +11,12 @@ import {
   eq,
   inArray,
   isNull,
+  message,
   or,
   sql,
   user,
 } from "@manylead/db";
-import { publishChatEvent } from "@manylead/shared";
+import { publishChatEvent, formatTime } from "@manylead/shared";
 
 import { env } from "../env";
 import {
@@ -366,6 +367,23 @@ export const chatsRouter = createTRPCRouter({
         });
       }
 
+      // Criar mensagem de sistema "Sessão criada às HH:mm"
+      const createdTime = formatTime(newChat.createdAt);
+
+      await ctx.tenantDb.insert(message).values({
+        chatId: newChat.id,
+        messageSource: newChat.messageSource,
+        sender: "system",
+        senderId: null,
+        messageType: "system",
+        content: `Sessão criada às ${createdTime}`,
+        status: "sent",
+        timestamp: newChat.createdAt,
+        metadata: {
+          systemEventType: "session_created",
+        },
+      });
+
       return newChat;
     }),
 
@@ -578,13 +596,31 @@ export const chatsRouter = createTRPCRouter({
         env.REDIS_URL,
       );
 
+      // Criar mensagem de sistema "Sessão criada às HH:mm"
+      const createdTime = formatTime(newChat.createdAt);
+
+      await tenantDb.insert(message).values({
+        chatId: newChat.id,
+        messageSource: newChat.messageSource,
+        sender: "system",
+        senderId: null,
+        messageType: "system",
+        content: `Sessão criada às ${createdTime}`,
+        status: "sent",
+        timestamp: newChat.createdAt,
+        metadata: {
+          systemEventType: "session_created",
+        },
+      });
+
       return newChat;
     }),
 
   /**
    * Atualizar chat (status, atribuição, etc)
+   * Permissões: Owner, Admin, ou Agent assigned ao chat
    */
-  update: ownerProcedure
+  update: memberProcedure
     .input(
       z.object({
         id: z.string().uuid(),
@@ -600,6 +636,46 @@ export const chatsRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       const { id, createdAt, ...data } = input;
+
+      // Buscar chat atual para verificar permissões
+      const [currentChat] = await ctx.tenantDb
+        .select()
+        .from(chat)
+        .where(and(eq(chat.id, id), eq(chat.createdAt, createdAt)))
+        .limit(1);
+
+      if (!currentChat) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Chat não encontrado",
+        });
+      }
+
+      // Buscar agent do usuário logado
+      const [currentAgent] = await ctx.tenantDb
+        .select()
+        .from(agent)
+        .where(eq(agent.userId, ctx.session.user.id))
+        .limit(1);
+
+      if (!currentAgent) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Agent não encontrado",
+        });
+      }
+
+      // Verificar permissões: owner, admin, ou assigned
+      const isOwner = currentAgent.role === "owner";
+      const isAdmin = currentAgent.role === "admin";
+      const isAssigned = currentChat.assignedTo === currentAgent.id;
+
+      if (!isOwner && !isAdmin && !isAssigned) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Apenas o agent responsável pelo atendimento pode atualizar este chat",
+        });
+      }
 
       const [updated] = await ctx.tenantDb
         .update(chat)
@@ -651,9 +727,11 @@ export const chatsRouter = createTRPCRouter({
     }),
 
   /**
-   * Atribuir chat a um agent
+   * Atribuir chat a um agent (botão "Atender")
+   * Permissões: Qualquer agent autenticado pode atribuir
+   * IMPORTANTE: NÃO altera department_id, apenas assignedTo e status
    */
-  assign: ownerProcedure
+  assign: memberProcedure
     .input(
       z.object({
         id: z.string().uuid(),
@@ -676,22 +754,12 @@ export const chatsRouter = createTRPCRouter({
         });
       }
 
-      // Determinar departmentId do chat baseado nas permissões do agent
-      // Se agent tem permissões específicas de departamento, usa o primeiro da lista
-      let chatDepartmentId: string | null = null;
-      if (
-        agentExists.permissions.departments.type === "specific" &&
-        agentExists.permissions.departments.ids &&
-        agentExists.permissions.departments.ids.length > 0
-      ) {
-        chatDepartmentId = agentExists.permissions.departments.ids[0] ?? null;
-      }
-
+      // Atribuir chat ao agent SEM alterar department_id
+      // department_id só deve ser alterado na transferência
       const [updated] = await ctx.tenantDb
         .update(chat)
         .set({
           assignedTo: input.agentId,
-          departmentId: chatDepartmentId,
           status: "open",
           updatedAt: new Date(),
         })
@@ -705,15 +773,59 @@ export const chatsRouter = createTRPCRouter({
         });
       }
 
+      // Buscar nome do agent para mensagem de sistema
+      const [agentUser] = await ctx.db
+        .select()
+        .from(user)
+        .where(eq(user.id, agentExists.userId))
+        .limit(1);
+
+      const agentName = agentUser?.name ?? "Agente";
+      const assignTime = formatTime(updated.updatedAt);
+
+      // Criar mensagem de sistema "Sessão transferida para {Nome} às HH:mm"
+      await ctx.tenantDb.insert(message).values({
+        chatId: updated.id,
+        messageSource: updated.messageSource,
+        sender: "system",
+        senderId: null,
+        messageType: "system",
+        content: `Sessão transferida para ${agentName} às ${assignTime}`,
+        status: "sent",
+        timestamp: updated.updatedAt,
+        metadata: {
+          systemEventType: "session_assigned",
+          agentId: agentExists.id,
+          agentName,
+        },
+      });
+
+      // Publicar evento de atualização para todos da organização
+      const organizationId = ctx.session.session.activeOrganizationId;
+      if (organizationId) {
+        await publishChatEvent(
+          {
+            type: "chat:updated",
+            organizationId,
+            chatId: updated.id,
+            data: {
+              chat: updated as unknown as Record<string, unknown>,
+            },
+          },
+          env.REDIS_URL,
+        );
+      }
+
       return updated;
     }),
 
   /**
    * Transferir chat para outro agent ou departamento
+   * Permissões: Owner, Admin, ou Agent assigned ao chat
    * Se transferir para agent: atribui ao agent e seta departmentId baseado nas permissões
    * Se transferir para departamento: seta departmentId e remove assignedTo
    */
-  transfer: ownerProcedure
+  transfer: memberProcedure
     .input(
       z
         .object({
@@ -727,6 +839,46 @@ export const chatsRouter = createTRPCRouter({
         }),
     )
     .mutation(async ({ ctx, input }) => {
+      // Buscar chat atual para verificar permissões
+      const [currentChat] = await ctx.tenantDb
+        .select()
+        .from(chat)
+        .where(and(eq(chat.id, input.id), eq(chat.createdAt, input.createdAt)))
+        .limit(1);
+
+      if (!currentChat) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Chat não encontrado",
+        });
+      }
+
+      // Buscar agent do usuário logado
+      const [currentAgent] = await ctx.tenantDb
+        .select()
+        .from(agent)
+        .where(eq(agent.userId, ctx.session.user.id))
+        .limit(1);
+
+      if (!currentAgent) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Agent não encontrado",
+        });
+      }
+
+      // Verificar permissões: owner, admin, ou assigned
+      const isOwner = currentAgent.role === "owner";
+      const isAdmin = currentAgent.role === "admin";
+      const isAssigned = currentChat.assignedTo === currentAgent.id;
+
+      if (!isOwner && !isAdmin && !isAssigned) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Apenas o agent responsável pelo atendimento pode transferir este chat",
+        });
+      }
+
       // Caso 1: Transferir para um agent específico
       if (input.targetAgentId) {
         // Verificar se agent existe
@@ -773,6 +925,58 @@ export const chatsRouter = createTRPCRouter({
           });
         }
 
+        // Buscar nomes dos agents para mensagem de sistema
+        const [fromUser] = await ctx.db
+          .select()
+          .from(user)
+          .where(eq(user.id, currentAgent.userId))
+          .limit(1);
+
+        const [toUser] = await ctx.db
+          .select()
+          .from(user)
+          .where(eq(user.id, agentExists.userId))
+          .limit(1);
+
+        const fromName = fromUser?.name ?? "Agente";
+        const toName = toUser?.name ?? "Agente";
+        const transferTime = formatTime(updated.updatedAt);
+
+        // Criar mensagem de sistema "Sessão transferida de X para Y às HH:mm"
+        await ctx.tenantDb.insert(message).values({
+          chatId: updated.id,
+          messageSource: updated.messageSource,
+          sender: "system",
+          senderId: null,
+          messageType: "system",
+          content: `Sessão transferida de ${fromName} para ${toName} às ${transferTime}`,
+          status: "sent",
+          timestamp: updated.updatedAt,
+          metadata: {
+            systemEventType: "session_transferred",
+            fromAgentId: currentAgent.id,
+            fromAgentName: fromName,
+            toAgentId: agentExists.id,
+            toAgentName: toName,
+          },
+        });
+
+        // Publicar evento de atualização para todos da organização
+        const organizationId = ctx.session.session.activeOrganizationId;
+        if (organizationId) {
+          await publishChatEvent(
+            {
+              type: "chat:updated",
+              organizationId,
+              chatId: updated.id,
+              data: {
+                chat: updated as unknown as Record<string, unknown>,
+              },
+            },
+            env.REDIS_URL,
+          );
+        }
+
         return updated;
       }
 
@@ -796,6 +1000,22 @@ export const chatsRouter = createTRPCRouter({
             code: "NOT_FOUND",
             message: "Chat não encontrado",
           });
+        }
+
+        // Publicar evento de atualização para todos da organização
+        const organizationId = ctx.session.session.activeOrganizationId;
+        if (organizationId) {
+          await publishChatEvent(
+            {
+              type: "chat:updated",
+              organizationId,
+              chatId: updated.id,
+              data: {
+                chat: updated as unknown as Record<string, unknown>,
+              },
+            },
+            env.REDIS_URL,
+          );
         }
 
         return updated;

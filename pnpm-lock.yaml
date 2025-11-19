@@ -744,6 +744,9 @@ importers:
       bullmq:
         specifier: ^5.63.0
         version: 5.63.0
+      date-fns:
+        specifier: ^4.1.0
+        version: 4.1.0
       ioredis:
         specifier: ^5.8.2
         version: 5.8.2

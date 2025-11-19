@@ -10,7 +10,7 @@ import {
   updateDepartmentSchema,
 } from "@manylead/db";
 
-import { createTRPCRouter, ownerProcedure, tenantManager } from "../trpc";
+import { createTRPCRouter, memberProcedure, ownerProcedure, tenantManager } from "../trpc";
 
 /**
  * Departments Router
@@ -20,8 +20,9 @@ import { createTRPCRouter, ownerProcedure, tenantManager } from "../trpc";
 export const departmentsRouter = createTRPCRouter({
   /**
    * List all departments for the active organization
+   * Usado no dropdown de transferência - todos os members precisam ver a lista
    */
-  list: ownerProcedure.query(async ({ ctx }) => {
+  list: memberProcedure.query(async ({ ctx }) => {
     const organizationId = ctx.session.session.activeOrganizationId;
 
     if (!organizationId) {

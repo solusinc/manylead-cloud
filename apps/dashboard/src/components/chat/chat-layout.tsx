@@ -158,11 +158,24 @@ function ChatLayoutInner({
     });
 
     const unsubscribeChatCreated = socket.onChatCreated(() => {
-      void queryClient.invalidateQueries({ queryKey: [["chats"]] });
+      void queryClient.invalidateQueries({
+        queryKey: [["chats"]],
+        refetchType: "active",
+      });
     });
 
     const unsubscribeChatUpdated = socket.onChatUpdated(() => {
-      void queryClient.invalidateQueries({ queryKey: [["chats"]] });
+      // Forçar refetch imediato quando chat é atualizado (assign/transfer)
+      void queryClient.invalidateQueries({
+        queryKey: [["chats"]],
+        refetchType: "active",
+      });
+
+      // Invalidar mensagens também para buscar mensagens de sistema (transferência, etc)
+      void queryClient.invalidateQueries({
+        queryKey: [["messages"]],
+        refetchType: "active",
+      });
     });
 
     return () => {

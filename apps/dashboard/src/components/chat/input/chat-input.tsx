@@ -19,7 +19,6 @@ import { useServerSession } from "~/components/providers/session-provider";
 export function ChatInput({
   chatId,
   chatCreatedAt,
-  chatStatus,
   assignedTo,
   onTypingStart,
   onTypingStop,
@@ -28,7 +27,6 @@ export function ChatInput({
 }: {
   chatId: string;
   chatCreatedAt: Date;
-  chatStatus: "open" | "closed";
   assignedTo: string | null;
   onTypingStart?: () => void;
   onTypingStop?: () => void;
@@ -50,11 +48,17 @@ export function ChatInput({
     trpc.agents.getByUserId.queryOptions({ userId: session.user.id })
   );
 
+  // Buscar informações do agent assigned (se houver)
+  const { data: assignedAgent } = useQuery({
+    ...trpc.agents.getById.queryOptions({ id: assignedTo ?? "" }),
+    enabled: !!assignedTo,
+  });
+
   // Mutation para atribuir chat ao agent atual
   const assignMutation = useMutation(
     trpc.chats.assign.mutationOptions({
       onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: [["chats", "list"]] });
+        void queryClient.invalidateQueries({ queryKey: [["chats", "list"]] });
         toast.success("Chat atribuído com sucesso!");
       },
       onError: (error) => {
@@ -384,6 +388,32 @@ export function ChatInput({
           >
             <UserCheck className="mr-2 h-4 w-4" />
             {assignMutation.isPending ? "Atribuindo..." : "Atender"}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Se está atribuído para outro agent, mostrar "Em atendimento com..."
+  if (assignedTo && assignedTo !== currentAgent?.id) {
+    return (
+      <div className={cn("flex w-full flex-col items-center gap-3 rounded-lg border bg-muted/30 py-4", className)} {...props}>
+        <p className="text-sm text-muted-foreground">
+          Em atendimento com <span className="font-bold">{assignedAgent?.user?.name ?? "..."}</span>
+        </p>
+        <div className="flex gap-2">
+          <Button variant="outline" size="default">
+            <MessageSquare className="mr-2 h-4 w-4" />
+            Comentário
+          </Button>
+          <Button
+            variant="default"
+            size="default"
+            onClick={handleAtender}
+            disabled={assignMutation.isPending}
+          >
+            <UserCheck className="mr-2 h-4 w-4" />
+            {assignMutation.isPending ? "Pegando..." : "Pegar atendimento"}
           </Button>
         </div>
       </div>

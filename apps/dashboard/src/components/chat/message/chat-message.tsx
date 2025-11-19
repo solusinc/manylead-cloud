@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { format } from "date-fns";
-import { Check, CheckCheck, Clock, MessageCircle, Star, ChevronDown } from "lucide-react";
+import { Check, CheckCheck, Clock, MessageCircle, Star, ChevronDown, ArrowRightLeft } from "lucide-react";
 
 import { cn } from "@manylead/ui";
 import { Button } from "@manylead/ui/button";
@@ -16,9 +16,10 @@ import {
 interface Message {
   id: string;
   content: string;
-  sender: "contact" | "agent";
+  sender: "contact" | "agent" | "system";
   timestamp: Date;
   status?: "pending" | "sent" | "delivered" | "read";
+  messageType?: string;
 }
 
 export function ChatMessage({
@@ -226,5 +227,26 @@ export function ChatMessageActions({
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+/**
+ * Mensagem de sistema (ex: "Sessão criada", "Transferida de X para Y")
+ * Renderizada como badge centralizado na timeline
+ */
+export function ChatMessageSystem({
+  message,
+  className,
+}: {
+  message: Message;
+  className?: string;
+}) {
+  return (
+    <div className={cn("mb-4 flex justify-center", className)}>
+      <div className="flex items-center gap-2 rounded-lg bg-white dark:bg-muted/50 px-3 py-1.5 text-sm font-semibold shadow-sm">
+        <ArrowRightLeft className="h-3.5 w-3.5" />
+        <span>{message.content}</span>
+      </div>
+    </div>
   );
 }

@@ -10,7 +10,6 @@ import {
   TooltipTrigger,
 } from "@manylead/ui/tooltip";
 import { List, Hourglass, MessageCircle, UserCircle } from "lucide-react";
-import { useServerSession } from "~/components/providers/session-provider";
 import { useTRPC } from "~/lib/trpc/react";
 import { useQuery } from "@tanstack/react-query";
 
@@ -25,14 +24,7 @@ export function ChatSidebarFilters({
   activeFilter?: FilterType;
   onFilterChange?: (filter: FilterType) => void;
 } & React.ComponentProps<"div">) {
-  const session = useServerSession();
   const trpc = useTRPC();
-
-  // Buscar agent atual para verificar role
-  const { data: currentAgent } = useQuery(
-    trpc.agents.getByUserId.queryOptions({ userId: session.user.id })
-  );
-  const role = currentAgent?.role;
 
   // Buscar todos os chats para contar pending
   const { data: chatsData, isLoading: isLoadingChats } = useQuery(
@@ -60,24 +52,8 @@ export function ChatSidebarFilters({
     );
   }
 
-  // Member não precisa de filtros (só vê seus próprios chats)
-  if (role === "member") {
-    return (
-      <div
-        className={cn(
-          "flex items-center border-b bg-background px-4 py-3",
-          className
-        )}
-        {...props}
-      >
-        <span className="text-sm font-medium">
-          Meus atendimentos
-        </span>
-      </div>
-    );
-  }
-
-  // Admin e Owner veem todas as tabs
+  // Todas as tabs são exibidas para todos os roles
+  // O backend (TRPC) cuida de filtrar baseado em permissões de departamento
   return (
     <div
       className={cn("flex items-center border-b bg-background", className)}

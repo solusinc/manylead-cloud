@@ -19,7 +19,7 @@ import { Skeleton } from "@manylead/ui/skeleton";
 
 import { useChatSocketContext } from "~/components/providers/chat-socket-provider";
 import { useTRPC } from "~/lib/trpc/react";
-import { ChatMessage } from "./chat-message";
+import { ChatMessage, ChatMessageSystem } from "./chat-message";
 import { ChatMessageDateDivider } from "./chat-message-date";
 
 // Context to expose refetch function to parent components
@@ -83,7 +83,11 @@ export function ChatMessageList({
   ).map((item) => ({
     id: item.message.id,
     content: item.message.content,
-    sender: item.isOwnMessage ? ("agent" as const) : ("contact" as const),
+    sender: item.message.sender === "system"
+      ? ("system" as const)
+      : item.isOwnMessage
+        ? ("agent" as const)
+        : ("contact" as const),
     timestamp: item.message.timestamp,
     status: item.message.status as
       | "pending"
@@ -91,6 +95,7 @@ export function ChatMessageList({
       | "delivered"
       | "read"
       | undefined,
+    messageType: item.message.messageType as string | undefined,
   }));
 
   // Scroll to bottom on initial load
@@ -330,10 +335,14 @@ export function ChatMessageList({
               {showDateDivider && !shouldHideBadge && (
                 <ChatMessageDateDivider date={new Date(message.timestamp)} />
               )}
-              <ChatMessage
-                message={message}
-                showAvatar={showAvatar}
-              />
+              {message.sender === "system" ? (
+                <ChatMessageSystem message={message} />
+              ) : (
+                <ChatMessage
+                  message={message}
+                  showAvatar={showAvatar}
+                />
+              )}
             </Fragment>
           );
         })}

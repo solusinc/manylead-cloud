@@ -4,7 +4,6 @@ import { useState } from "react";
 import Image from "next/image";
 import {
   Archive,
-  ArrowRightLeft,
   CheckCircle,
   MoreVertical,
   Tag,
@@ -29,7 +28,9 @@ import {
 
 import { ContactDetailsSheet } from "../contact";
 import { ChatTransferDropdown } from "./chat-transfer-dropdown";
-import { usePermissions } from "~/lib/permissions/use-permissions";
+import { useServerSession } from "~/components/providers/session-provider";
+import { useTRPC } from "~/lib/trpc/react";
+import { useQuery } from "@tanstack/react-query";
 
 interface ChatWindowHeaderProps {
   chat: {
@@ -156,6 +157,7 @@ export function ChatWindowHeaderInfo({
 }
 
 export function ChatWindowHeaderActions({
+  chat,
   chatId,
   chatCreatedAt,
   className,
@@ -169,14 +171,25 @@ export function ChatWindowHeaderActions({
   chatCreatedAt: Date;
   className?: string;
 }) {
-  const { isOwner, isAdmin } = usePermissions();
-  const canTransfer = isOwner || isAdmin;
+  const session = useServerSession();
+  const trpc = useTRPC();
+
+  // Buscar agent atual para verificar se está assigned
+  const { data: currentAgent } = useQuery(
+    trpc.agents.getByUserId.queryOptions({ userId: session.user.id })
+  );
+
+  // APENAS quem está assigned pode transferir, adicionar tags ou finalizar
+  const isAssigned = chat.assignedTo === currentAgent?.id;
+
+  // Se não está assigned, não mostra nenhuma ação
+  if (!isAssigned) {
+    return null;
+  }
 
   return (
     <div className={cn("flex items-center gap-1", className)}>
-      {canTransfer && (
-        <ChatTransferDropdown chatId={chatId} chatCreatedAt={chatCreatedAt} />
-      )}
+      <ChatTransferDropdown chatId={chatId} chatCreatedAt={chatCreatedAt} />
 
       <Tooltip>
         <TooltipTrigger asChild>

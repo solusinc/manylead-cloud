@@ -16,6 +16,7 @@ import {
 
 import {
   createTRPCRouter,
+  memberProcedure,
   ownerProcedure,
   protectedProcedure,
   tenantManager,
@@ -50,8 +51,9 @@ export const agentsRouter = createTRPCRouter({
 
   /**
    * List all agents for the active organization with user data
+   * Usado no dropdown de transferência - todos os members precisam ver a lista
    */
-  list: ownerProcedure.query(async ({ ctx }) => {
+  list: memberProcedure.query(async ({ ctx }) => {
     const organizationId = ctx.session.session.activeOrganizationId;
 
     if (!organizationId) {
@@ -94,14 +96,23 @@ export const agentsRouter = createTRPCRouter({
 
   /**
    * Get agent by ID
-   * Only admins and owners can view any agent (enforced by ownerProcedure)
+   * Usado para exibir informações do agent assigned no chat input
    */
-  getById: ownerProcedure
+  getById: memberProcedure
     .input(z.object({ id: z.uuid() }))
     .query(async ({ ctx, input }) => {
-      // ctx.tenantDb já está disponível via ownerProcedure
+      const organizationId = ctx.session.session.activeOrganizationId;
 
-      const [agentRecord] = await ctx.tenantDb
+      if (!organizationId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Nenhuma organização ativa",
+        });
+      }
+
+      const tenantDb = await tenantManager.getConnection(organizationId);
+
+      const [agentRecord] = await tenantDb
         .select()
         .from(agent)
         .where(eq(agent.id, input.id))
