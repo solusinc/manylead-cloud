@@ -2,6 +2,7 @@
 
 import {
   createContext,
+  Fragment,
   useCallback,
   useContext,
   useEffect,
@@ -11,6 +12,7 @@ import {
 } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
+import { isSameDay } from "date-fns";
 
 import { cn } from "@manylead/ui";
 
@@ -24,8 +26,25 @@ const ChatMessageRefetchContext = createContext<(() => void) | null>(null);
 export const useChatMessageRefetch = () =>
   useContext(ChatMessageRefetchContext);
 
-const INITIAL_LIMIT = 10; // TEMPORÁRIO: 10 mensagens iniciais para testar (WhatsApp usa ~50)
-const LOAD_MORE_LIMIT = 2; // TEMPORÁRIO: 2 mensagens por scroll para testar (WhatsApp usa ~30)
+const INITIAL_LIMIT = 50; // WhatsApp-style: 50 mensagens iniciais
+const LOAD_MORE_LIMIT = 30; // WhatsApp-style: 30 mensagens por scroll
+
+/**
+ * Determine if a date divider should be shown between two messages
+ * WhatsApp style: show divider when date changes
+ */
+function shouldShowDateDivider(
+  currentTimestamp: Date,
+  previousTimestamp?: Date
+): boolean {
+  // Always show divider for first message
+  if (!previousTimestamp) {
+    return true;
+  }
+
+  // Show divider if messages are on different days
+  return !isSameDay(new Date(currentTimestamp), new Date(previousTimestamp));
+}
 
 export function ChatMessageList({
   chatId,
@@ -177,8 +196,10 @@ export function ChatMessageList({
     };
   }, [socket.isConnected, chatId, socket]);
 
-  // Auto-scroll when new messages arrive (only if user is near bottom)
+  // Auto-scroll: ALWAYS when YOU send, only if near bottom when receiving
   const previousMessagesLengthRef = useRef(messages.length);
+  const lastMessageIdRef = useRef<string | null>(null);
+
   useEffect(() => {
     const currentLength = messages.length;
     const previousLength = previousMessagesLengthRef.current;
@@ -189,23 +210,37 @@ export function ChatMessageList({
       !isInitialLoadRef.current &&
       !isFetchingNextPage
     ) {
-      const viewport = scrollViewportRef.current;
-      if (!viewport) return;
+      const lastMessage = messages[messages.length - 1];
 
-      // Check if user is near bottom (within 200px)
-      const distanceFromBottom =
-        viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
-      const isNearBottom = distanceFromBottom < 200;
+      // Check if this is a NEW message we haven't seen before
+      if (lastMessage && lastMessage.id !== lastMessageIdRef.current) {
+        const isOwnMessage = lastMessage.sender === "agent";
 
-      // Only auto-scroll if user is near bottom (don't interrupt manual scrolling up)
-      if (isNearBottom) {
-        setTimeout(() => {
-          scrollToBottom("smooth");
-        }, 50);
+        // WhatsApp behavior: ALWAYS scroll when YOU send
+        if (isOwnMessage) {
+          scrollToBottom("instant");
+        } else {
+          // Only scroll if near bottom for received messages
+          const viewport = scrollViewportRef.current;
+          if (viewport) {
+            const distanceFromBottom =
+              viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+            const isNearBottom = distanceFromBottom < 200;
+
+            if (isNearBottom) {
+              setTimeout(() => {
+                scrollToBottom("smooth");
+              }, 50);
+            }
+          }
+        }
+
+        lastMessageIdRef.current = lastMessage.id;
       }
     }
 
     previousMessagesLengthRef.current = currentLength;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [messages.length, isFetchingNextPage, scrollToBottom]);
 
   // Scroll quando typing indicator aparecer/desaparecer
@@ -256,20 +291,30 @@ export function ChatMessageList({
         </div>
       )}
 
-      <ChatMessageDateDivider date={new Date()} />
-
       <div className="space-y-2">
         {messages.map((message, index) => {
           const prevMessage = messages[index - 1];
           const showAvatar =
             !prevMessage || prevMessage.sender !== message.sender;
 
+          const showDateDivider = shouldShowDateDivider(
+            message.timestamp,
+            prevMessage?.timestamp
+          );
+
+          // Hide first badge when loading to prevent visual jump
+          const shouldHideBadge = index === 0 && isFetchingNextPage;
+
           return (
-            <ChatMessage
-              key={message.id}
-              message={message}
-              showAvatar={showAvatar}
-            />
+            <Fragment key={message.id}>
+              {showDateDivider && !shouldHideBadge && (
+                <ChatMessageDateDivider date={new Date(message.timestamp)} />
+              )}
+              <ChatMessage
+                message={message}
+                showAvatar={showAvatar}
+              />
+            </Fragment>
           );
         })}
 

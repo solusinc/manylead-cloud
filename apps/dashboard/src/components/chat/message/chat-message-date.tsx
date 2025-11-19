@@ -1,7 +1,7 @@
 "use client";
 
 import { cn } from "@manylead/ui";
-import { format, isToday, isYesterday } from "date-fns";
+import { format, isToday, isYesterday, isThisWeek } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 export function ChatMessageDateDivider({
@@ -16,12 +16,12 @@ export function ChatMessageDateDivider({
   return (
     <div
       className={cn(
-        "flex items-center justify-center my-4",
+        "flex items-center justify-center my-3",
         className
       )}
       {...props}
     >
-      <span className="text-xs text-muted-foreground bg-background px-3 py-1 rounded-full border">
+      <span className="text-[11px] text-muted-foreground bg-background/80 px-2.5 py-0.5 rounded-full border shadow-sm">
         {formattedDate}
       </span>
     </div>
@@ -37,5 +37,12 @@ function formatMessageDate(date: Date): string {
     return "Ontem";
   }
 
-  return format(date, "dd 'de' MMMM", { locale: ptBR });
+  // Check if date is within this week (last 7 days)
+  if (isThisWeek(date, { weekStartsOn: 0 })) {
+    // Show day of week (Segunda-feira, Terça-feira, etc.)
+    return format(date, "EEEE", { locale: ptBR });
+  }
+
+  // More than 7 days: show date in DD/MM/YYYY format (WhatsApp style)
+  return format(date, "dd/MM/yyyy", { locale: ptBR });
 }
