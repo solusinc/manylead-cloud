@@ -120,7 +120,7 @@ export function ChatSidebarUnreadButton({
   className,
   ...props
 }: React.ComponentProps<typeof Button>) {
-  const [showUnreadOnly, setShowUnreadOnly] = useState(false);
+  const { showUnreadOnly, toggleUnreadOnly } = useChatFiltersStore();
 
   return (
     <Tooltip>
@@ -134,7 +134,7 @@ export function ChatSidebarUnreadButton({
             className
           )}
           aria-label="Conversas não lidas"
-          onClick={() => setShowUnreadOnly(!showUnreadOnly)}
+          onClick={toggleUnreadOnly}
           {...props}
         >
           <Eye className="h-5 w-5" />

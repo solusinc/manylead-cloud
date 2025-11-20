@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 import { cn } from "@manylead/ui";
 import { ScrollArea } from "@manylead/ui/scroll-area";
@@ -26,7 +26,9 @@ export function ChatWindow({
   const trpc = useTRPC();
   const socket = useChatSocketContext();
   const router = useRouter();
+  const queryClient = useQueryClient();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const hasMarkedAsReadRef = useRef(false);
 
   // Buscar chat da API
   const { data: chatData, isLoading } = useQuery(
@@ -39,12 +41,58 @@ export function ChatWindow({
   // Encontrar o chat específico
   const chatItem = chatData?.items.find((item) => item.chat.id === chatId);
 
+  // Mutation para marcar chat como lido
+  const markAsReadMutation = useMutation(
+    trpc.chats.markAsRead.mutationOptions({
+      onSuccess: () => {
+        // Invalidar query para refetch a lista de chats
+        void queryClient.invalidateQueries({
+          queryKey: [["chats", "list"]],
+        });
+      },
+    }),
+  );
+
   // Redirect para /chats se conversa não encontrada (após loading)
   useEffect(() => {
     if (!isLoading && !chatItem) {
       router.replace("/chats");
     }
   }, [isLoading, chatItem, router]);
+
+  // Resetar flag quando trocar de chat
+  useEffect(() => {
+    hasMarkedAsReadRef.current = false;
+  }, [chatId]);
+
+  // Marcar chat como lido quando abrir (apenas uma vez por chat)
+  useEffect(() => {
+    if (chatItem && !hasMarkedAsReadRef.current && chatItem.chat.unreadCount > 0) {
+      hasMarkedAsReadRef.current = true;
+      markAsReadMutation.mutate({
+        id: chatItem.chat.id,
+        createdAt: chatItem.chat.createdAt,
+      });
+    }
+  }, [chatItem, markAsReadMutation]);
+
+  // Marcar como lido automaticamente quando receber mensagem no chat ativo
+  useEffect(() => {
+    if (!socket.isConnected || !chatItem) return;
+
+    const unsubscribe = socket.onMessageNew((event) => {
+      // Se a mensagem é para este chat, marcar como lido automaticamente
+      const messageChatId = event.message.chatId as string;
+      if (messageChatId === chatId) {
+        markAsReadMutation.mutate({
+          id: chatItem.chat.id,
+          createdAt: chatItem.chat.createdAt,
+        });
+      }
+    });
+
+    return unsubscribe;
+  }, [socket, socket.isConnected, chatId, chatItem, markAsReadMutation]);
 
   // Loading skeleton
   if (isLoading || !chatItem) {

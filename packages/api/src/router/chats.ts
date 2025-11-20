@@ -6,6 +6,7 @@ import {
   and,
   asc,
   chat,
+  chatParticipant,
   contact,
   count,
   department,
@@ -46,12 +47,13 @@ export const chatsRouter = createTRPCRouter({
         departmentId: z.string().uuid().optional(),
         messageSource: z.enum(["whatsapp", "internal"]).optional(),
         search: z.string().optional(),
+        unreadOnly: z.boolean().optional(),
         limit: z.number().min(1).max(100).default(50),
         offset: z.number().min(0).default(0),
       }),
     )
     .query(async ({ ctx, input }) => {
-      const { status, assignedTo, departmentId, messageSource, search, limit, offset } =
+      const { status, assignedTo, departmentId, messageSource, search, unreadOnly, limit, offset } =
         input;
 
       // Buscar o agent do usuário atual
@@ -126,6 +128,12 @@ export const chatsRouter = createTRPCRouter({
         );
       }
 
+      // Filtrar apenas conversas com mensagens não lidas
+      // IMPORTANTE: Agora filtra baseado em chatParticipant.unreadCount
+      if (unreadOnly && currentAgent) {
+        conditions.push(sql`${chatParticipant.unreadCount} > 0`);
+      }
+
       const where = conditions.length > 0 ? and(...conditions) : undefined;
 
       // Executar queries em paralelo
@@ -135,10 +143,23 @@ export const chatsRouter = createTRPCRouter({
             chat,
             contact,
             assignedAgent: agent,
+            // Pegar unreadCount do participant (NULL se não for participant)
+            participant: chatParticipant,
           })
           .from(chat)
           .leftJoin(contact, eq(chat.contactId, contact.id))
           .leftJoin(agent, eq(chat.assignedTo, agent.id))
+          // JOIN com participant APENAS se tiver currentAgent
+          .leftJoin(
+            chatParticipant,
+            currentAgent
+              ? and(
+                  eq(chatParticipant.chatId, chat.id),
+                  eq(chatParticipant.chatCreatedAt, chat.createdAt),
+                  eq(chatParticipant.agentId, currentAgent.id),
+                )
+              : undefined,
+          )
           .where(where)
           .limit(limit)
           .offset(offset)
@@ -237,8 +258,18 @@ export const chatsRouter = createTRPCRouter({
         };
       });
 
+      // Mapear items para usar unreadCount do participant ao invés do chat
+      const itemsWithCorrectUnreadCount = resolvedItems.map((item) => ({
+        ...item,
+        chat: {
+          ...item.chat,
+          // Usar unreadCount do participant (0 se não for participant)
+          unreadCount: item.participant?.unreadCount ?? 0,
+        },
+      }));
+
       return {
-        items: resolvedItems,
+        items: itemsWithCorrectUnreadCount,
         total: totalResult[0]?.count ?? 0,
         limit,
         offset,
@@ -420,12 +451,12 @@ export const chatsRouter = createTRPCRouter({
   /**
    * Criar nova sessão (chat interno) via instance code
    * SEMPRE cria nova sessão, mesmo que já exista chat anterior com o mesmo contato
+   * O chat é SEMPRE atribuído ao criador automaticamente
    */
   createNewSession: protectedProcedure
     .input(
       z.object({
         targetInstanceCode: z.string(),
-        assignToMe: z.boolean().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -541,14 +572,13 @@ export const chatsRouter = createTRPCRouter({
         )
         .limit(1);
 
-      // Se existe chat open, retornar ele (atribuir se necessário)
+      // Se existe chat open, atribuir ao DESTINATÁRIO automaticamente (se ainda não atribuído)
       if (existingOpenChat) {
-        // Se assignToMe é true e ainda não está atribuído, atribuir
-        if (input.assignToMe && !existingOpenChat.assignedTo) {
+        if (!existingOpenChat.assignedTo) {
           const [updated] = await tenantDb
             .update(chat)
             .set({
-              assignedTo: currentAgent.id,
+              assignedTo: targetAgent.id,
               updatedAt: new Date(),
             })
             .where(
@@ -565,7 +595,7 @@ export const chatsRouter = createTRPCRouter({
         return existingOpenChat;
       }
 
-      // 6. Criar novo chat interno (apenas se não existe chat open)
+      // 6. Criar novo chat interno (sempre atribuído ao DESTINATÁRIO)
       const now = new Date();
       const [newChat] = await tenantDb
         .insert(chat)
@@ -574,8 +604,8 @@ export const chatsRouter = createTRPCRouter({
           contactId: targetContact.id,
           channelId: null, // Chats internos não têm canal
           messageSource: "internal",
-          initiatorAgentId: currentAgent.id,
-          assignedTo: input.assignToMe ? currentAgent.id : null,
+          initiatorAgentId: currentAgent.id, // Quem criou o chat
+          assignedTo: targetAgent.id, // Atribuído ao destinatário
           status: "open",
           createdAt: now,
           updatedAt: now,
@@ -588,6 +618,22 @@ export const chatsRouter = createTRPCRouter({
           message: "Falha ao criar chat",
         });
       }
+
+      // Criar registros de participantes (initiator + target)
+      await tenantDb.insert(chatParticipant).values([
+        {
+          chatId: newChat.id,
+          chatCreatedAt: newChat.createdAt,
+          agentId: currentAgent.id, // Initiator
+          unreadCount: 0, // Quem cria não tem mensagens não lidas
+        },
+        {
+          chatId: newChat.id,
+          chatCreatedAt: newChat.createdAt,
+          agentId: targetAgent.id, // Target
+          unreadCount: 0, // Ainda sem mensagens
+        },
+      ]);
 
       // Atualizar lastMessage com "Nova sessão criada"
       await tenantDb
@@ -756,8 +802,9 @@ export const chatsRouter = createTRPCRouter({
 
   /**
    * Marcar mensagens como lidas (zerar unreadCount)
+   * Atualiza chatParticipant para o agent atual
    */
-  markAsRead: ownerProcedure
+  markAsRead: memberProcedure
     .input(
       z.object({
         id: z.string().uuid(),
@@ -765,23 +812,69 @@ export const chatsRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const [updated] = await ctx.tenantDb
-        .update(chat)
-        .set({
-          unreadCount: 0,
-          updatedAt: new Date(),
-        })
-        .where(and(eq(chat.id, input.id), eq(chat.createdAt, input.createdAt)))
-        .returning();
+      // Buscar o agent atual
+      const [currentAgent] = await ctx.tenantDb
+        .select()
+        .from(agent)
+        .where(eq(agent.userId, ctx.session.user.id))
+        .limit(1);
 
-      if (!updated) {
+      if (!currentAgent) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "Chat não encontrado",
+          message: "Agent não encontrado",
         });
       }
 
-      return updated;
+      const now = new Date();
+
+      // Atualizar chatParticipant APENAS para o agent atual
+      const [updated] = await ctx.tenantDb
+        .update(chatParticipant)
+        .set({
+          unreadCount: 0,
+          lastReadAt: now,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(chatParticipant.chatId, input.id),
+            eq(chatParticipant.chatCreatedAt, input.createdAt),
+            eq(chatParticipant.agentId, currentAgent.id),
+          ),
+        )
+        .returning();
+
+      if (!updated) {
+        // Se não existe participant, pode ser chat de WhatsApp
+        // Atualizar chat table (fallback para WhatsApp)
+        const [chatUpdated] = await ctx.tenantDb
+          .update(chat)
+          .set({
+            unreadCount: 0,
+            updatedAt: now,
+          })
+          .where(and(eq(chat.id, input.id), eq(chat.createdAt, input.createdAt)))
+          .returning();
+
+        if (!chatUpdated) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Chat não encontrado",
+          });
+        }
+
+        return chatUpdated;
+      }
+
+      // Buscar chat atualizado para retornar
+      const [chatRecord] = await ctx.tenantDb
+        .select()
+        .from(chat)
+        .where(and(eq(chat.id, input.id), eq(chat.createdAt, input.createdAt)))
+        .limit(1);
+
+      return chatRecord ?? updated;
     }),
 
   /**

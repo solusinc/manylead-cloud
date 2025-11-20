@@ -1,7 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
-import { agent, and, attachment, channel, chat, contact, desc, eq, lt, message, sql } from "@manylead/db";
+import { agent, and, attachment, channel, chat, chatParticipant, contact, desc, eq, lt, message, sql } from "@manylead/db";
 import { EvolutionAPIClient } from "@manylead/evolution-api-client";
 import { publishMessageEvent } from "@manylead/shared";
 
@@ -235,7 +235,7 @@ export const messagesRouter = createTRPCRouter({
       if (chatRecord.messageSource === "internal" && chatRecord.initiatorAgentId) {
         const isInitiator = currentAgent.id === chatRecord.initiatorAgentId;
 
-        // Buscar o outro participante
+        // Buscar o outro participante (destinatário)
         const targetAgentId = isInitiator
           ? (await ctx.tenantDb
               .select()
@@ -247,6 +247,23 @@ export const messagesRouter = createTRPCRouter({
                 return metadata?.agentId;
               }))
           : chatRecord.initiatorAgentId;
+
+        // Incrementar unreadCount APENAS do destinatário (não do sender)
+        if (targetAgentId) {
+          await ctx.tenantDb
+            .update(chatParticipant)
+            .set({
+              unreadCount: sql`COALESCE(${chatParticipant.unreadCount}, 0) + 1`,
+              updatedAt: now,
+            })
+            .where(
+              and(
+                eq(chatParticipant.chatId, input.chatId),
+                eq(chatParticipant.chatCreatedAt, chatRecord.createdAt),
+                eq(chatParticipant.agentId, targetAgentId),
+              ),
+            );
+        }
 
         if (targetAgentId) {
           // Enviar evento APENAS para o outro participante

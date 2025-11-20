@@ -70,7 +70,33 @@ export async function setupTimescaleDB(
     console.log("[TimescaleDB] ✅ Chat UNIQUE constraint created");
 
     // ============================================================================
-    // 3. CONFIGURAR COMPRESSION POLICY (Economiza 70-90% de disco)
+    // 3. CRIAR INDEXES PARA CHAT_PARTICIPANT
+    // ============================================================================
+    console.log("[TimescaleDB] Creating indexes for 'chat_participant' table...");
+
+    // Index para buscar participantes por agent
+    await client.unsafe(`
+      CREATE INDEX IF NOT EXISTS idx_chat_participant_agent_id
+      ON chat_participant(agent_id);
+    `);
+
+    // Index para buscar participantes por chat
+    await client.unsafe(`
+      CREATE INDEX IF NOT EXISTS idx_chat_participant_chat_lookup
+      ON chat_participant(chat_id, chat_created_at);
+    `);
+
+    // Index para buscar participantes com mensagens não lidas
+    await client.unsafe(`
+      CREATE INDEX IF NOT EXISTS idx_chat_participant_unread
+      ON chat_participant(agent_id, unread_count)
+      WHERE unread_count > 0;
+    `);
+
+    console.log("[TimescaleDB] ✅ Chat participant indexes created");
+
+    // ============================================================================
+    // 4. CONFIGURAR COMPRESSION POLICY (Economiza 70-90% de disco)
     // ============================================================================
     console.log("[TimescaleDB] Configuring compression policies...");
 

@@ -1,4 +1,4 @@
-import { and, attachment, chat, contact, eq, message } from "@manylead/db";
+import { and, attachment, chat, contact, eq, message, sql } from "@manylead/db";
 import { createMediaDownloadQueue } from "@manylead/shared/queue";
 
 import { getSocketManager } from "~/socket";
@@ -232,7 +232,7 @@ export async function handleMessagesUpsert(
           lastMessageAt: timestamp,
           lastMessageContent: messageContent.text,
           lastMessageSender: "customer",
-          unreadCount: chatRecord.unreadCount + 1,
+          unreadCount: sql`COALESCE(${chat.unreadCount}, 0) + 1`,
           updatedAt: new Date(),
         })
         .where(

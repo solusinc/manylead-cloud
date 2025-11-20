@@ -11,6 +11,7 @@ import { useTRPC } from "~/lib/trpc/react";
 import { useChatSocketContext } from "~/components/providers/chat-socket-provider";
 import { useServerSession } from "~/components/providers/session-provider";
 import { useChatSearchStore, useIsSearchActive } from "~/stores/use-chat-search-store";
+import { useChatFiltersStore } from "~/stores/use-chat-filters-store";
 
 type FilterType = "all" | "pending" | "open" | "mine";
 
@@ -29,6 +30,7 @@ export function ChatSidebarList({
   const session = useServerSession();
   const isSearchActive = useIsSearchActive();
   const searchTerm = useChatSearchStore((state) => state.searchTerm);
+  const showUnreadOnly = useChatFiltersStore((state) => state.showUnreadOnly);
 
   // Estado para rastrear quem está digitando (chatId -> true/false)
   const [typingChats, setTypingChats] = useState<Set<string>>(new Set());
@@ -58,6 +60,7 @@ export function ChatSidebarList({
     trpc.chats.list.queryOptions({
       ...filterParams,
       search: isSearchActive ? searchTerm : undefined,
+      unreadOnly: showUnreadOnly || undefined,
       limit: 100,
       offset: 0,
     })
@@ -126,7 +129,7 @@ export function ChatSidebarList({
     return (
       <div className={cn("flex h-full items-center justify-center p-4", className)}>
         <p className="text-muted-foreground text-center text-sm">
-          {isSearchActive ? (
+          {isSearchActive || showUnreadOnly ? (
             "Nenhuma sessão encontrada..."
           ) : (
             <>
