@@ -7,10 +7,7 @@ import {
   uuid,
   varchar,
 } from "drizzle-orm/pg-core";
-import { customAlphabet } from "nanoid";
 import { v7 as uuidv7 } from "uuid";
-
-const nanoid = customAlphabet("0123456789abcdef", 10);
 
 /**
  * Agent table - Usuários com permissões granulares
@@ -52,13 +49,6 @@ export const agent = pgTable(
 
     isActive: boolean("is_active").default(true).notNull(),
 
-    // Instance Code (para comunicação interna manylead-to-manylead)
-    instanceCode: varchar("instance_code", { length: 50 })
-      .notNull()
-      .unique()
-      .$defaultFn(() => `manylead-${nanoid()}`),
-    // Formato: manylead-477a286676 (sem hífen no ID, só lowercase hex)
-
     // Timestamps
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -66,6 +56,5 @@ export const agent = pgTable(
   (table) => [
     index("agent_user_idx").on(table.userId),
     index("agent_active_idx").on(table.isActive),
-    index("agent_instance_code_idx").on(table.instanceCode),
   ],
 );

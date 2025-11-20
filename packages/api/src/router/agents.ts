@@ -139,50 +139,6 @@ export const agentsRouter = createTRPCRouter({
     }),
 
   /**
-   * Get agent by instance code
-   * Used for internal chat - find agent to start conversation with
-   */
-  getByInstanceCode: protectedProcedure
-    .input(z.object({ instanceCode: z.string() }))
-    .query(async ({ ctx, input }) => {
-      const organizationId = ctx.session.session.activeOrganizationId;
-
-      if (!organizationId) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Nenhuma organização ativa",
-        });
-      }
-
-      const tenantDb = await tenantManager.getConnection(organizationId);
-
-      const [agentRecord] = await tenantDb
-        .select()
-        .from(agent)
-        .where(eq(agent.instanceCode, input.instanceCode))
-        .limit(1);
-
-      if (!agentRecord) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Instance code não encontrado",
-        });
-      }
-
-      // Get user data from catalog database
-      const [userData] = await ctx.db
-        .select()
-        .from(user)
-        .where(eq(user.id, agentRecord.userId))
-        .limit(1);
-
-      return {
-        ...selectAgentSchema.parse(agentRecord),
-        user: userData ?? null,
-      };
-    }),
-
-  /**
    * Get agent by userId
    * Users can get their own agent, admins/owners can get any agent
    */

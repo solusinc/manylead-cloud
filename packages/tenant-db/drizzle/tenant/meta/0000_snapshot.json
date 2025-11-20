@@ -1,5 +1,5 @@
 {
-  "id": "88d1cf88-cee3-4f2e-a8c5-81d3b50fab41",
+  "id": "7d08e8bc-8a82-42e1-8742-d30d7ba5aaf4",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -248,12 +248,6 @@
           "notNull": true,
           "default": true
         },
-        "instance_code": {
-          "name": "instance_code",
-          "type": "varchar(50)",
-          "primaryKey": false,
-          "notNull": true
-        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -299,21 +293,6 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
-        },
-        "agent_instance_code_idx": {
-          "name": "agent_instance_code_idx",
-          "columns": [
-            {
-              "expression": "instance_code",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
         }
       },
       "foreignKeys": {},
@@ -324,13 +303,6 @@
           "nullsNotDistinct": false,
           "columns": [
             "user_id"
-          ]
-        },
-        "agent_instance_code_unique": {
-          "name": "agent_instance_code_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "instance_code"
           ]
         }
       },
@@ -948,6 +920,87 @@
           "columns": [
             "id",
             "created_at"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.chat_participant": {
+      "name": "chat_participant",
+      "schema": "",
+      "columns": {
+        "chat_id": {
+          "name": "chat_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "chat_created_at": {
+          "name": "chat_created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "agent_id": {
+          "name": "agent_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "unread_count": {
+          "name": "unread_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "last_read_at": {
+          "name": "last_read_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "chat_participant_agent_id_agent_id_fk": {
+          "name": "chat_participant_agent_id_agent_id_fk",
+          "tableFrom": "chat_participant",
+          "tableTo": "agent",
+          "columnsFrom": [
+            "agent_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "chat_participant_chat_id_chat_created_at_agent_id_pk": {
+          "name": "chat_participant_chat_id_chat_created_at_agent_id_pk",
+          "columns": [
+            "chat_id",
+            "chat_created_at",
+            "agent_id"
           ]
         }
       },

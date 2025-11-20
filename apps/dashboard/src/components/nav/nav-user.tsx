@@ -40,10 +40,10 @@ import {
 } from "@manylead/ui/sidebar";
 import { useTheme } from "@manylead/ui/theme";
 
-import { authClient } from "~/lib/auth/client";
-import { useTRPC } from "~/lib/trpc/react";
-import { usePermissions } from "~/lib/permissions";
 import { useServerSession } from "~/components/providers/session-provider";
+import { authClient } from "~/lib/auth/client";
+import { usePermissions } from "~/lib/permissions";
+import { useTRPC } from "~/lib/trpc/react";
 
 export function NavUser() {
   const { isMobile, setOpenMobile } = useSidebar();
@@ -60,14 +60,11 @@ export function NavUser() {
   const { data: organizations, isLoading: isLoadingOrgs } = useQuery(
     trpc.organization.list.queryOptions(),
   );
-  const { data: agent, isLoading: isLoadingAgent } = useQuery(
-    trpc.agents.getCurrent.queryOptions(),
-  );
 
   // Se não há organização ativa mas há organizações disponíveis, use a primeira
   const activeOrg = organization ?? organizations?.[0];
 
-  if (isLoadingOrg || isLoadingOrgs || isLoadingAgent) {
+  if (isLoadingOrg || isLoadingOrgs) {
     return null;
   }
 
@@ -137,24 +134,26 @@ export function NavUser() {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            {agent?.instanceCode && (
+            {activeOrg.instanceCode && (
               <>
                 <div className="px-2 py-2">
                   <label className="text-muted-foreground mb-1.5 block text-xs">
                     Código da instância
                   </label>
-                  <div className="relative group">
+                  <div className="group relative">
                     <Input
-                      value={agent.instanceCode}
+                      value={activeOrg.instanceCode}
                       readOnly
-                      className="font-mono pr-10 text-xs focus-visible:ring-0 focus-visible:ring-offset-0 border-input hover:border-input focus:border-input group-hover:border-input"
+                      className="border-input hover:border-input focus:border-input group-hover:border-input pr-10 font-mono text-xs focus-visible:ring-0 focus-visible:ring-offset-0"
                     />
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="absolute top-0 right-0 h-full px-3 hover:bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 outline-none border-0 focus-visible:!border-transparent hover:!border-transparent dark:hover:bg-transparent dark:focus-visible:border-transparent"
+                      className="absolute top-0 right-0 h-full border-0 px-3 shadow-none outline-none hover:border-transparent! hover:bg-transparent focus-visible:border-transparent! focus-visible:ring-0 focus-visible:ring-offset-0 dark:hover:bg-transparent dark:focus-visible:border-transparent"
                       onClick={() => {
-                        void navigator.clipboard.writeText(agent.instanceCode);
+                        void navigator.clipboard.writeText(
+                          activeOrg.instanceCode,
+                        );
                         setCopied(true);
                         setTimeout(() => setCopied(false), 2000);
                       }}

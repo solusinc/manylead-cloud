@@ -408,6 +408,7 @@ export const organizationRouter = createTRPCRouter({
         logo: organization.logo,
         createdAt: organization.createdAt,
         metadata: organization.metadata,
+        instanceCode: organization.instanceCode,
       })
       .from(organization)
       .innerJoin(member, eq(member.organizationId, organization.id))
@@ -450,6 +451,7 @@ export const organizationRouter = createTRPCRouter({
             logo: organization.logo,
             createdAt: organization.createdAt,
             metadata: organization.metadata,
+            instanceCode: organization.instanceCode,
           })
           .from(organization)
           .where(eq(organization.id, otherOrgs[0].id))
@@ -478,6 +480,7 @@ export const organizationRouter = createTRPCRouter({
         logo: organization.logo,
         createdAt: organization.createdAt,
         metadata: organization.metadata,
+        instanceCode: organization.instanceCode,
       })
       .from(organization)
       .innerJoin(member, eq(member.organizationId, organization.id))

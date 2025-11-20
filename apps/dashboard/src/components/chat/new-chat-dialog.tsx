@@ -30,7 +30,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
   const router = useRouter();
   const trpc = useTRPC();
   const [selectedType, setSelectedType] = useState<ChatType | null>(null);
-  const [instanceCode, setInstanceCode] = useState("");
+  const [organizationInstanceCode, setOrganizationInstanceCode] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
 
   const createNewSessionMutation = useMutation(
@@ -51,7 +51,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
     try {
       if (selectedType === "internal") {
         await createNewSessionMutation.mutateAsync({
-          targetInstanceCode: instanceCode.trim(),
+          organizationInstanceCode: organizationInstanceCode.trim(),
         });
       } else if (selectedType === "whatsapp") {
         // TODO: Implement WhatsApp chat creation
@@ -68,14 +68,14 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
 
   const handleClose = () => {
     setSelectedType(null);
-    setInstanceCode("");
+    setOrganizationInstanceCode("");
     setPhoneNumber("");
     onOpenChange(false);
   };
 
   const handleBack = () => {
     setSelectedType(null);
-    setInstanceCode("");
+    setOrganizationInstanceCode("");
     setPhoneNumber("");
   };
 
@@ -92,7 +92,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
               <NewChatOption
                 icon={<span className="text-sm font-bold">ML</span>}
                 label="Manylead"
-                description="Conversa interna com outro usuário"
+                description="Conversa com outra organização"
                 onClick={() => setSelectedType("internal")}
               />
 
@@ -117,16 +117,16 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
             <div className="space-y-4">
               {selectedType === "internal" ? (
                 <div className="space-y-2">
-                  <Label htmlFor="instance-code">Código da instância</Label>
+                  <Label htmlFor="instance-code">Código da organização</Label>
                   <Input
                     id="instance-code"
                     placeholder="manylead-xxxxxxxxxx"
-                    value={instanceCode}
-                    onChange={(e) => setInstanceCode(e.target.value)}
+                    value={organizationInstanceCode}
+                    onChange={(e) => setOrganizationInstanceCode(e.target.value)}
                     autoFocus
                   />
                   <p className="text-muted-foreground text-xs">
-                    Digite o código da pessoa com quem deseja conversar
+                    Digite o código da organização com quem deseja conversar
                   </p>
                 </div>
               ) : (
@@ -159,7 +159,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
                   className="flex-1"
                   disabled={
                     createNewSessionMutation.isPending ||
-                    (selectedType === "internal" && !instanceCode.trim()) ||
+                    (selectedType === "internal" && !organizationInstanceCode.trim()) ||
                     (selectedType === "whatsapp" && !phoneNumber.trim())
                   }
                 >

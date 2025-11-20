@@ -1,5 +1,5 @@
 {
-  "id": "07b4f936-53df-4d6a-aa81-9e8794a3aa40",
+  "id": "9bf1cf79-0099-42f8-9762-deb02c4efe98",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -338,6 +338,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "instance_code": {
+          "name": "instance_code",
+          "type": "varchar(50)",
+          "primaryKey": false,
+          "notNull": true
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp",
@@ -351,7 +357,23 @@
           "notNull": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "organization_instance_code_idx": {
+          "name": "organization_instance_code_idx",
+          "columns": [
+            {
+              "expression": "instance_code",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
@@ -360,6 +382,13 @@
           "nullsNotDistinct": false,
           "columns": [
             "slug"
+          ]
+        },
+        "organization_instance_code_unique": {
+          "name": "organization_instance_code_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "instance_code"
           ]
         }
       },

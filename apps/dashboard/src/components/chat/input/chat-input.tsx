@@ -80,7 +80,6 @@ export function ChatInput({
     trpc.chats.assign.mutationOptions({
       onSuccess: () => {
         void queryClient.invalidateQueries({ queryKey: [["chats", "list"]] });
-        toast.success("Chat atribuído com sucesso!");
       },
       onError: (error) => {
         toast.error(error.message || "Erro ao atribuir chat");
@@ -116,7 +115,7 @@ export function ChatInput({
     })
   );
 
-  const handleNovoAtendimento = async () => {
+  const handleNovoAtendimento = () => {
     if (!currentChat) {
       toast.error("Erro ao carregar dados do chat");
       return;
@@ -127,44 +126,19 @@ export function ChatInput({
       return;
     }
 
-    // Se for chat interno, criar nova sessão com o outro participante
+    // Se for chat interno, criar nova sessão com a organização
     if (currentChat.chat.messageSource === "internal") {
-      // Determinar quem é o "outro" participante
-      const isInitiator = currentChat.chat.initiatorAgentId === currentAgent.id;
+      // Contact representa a outra organização
+      const targetOrgInstanceCode = currentChat.contact?.metadata?.targetOrganizationInstanceCode;
 
-      // Se sou o iniciador, o outro é o contact (que tem agentId no metadata)
-      // Se não sou, o outro é o iniciator
-      let targetAgentId: string | null = null;
-
-      if (isInitiator && currentChat.contact?.metadata) {
-        targetAgentId = (currentChat.contact.metadata as { agentId?: string }).agentId ?? null;
-      } else {
-        targetAgentId = currentChat.chat.initiatorAgentId;
-      }
-
-      if (!targetAgentId) {
-        toast.error("Erro ao identificar participante");
+      if (!targetOrgInstanceCode) {
+        toast.error("Erro ao identificar organização");
         return;
       }
 
-      // Buscar instanceCode do target agent
-      try {
-        const targetAgent = await queryClient.fetchQuery(
-          trpc.agents.getById.queryOptions({ id: targetAgentId })
-        );
-
-        if (!targetAgent.instanceCode) {
-          toast.error("Erro ao obter código da instância");
-          return;
-        }
-
-        createNewSessionMutation.mutate({
-          targetInstanceCode: targetAgent.instanceCode,
-          assignToMe: true,
-        });
-      } catch {
-        toast.error("Erro ao buscar dados do participante");
-      }
+      createNewSessionMutation.mutate({
+        organizationInstanceCode: targetOrgInstanceCode,
+      });
     } else {
       // WhatsApp - TODO: implementar criação de nova sessão WhatsApp
       toast("Em breve", {

@@ -30,11 +30,9 @@ CREATE TABLE "agent" (
 	"role" varchar(50) DEFAULT 'member' NOT NULL,
 	"permissions" jsonb DEFAULT '{"departments":{"type":"all"},"channels":{"type":"all"}}'::jsonb NOT NULL,
 	"is_active" boolean DEFAULT true NOT NULL,
-	"instance_code" varchar(50) NOT NULL,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL,
-	CONSTRAINT "agent_user_id_unique" UNIQUE("user_id"),
-	CONSTRAINT "agent_instance_code_unique" UNIQUE("instance_code")
+	CONSTRAINT "agent_user_id_unique" UNIQUE("user_id")
 );
 --> statement-breakpoint
 CREATE TABLE "channel" (
@@ -103,6 +101,17 @@ CREATE TABLE "chat" (
 	CONSTRAINT "chat_id_created_at_pk" PRIMARY KEY("id","created_at")
 );
 --> statement-breakpoint
+CREATE TABLE "chat_participant" (
+	"chat_id" uuid NOT NULL,
+	"chat_created_at" timestamp NOT NULL,
+	"agent_id" uuid NOT NULL,
+	"unread_count" integer DEFAULT 0 NOT NULL,
+	"last_read_at" timestamp,
+	"created_at" timestamp DEFAULT now() NOT NULL,
+	"updated_at" timestamp DEFAULT now() NOT NULL,
+	CONSTRAINT "chat_participant_chat_id_chat_created_at_agent_id_pk" PRIMARY KEY("chat_id","chat_created_at","agent_id")
+);
+--> statement-breakpoint
 CREATE TABLE "message" (
 	"id" uuid NOT NULL,
 	"chat_id" uuid NOT NULL,
@@ -157,13 +166,13 @@ ALTER TABLE "chat" ADD CONSTRAINT "chat_channel_id_channel_id_fk" FOREIGN KEY ("
 ALTER TABLE "chat" ADD CONSTRAINT "chat_contact_id_contact_id_fk" FOREIGN KEY ("contact_id") REFERENCES "public"."contact"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "chat" ADD CONSTRAINT "chat_initiator_agent_id_agent_id_fk" FOREIGN KEY ("initiator_agent_id") REFERENCES "public"."agent"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "chat" ADD CONSTRAINT "chat_assigned_to_agent_id_fk" FOREIGN KEY ("assigned_to") REFERENCES "public"."agent"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "chat_participant" ADD CONSTRAINT "chat_participant_agent_id_agent_id_fk" FOREIGN KEY ("agent_id") REFERENCES "public"."agent"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "agent_status" ADD CONSTRAINT "agent_status_agent_id_agent_id_fk" FOREIGN KEY ("agent_id") REFERENCES "public"."agent"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "organization_settings_org_idx" ON "organization_settings" USING btree ("organization_id");--> statement-breakpoint
 CREATE INDEX "department_org_idx" ON "department" USING btree ("organization_id");--> statement-breakpoint
 CREATE INDEX "department_active_idx" ON "department" USING btree ("is_active");--> statement-breakpoint
 CREATE INDEX "agent_user_idx" ON "agent" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "agent_active_idx" ON "agent" USING btree ("is_active");--> statement-breakpoint
-CREATE INDEX "agent_instance_code_idx" ON "agent" USING btree ("instance_code");--> statement-breakpoint
 CREATE INDEX "channel_org_idx" ON "channel" USING btree ("organization_id");--> statement-breakpoint
 CREATE INDEX "channel_type_idx" ON "channel" USING btree ("channel_type");--> statement-breakpoint
 CREATE INDEX "channel_status_idx" ON "channel" USING btree ("status");--> statement-breakpoint

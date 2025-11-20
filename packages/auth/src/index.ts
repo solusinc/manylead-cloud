@@ -1,9 +1,9 @@
 import type { BetterAuthOptions, BetterAuthPlugin } from "better-auth";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
-import { organization } from "better-auth/plugins";
+import { customSession, organization } from "better-auth/plugins";
 
-import { db } from "@manylead/db/client";
+import { db, eq, organization as organizationTable } from "@manylead/db";
 
 export function initAuth<
   TExtraPlugins extends BetterAuthPlugin[] = [],
@@ -43,7 +43,35 @@ export function initAuth<
     },
   } satisfies BetterAuthOptions;
 
-  return betterAuth(config);
+  return betterAuth({
+    ...config,
+    plugins: [
+      ...config.plugins,
+      customSession(async ({ user, session }) => {
+        let organizationInstanceCode: string | null = null;
+
+        const sessionWithOrg = session as typeof session & {
+          activeOrganizationId?: string | null;
+        };
+
+        if (sessionWithOrg.activeOrganizationId) {
+          const org = await db
+            .select({ instanceCode: organizationTable.instanceCode })
+            .from(organizationTable)
+            .where(eq(organizationTable.id, sessionWithOrg.activeOrganizationId))
+            .limit(1);
+
+          organizationInstanceCode = org[0]?.instanceCode ?? null;
+        }
+
+        return {
+          user,
+          session,
+          organizationInstanceCode,
+        };
+      }, config),
+    ],
+  });
 }
 
 export type Auth = ReturnType<typeof initAuth>;

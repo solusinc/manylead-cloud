@@ -52,9 +52,11 @@ CREATE TABLE "organization" (
 	"name" text NOT NULL,
 	"slug" text NOT NULL,
 	"logo" text,
+	"instance_code" varchar(50) NOT NULL,
 	"created_at" timestamp NOT NULL,
 	"metadata" text,
-	CONSTRAINT "organization_slug_unique" UNIQUE("slug")
+	CONSTRAINT "organization_slug_unique" UNIQUE("slug"),
+	CONSTRAINT "organization_instance_code_unique" UNIQUE("instance_code")
 );
 --> statement-breakpoint
 CREATE TABLE "member" (
@@ -174,6 +176,7 @@ ALTER TABLE "tenant" ADD CONSTRAINT "tenant_database_host_id_database_host_id_fk
 ALTER TABLE "tenant_metric" ADD CONSTRAINT "tenant_metric_tenant_id_tenant_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenant"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "migration_log" ADD CONSTRAINT "migration_log_tenant_id_tenant_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenant"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "activity_log" ADD CONSTRAINT "activity_log_tenant_id_tenant_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenant"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "organization_instance_code_idx" ON "organization" USING btree ("instance_code");--> statement-breakpoint
 CREATE INDEX "member_user_id_idx" ON "member" USING btree ("user_id");--> statement-breakpoint
 CREATE INDEX "member_organization_id_idx" ON "member" USING btree ("organization_id");--> statement-breakpoint
 CREATE INDEX "member_user_org_idx" ON "member" USING btree ("user_id","organization_id");--> statement-breakpoint

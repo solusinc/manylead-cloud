@@ -47,7 +47,10 @@ export const contact = pgTable(
       firstMessageAt?: Date;
       lastMessageAt?: Date;
       whatsappProfileName?: string; // pushName do WhatsApp
-      agentId?: string; // ID do agent (para source: "internal")
+      agentId?: string; // ID do agent (para source: "internal" intra-org)
+      targetOrganizationId?: string; // ID da org alvo (para cross-org)
+      targetOrganizationName?: string; // Nome da org alvo (para cross-org)
+      targetOrganizationInstanceCode?: string; // instanceCode da org alvo
     }>(),
 
     // Timestamps
@@ -70,5 +73,5 @@ export const contact = pgTable(
       table.organizationId,
       table.createdAt.desc(),
     ),
-  ]
+  ],
 );

@@ -17,6 +17,7 @@ import {
   isNull,
   message,
   or,
+  organization,
   sql,
   user,
 } from "@manylead/db";
@@ -27,7 +28,6 @@ import {
   createTRPCRouter,
   memberProcedure,
   ownerProcedure,
-  protectedProcedure,
 } from "../trpc";
 
 /**
@@ -67,15 +67,16 @@ export const chatsRouter = createTRPCRouter({
       const conditions = [];
 
       // Lógica de visibilidade:
-      // 1. Chat com mensagens (totalMessages > 0): aparece para todos os participantes
-      // 2. Chat sem mensagens: só aparece para quem CRIOU (initiatorAgentId = current agent)
-      if (currentAgent) {
-        conditions.push(
-          sql`(${chat.totalMessages} > 0 OR ${chat.initiatorAgentId} = ${currentAgent.id})`,
-        );
-      } else {
-        conditions.push(sql`${chat.totalMessages} > 0`);
-      }
+      // 1. Chat pending (cross-org): aparece para TODOS (qualquer agent pode pegar)
+      // 2. Chat com mensagens: aparece para TODOS
+      // 3. Chat sem mensagens e não pending: só aparece para assigned agent
+      conditions.push(
+        or(
+          eq(chat.status, "pending"), // Chats pending aparecem para todos
+          sql`${chat.totalMessages} > 0`, // Chats com mensagens aparecem para todos
+          currentAgent ? eq(chat.assignedTo, currentAgent.id) : undefined, // Ou atribuído a mim
+        ),
+      );
 
       // Filtro de departamento baseado em permissões do agent
       if (currentAgent?.permissions.departments) {
@@ -258,13 +259,13 @@ export const chatsRouter = createTRPCRouter({
         };
       });
 
-      // Mapear items para usar unreadCount do participant ao invés do chat
+      // Mapear items para usar unreadCount do participant ou do chat
       const itemsWithCorrectUnreadCount = resolvedItems.map((item) => ({
         ...item,
         chat: {
           ...item.chat,
-          // Usar unreadCount do participant (0 se não for participant)
-          unreadCount: item.participant?.unreadCount ?? 0,
+          // Usar unreadCount do participant, ou do chat se pending (sem participant)
+          unreadCount: item.participant?.unreadCount ?? item.chat.unreadCount,
         },
       }));
 
@@ -449,87 +450,80 @@ export const chatsRouter = createTRPCRouter({
     }),
 
   /**
-   * Criar nova sessão (chat interno) via instance code
-   * SEMPRE cria nova sessão, mesmo que já exista chat anterior com o mesmo contato
-   * O chat é SEMPRE atribuído ao criador automaticamente
+   * Criar nova sessão (chat cross-org) via instance code
+   * Cria o chat NO BANCO DA ORG SOURCE (quem está iniciando)
+   * O chat só aparece na org TARGET quando a primeira mensagem for enviada
+   * Auto-atribui para o agent que criou
    */
-  createNewSession: protectedProcedure
+  createNewSession: memberProcedure
     .input(
       z.object({
-        targetInstanceCode: z.string(),
+        organizationInstanceCode: z.string(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const organizationId = ctx.session.session.activeOrganizationId;
+      const sourceOrganizationId = ctx.session.session.activeOrganizationId;
 
-      if (!organizationId) {
+      if (!sourceOrganizationId) {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "Nenhuma organização ativa",
         });
       }
 
-      const { tenantManager } = await import("../trpc");
-      const tenantDb = await tenantManager.getConnection(organizationId);
-
-      // 1. Buscar target agent por instanceCode
-      const [targetAgent] = await tenantDb
+      // 1. Buscar TARGET ORGANIZATION no catalog DB
+      const [targetOrg] = await ctx.db
         .select()
-        .from(agent)
-        .where(eq(agent.instanceCode, input.targetInstanceCode))
+        .from(organization)
+        .where(eq(organization.instanceCode, input.organizationInstanceCode))
         .limit(1);
 
-      if (!targetAgent) {
+      if (!targetOrg) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "Instance code não encontrado",
+          message: "Código da organização não encontrado",
         });
       }
 
-      // Não pode criar chat consigo mesmo
-      if (targetAgent.userId === ctx.session.user.id) {
+      // 2. Não pode criar chat com a própria organização
+      if (targetOrg.id === sourceOrganizationId) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: "Você não pode criar um chat consigo mesmo",
+          message: "Você não pode criar um chat com sua própria organização",
         });
       }
 
-      // 2. Buscar user do target agent para pegar nome e avatar
-      const [targetUser] = await ctx.db
-        .select()
-        .from(user)
-        .where(eq(user.id, targetAgent.userId))
-        .limit(1);
+      const { tenantManager } = await import("../trpc");
 
-      if (!targetUser) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Usuário não encontrado",
-        });
-      }
+      // 3. Conectar ao banco da organização SOURCE (quem está criando)
+      const sourceTenantDb = await tenantManager.getConnection(sourceOrganizationId);
 
-      // 3. Criar/buscar contact interno para o target agent
-      const existingContacts = await tenantDb
+      // 4. Criar/buscar contact representando a organização TARGET
+      const existingContacts = await sourceTenantDb
         .select()
         .from(contact)
-        .where(eq(contact.organizationId, organizationId));
+        .where(eq(contact.organizationId, sourceOrganizationId));
 
       let targetContact = existingContacts.find(
-        (c) => c.metadata?.agentId === targetAgent.id,
+        (c) =>
+          c.metadata?.source === "internal" &&
+          c.metadata.targetOrganizationId === targetOrg.id,
       );
 
       if (!targetContact) {
-        // Criar novo contato interno
-        const [newContact] = await tenantDb
+        // Criar novo contato representando a organização target
+        const [newContact] = await sourceTenantDb
           .insert(contact)
           .values({
-            organizationId,
+            organizationId: sourceOrganizationId,
             phoneNumber: null,
-            name: targetUser.name,
-            avatar: targetUser.image ?? undefined,
+            name: targetOrg.name,
+            avatar: targetOrg.logo ?? undefined,
             metadata: {
-              source: "internal" as const,
-              agentId: targetAgent.id,
+              source: "internal",
+              targetOrganizationId: targetOrg.id,
+              targetOrganizationName: targetOrg.name,
+              targetOrganizationInstanceCode: targetOrg.instanceCode,
               firstMessageAt: new Date(),
             },
           })
@@ -538,74 +532,42 @@ export const chatsRouter = createTRPCRouter({
         if (!newContact) {
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
-            message: "Falha ao criar contato interno",
+            message: "Falha ao criar contato",
           });
         }
 
         targetContact = newContact;
       }
 
-      // 4. Buscar o agent atual (criador do chat)
-      const [currentAgent] = await tenantDb
-        .select()
-        .from(agent)
-        .where(eq(agent.userId, ctx.session.user.id))
-        .limit(1);
-
-      if (!currentAgent) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Agent atual não encontrado",
-        });
-      }
-
-      // 5. Verificar se já existe chat OPEN com o mesmo participante
-      const [existingOpenChat] = await tenantDb
+      // 5. Verificar se já existe chat open/pending com a mesma organização
+      const [existingChat] = await sourceTenantDb
         .select()
         .from(chat)
         .where(
           and(
             eq(chat.messageSource, "internal"),
             eq(chat.contactId, targetContact.id),
-            eq(chat.status, "open"),
+            or(eq(chat.status, "open"), eq(chat.status, "pending")),
           ),
         )
         .limit(1);
 
-      // Se existe chat open, atribuir ao DESTINATÁRIO automaticamente (se ainda não atribuído)
-      if (existingOpenChat) {
-        if (!existingOpenChat.assignedTo) {
-          const [updated] = await tenantDb
-            .update(chat)
-            .set({
-              assignedTo: targetAgent.id,
-              updatedAt: new Date(),
-            })
-            .where(
-              and(
-                eq(chat.id, existingOpenChat.id),
-                eq(chat.createdAt, existingOpenChat.createdAt),
-              ),
-            )
-            .returning();
-
-          return updated ?? existingOpenChat;
-        }
-
-        return existingOpenChat;
+      if (existingChat) {
+        return existingChat;
       }
 
-      // 6. Criar novo chat interno (sempre atribuído ao DESTINATÁRIO)
+      // 6. Criar novo chat cross-org NO BANCO DA SOURCE
+      const currentAgent = ctx.agent;
       const now = new Date();
-      const [newChat] = await tenantDb
+      const [newChat] = await sourceTenantDb
         .insert(chat)
         .values({
-          organizationId,
+          organizationId: sourceOrganizationId,
           contactId: targetContact.id,
-          channelId: null, // Chats internos não têm canal
+          channelId: null,
           messageSource: "internal",
-          initiatorAgentId: currentAgent.id, // Quem criou o chat
-          assignedTo: targetAgent.id, // Atribuído ao destinatário
+          initiatorAgentId: currentAgent.id,
+          assignedTo: currentAgent.id, // Auto-atribuir para quem criou
           status: "open",
           createdAt: now,
           updatedAt: now,
@@ -619,24 +581,17 @@ export const chatsRouter = createTRPCRouter({
         });
       }
 
-      // Criar registros de participantes (initiator + target)
-      await tenantDb.insert(chatParticipant).values([
-        {
-          chatId: newChat.id,
-          chatCreatedAt: newChat.createdAt,
-          agentId: currentAgent.id, // Initiator
-          unreadCount: 0, // Quem cria não tem mensagens não lidas
-        },
-        {
-          chatId: newChat.id,
-          chatCreatedAt: newChat.createdAt,
-          agentId: targetAgent.id, // Target
-          unreadCount: 0, // Ainda sem mensagens
-        },
-      ]);
+      // 7. Criar chat_participant para o agent que criou
+      await sourceTenantDb.insert(chatParticipant).values({
+        chatId: newChat.id,
+        chatCreatedAt: newChat.createdAt,
+        agentId: currentAgent.id,
+        unreadCount: 0,
+        lastReadAt: now,
+      });
 
-      // Atualizar lastMessage com "Nova sessão criada"
-      await tenantDb
+      // 8. Atualizar lastMessage com "Nova sessão criada"
+      await sourceTenantDb
         .update(chat)
         .set({
           lastMessageAt: newChat.createdAt,
@@ -645,27 +600,11 @@ export const chatsRouter = createTRPCRouter({
         })
         .where(and(eq(chat.id, newChat.id), eq(chat.createdAt, newChat.createdAt)));
 
-      // Emitir eventos Socket.io PERSONALIZADOS para cada participante
-
-      // Buscar dados do initiator para enviar pro target
-      const [currentUser] = await ctx.db
-        .select()
-        .from(user)
-        .where(eq(user.id, currentAgent.userId))
-        .limit(1);
-
-      if (!currentUser) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Usuário atual não encontrado",
-        });
-      }
-
-      // Evento para o INICIADOR - mostrar target contact
+      // Broadcast Socket.io para a organização SOURCE (quem criou)
       await publishChatEvent(
         {
           type: "chat:created",
-          organizationId,
+          organizationId: sourceOrganizationId,
           chatId: newChat.id,
           targetAgentId: currentAgent.id,
           data: {
@@ -676,34 +615,10 @@ export const chatsRouter = createTRPCRouter({
         env.REDIS_URL,
       );
 
-      // Evento para o TARGET - mostrar initiator data
-      await publishChatEvent(
-        {
-          type: "chat:created",
-          organizationId,
-          chatId: newChat.id,
-          targetAgentId: targetAgent.id,
-          data: {
-            chat: newChat as unknown as Record<string, unknown>,
-            contact: {
-              id: targetContact.id,
-              organizationId: targetContact.organizationId,
-              phoneNumber: null,
-              name: currentUser.name,
-              avatar: currentUser.image,
-              createdAt: targetContact.createdAt,
-              updatedAt: targetContact.updatedAt,
-              metadata: targetContact.metadata,
-            } as unknown as Record<string, unknown>,
-          },
-        },
-        env.REDIS_URL,
-      );
-
       // Criar mensagem de sistema "Sessão criada às HH:mm"
       const createdTime = formatTime(newChat.createdAt);
 
-      await tenantDb.insert(message).values({
+      await sourceTenantDb.insert(message).values({
         chatId: newChat.id,
         messageSource: newChat.messageSource,
         sender: "system",
@@ -714,6 +629,8 @@ export const chatsRouter = createTRPCRouter({
         timestamp: newChat.createdAt,
         metadata: {
           systemEventType: "session_created",
+          sourceOrganizationId,
+          targetOrganizationId: targetOrg.id,
         },
       });
 
@@ -846,8 +763,28 @@ export const chatsRouter = createTRPCRouter({
         .returning();
 
       if (!updated) {
-        // Se não existe participant, pode ser chat de WhatsApp
-        // Atualizar chat table (fallback para WhatsApp)
+        // Se não existe participant, verificar se é chat pending cross-org
+        const [chatRecord] = await ctx.tenantDb
+          .select()
+          .from(chat)
+          .where(and(eq(chat.id, input.id), eq(chat.createdAt, input.createdAt)))
+          .limit(1);
+
+        if (!chatRecord) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Chat não encontrado",
+          });
+        }
+
+        // Se é chat pending (cross-org sem assignment), NÃO zerar unreadCount
+        // O badge deve continuar visível até alguém pegar o chat
+        if (chatRecord.status === "pending" && !chatRecord.assignedTo) {
+          // Retornar o chat sem modificar (apenas visualização)
+          return chatRecord;
+        }
+
+        // Para outros casos (WhatsApp, etc), zerar unreadCount normalmente
         const [chatUpdated] = await ctx.tenantDb
           .update(chat)
           .set({
@@ -857,14 +794,7 @@ export const chatsRouter = createTRPCRouter({
           .where(and(eq(chat.id, input.id), eq(chat.createdAt, input.createdAt)))
           .returning();
 
-        if (!chatUpdated) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Chat não encontrado",
-          });
-        }
-
-        return chatUpdated;
+        return chatUpdated ?? chatRecord;
       }
 
       // Buscar chat atualizado para retornar
@@ -958,8 +888,48 @@ export const chatsRouter = createTRPCRouter({
           lastMessageAt: updated.updatedAt,
           lastMessageContent: "Sessão transferida",
           lastMessageSender: "system",
+          unreadCount: 0, // Zerar unreadCount ao atribuir
         })
         .where(and(eq(chat.id, updated.id), eq(chat.createdAt, updated.createdAt)));
+
+      // Criar chatParticipant para o agent (se não existir)
+      const existingParticipant = await ctx.tenantDb
+        .select()
+        .from(chatParticipant)
+        .where(
+          and(
+            eq(chatParticipant.chatId, updated.id),
+            eq(chatParticipant.chatCreatedAt, updated.createdAt),
+            eq(chatParticipant.agentId, input.agentId),
+          ),
+        )
+        .limit(1);
+
+      if (existingParticipant.length === 0) {
+        await ctx.tenantDb.insert(chatParticipant).values({
+          chatId: updated.id,
+          chatCreatedAt: updated.createdAt,
+          agentId: input.agentId,
+          unreadCount: 0,
+          lastReadAt: updated.updatedAt,
+        });
+      } else {
+        // Se já existe, apenas zerar unreadCount
+        await ctx.tenantDb
+          .update(chatParticipant)
+          .set({
+            unreadCount: 0,
+            lastReadAt: updated.updatedAt,
+            updatedAt: updated.updatedAt,
+          })
+          .where(
+            and(
+              eq(chatParticipant.chatId, updated.id),
+              eq(chatParticipant.chatCreatedAt, updated.createdAt),
+              eq(chatParticipant.agentId, input.agentId),
+            ),
+          );
+      }
 
       // Publicar evento de atualização para todos da organização
       const organizationId = ctx.session.session.activeOrganizationId;
