@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Search, MessageSquarePlus, Eye, SlidersHorizontal, X } from "lucide-react";
+import { useDebouncedCallback } from "use-debounce";
 
 import { cn } from "@manylead/ui";
 import { Input } from "@manylead/ui/input";
@@ -13,6 +14,7 @@ import {
 } from "@manylead/ui/tooltip";
 import { NewChatDialog } from "../new-chat-dialog";
 import { useChatFiltersStore } from "~/stores/use-chat-filters-store";
+import { useChatSearchStore } from "~/stores/use-chat-search-store";
 
 export function ChatSidebarHeader({
   className,
@@ -44,7 +46,27 @@ export function ChatSidebarSearch({
   className,
   ...props
 }: React.ComponentProps<"div">) {
-  const [search, setSearch] = useState("");
+  const { searchTerm, setSearchTerm, clearSearch } = useChatSearchStore();
+  const [localValue, setLocalValue] = useState(searchTerm);
+
+  // Debounced update to store (300ms delay)
+  const debouncedSetSearchTerm = useDebouncedCallback(
+    (value: string) => {
+      setSearchTerm(value);
+    },
+    300
+  );
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setLocalValue(value);
+    debouncedSetSearchTerm(value);
+  };
+
+  const handleClear = () => {
+    setLocalValue("");
+    clearSearch();
+  };
 
   return (
     <div className={cn("relative flex-1", className)} {...props}>
@@ -52,13 +74,13 @@ export function ChatSidebarSearch({
       <Input
         type="text"
         placeholder="Buscar contato"
-        value={search}
-        onChange={(e) => setSearch(e.target.value)}
+        value={localValue}
+        onChange={handleChange}
         className="pl-10 h-8 focus-visible:ring-0 focus-visible:ring-offset-0"
       />
-      {search && (
+      {localValue && (
         <button
-          onClick={() => setSearch("")}
+          onClick={handleClear}
           className="absolute right-3 top-1/2 -translate-y-1/2 hover:text-foreground"
         >
           <X className="h-4 w-4" />

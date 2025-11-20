@@ -6,7 +6,9 @@ import { useState } from "react";
 import { ChatSidebarHeader } from "./chat-sidebar-header";
 import { ChatSidebarFilters } from "./chat-sidebar-filters";
 import { ChatSidebarList } from "./chat-sidebar-list";
+import { ChatSidebarContactsList } from "./chat-sidebar-contacts-list";
 import { ChatFiltersSheet } from "../chat-filters-sheet";
+import { useChatSearchStore, useIsSearchActive } from "~/stores/use-chat-search-store";
 
 type FilterType = "all" | "pending" | "open" | "mine";
 
@@ -15,6 +17,8 @@ export function ChatSidebar({
   ...props
 }: React.ComponentProps<"div">) {
   const [activeFilter, setActiveFilter] = useState<FilterType>("all");
+  const isSearchActive = useIsSearchActive();
+  const searchMode = useChatSearchStore((state) => state.searchMode);
 
   return (
     <div
@@ -28,7 +32,11 @@ export function ChatSidebar({
           onFilterChange={setActiveFilter}
         />
         <ScrollArea className="flex-1">
-          <ChatSidebarList activeFilter={activeFilter} />
+          {isSearchActive && searchMode === "contacts" ? (
+            <ChatSidebarContactsList />
+          ) : (
+            <ChatSidebarList activeFilter={activeFilter} />
+          )}
         </ScrollArea>
         <ChatFiltersSheet />
       </div>

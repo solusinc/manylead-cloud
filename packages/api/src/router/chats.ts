@@ -11,6 +11,7 @@ import {
   department,
   desc,
   eq,
+  ilike,
   inArray,
   isNull,
   message,
@@ -50,7 +51,7 @@ export const chatsRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const { status, assignedTo, departmentId, messageSource, limit, offset } =
+      const { status, assignedTo, departmentId, messageSource, search, limit, offset } =
         input;
 
       // Buscar o agent do usuário atual
@@ -115,6 +116,16 @@ export const chatsRouter = createTRPCRouter({
         conditions.push(eq(chat.messageSource, messageSource));
       }
 
+      // Busca em nome do contato e telefone
+      if (search) {
+        conditions.push(
+          or(
+            ilike(contact.name, `%${search}%`),
+            ilike(contact.phoneNumber, `%${search}%`),
+          ),
+        );
+      }
+
       const where = conditions.length > 0 ? and(...conditions) : undefined;
 
       // Executar queries em paralelo
@@ -132,7 +143,14 @@ export const chatsRouter = createTRPCRouter({
           .limit(limit)
           .offset(offset)
           .orderBy(desc(chat.lastMessageAt)),
-        ctx.tenantDb.select({ count: count() }).from(chat).where(where),
+        // Query de count precisa do JOIN quando há busca por contact
+        search
+          ? ctx.tenantDb
+              .select({ count: count() })
+              .from(chat)
+              .leftJoin(contact, eq(chat.contactId, contact.id))
+              .where(where)
+          : ctx.tenantDb.select({ count: count() }).from(chat).where(where),
       ]);
 
       // BATCH OPTIMIZATION: Resolver "outro participante" para chats internos

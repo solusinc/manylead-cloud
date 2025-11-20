@@ -12,6 +12,8 @@ import {
 import { List, Hourglass, MessageCircle, UserCircle } from "lucide-react";
 import { useTRPC } from "~/lib/trpc/react";
 import { useQuery } from "@tanstack/react-query";
+import { useIsSearchActive } from "~/stores/use-chat-search-store";
+import { ChatSidebarSearchTabs } from "./chat-sidebar-search-tabs";
 
 type FilterType = "all" | "pending" | "open" | "mine";
 
@@ -24,9 +26,10 @@ export function ChatSidebarFilters({
   activeFilter?: FilterType;
   onFilterChange?: (filter: FilterType) => void;
 } & React.ComponentProps<"div">) {
+  const isSearchActive = useIsSearchActive();
   const trpc = useTRPC();
 
-  // Buscar todos os chats para contar pending
+  // Buscar todos os chats para contar pending (sempre chamar o hook)
   const { data: chatsData, isLoading: isLoadingChats } = useQuery(
     trpc.chats.list.queryOptions({
       limit: 100,
@@ -35,6 +38,11 @@ export function ChatSidebarFilters({
   );
 
   const pendingCount = chatsData?.items.filter((item) => item.chat.status === "pending").length ?? 0;
+
+  // Se busca está ativa, mostrar tabs de busca
+  if (isSearchActive) {
+    return <ChatSidebarSearchTabs className={className} {...props} />;
+  }
 
   // Loading skeleton
   if (isLoadingChats) {
