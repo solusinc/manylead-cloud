@@ -33,8 +33,8 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
   const [instanceCode, setInstanceCode] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
 
-  const createInternalChatMutation = useMutation(
-    trpc.chats.createInternalChat.mutationOptions({
+  const createNewSessionMutation = useMutation(
+    trpc.chats.createNewSession.mutationOptions({
       onSuccess: (chat) => {
         handleClose();
         router.push(`/chats/${chat.id}`);
@@ -50,7 +50,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
   const handleStartChat = async () => {
     try {
       if (selectedType === "internal") {
-        await createInternalChatMutation.mutateAsync({
+        await createNewSessionMutation.mutateAsync({
           targetInstanceCode: instanceCode.trim(),
         });
       } else if (selectedType === "whatsapp") {
@@ -150,7 +150,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
                   variant="outline"
                   onClick={handleBack}
                   className="flex-1"
-                  disabled={createInternalChatMutation.isPending}
+                  disabled={createNewSessionMutation.isPending}
                 >
                   Voltar
                 </Button>
@@ -158,12 +158,12 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
                   onClick={handleStartChat}
                   className="flex-1"
                   disabled={
-                    createInternalChatMutation.isPending ||
+                    createNewSessionMutation.isPending ||
                     (selectedType === "internal" && !instanceCode.trim()) ||
                     (selectedType === "whatsapp" && !phoneNumber.trim())
                   }
                 >
-                  {createInternalChatMutation.isPending
+                  {createNewSessionMutation.isPending
                     ? "Iniciando..."
                     : "Iniciar conversa"}
                 </Button>

@@ -36,12 +36,15 @@ export function ChatSidebarItem({
   className,
   ...props
 }: ChatSidebarItemProps & React.ComponentProps<"a">) {
+  const isClosed = chat.status === "closed";
+
   return (
     <Link
       href={`/chats/${chat.id}`}
       className={cn(
         "hover:bg-accent/50 flex cursor-pointer items-start gap-3 border-b p-4 transition-colors",
         isActive && "bg-accent",
+        isClosed && "grayscale opacity-60",
         className,
       )}
       {...props}

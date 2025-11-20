@@ -21,7 +21,7 @@ export function ChatMessageDateDivider({
       )}
       {...props}
     >
-      <span className="text-[11px] text-muted-foreground bg-background/80 px-2.5 py-0.5 rounded-full border shadow-sm">
+      <span className="rounded-lg bg-white dark:bg-muted/50 px-3 py-1.5 text-sm font-semibold shadow-sm">
         {formattedDate}
       </span>
     </div>

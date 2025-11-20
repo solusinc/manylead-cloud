@@ -369,6 +369,16 @@ export const chatsRouter = createTRPCRouter({
         });
       }
 
+      // Atualizar lastMessage com "Nova sessão criada"
+      await ctx.tenantDb
+        .update(chat)
+        .set({
+          lastMessageAt: newChat.createdAt,
+          lastMessageContent: "Nova sessão criada",
+          lastMessageSender: "system",
+        })
+        .where(and(eq(chat.id, newChat.id), eq(chat.createdAt, newChat.createdAt)));
+
       // Criar mensagem de sistema "Sessão criada às HH:mm"
       const createdTime = formatTime(newChat.createdAt);
 
@@ -390,13 +400,14 @@ export const chatsRouter = createTRPCRouter({
     }),
 
   /**
-   * Criar chat interno via instance code
-   * Fluxo completo: buscar agent -> criar/buscar contact -> detectar duplicata -> criar chat
+   * Criar nova sessão (chat interno) via instance code
+   * SEMPRE cria nova sessão, mesmo que já exista chat anterior com o mesmo contato
    */
-  createInternalChat: protectedProcedure
+  createNewSession: protectedProcedure
     .input(
       z.object({
         targetInstanceCode: z.string(),
+        assignToMe: z.boolean().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -499,28 +510,7 @@ export const chatsRouter = createTRPCRouter({
         });
       }
 
-      // 5. Detectar chat duplicado (verificar se já existe chat interno entre os 2 agents)
-      const existingChat = await tenantDb
-        .select({
-          chat,
-          contact,
-        })
-        .from(chat)
-        .leftJoin(contact, eq(chat.contactId, contact.id))
-        .where(
-          and(
-            eq(chat.messageSource, "internal"),
-            eq(chat.contactId, targetContact.id),
-          ),
-        )
-        .limit(1);
-
-      if (existingChat.length > 0 && existingChat[0]?.chat) {
-        // Chat já existe, retornar ele
-        return existingChat[0].chat;
-      }
-
-      // 6. Criar novo chat interno
+      // 5. Criar novo chat interno (SEMPRE cria nova sessão)
       const now = new Date();
       const [newChat] = await tenantDb
         .insert(chat)
@@ -530,6 +520,7 @@ export const chatsRouter = createTRPCRouter({
           channelId: null, // Chats internos não têm canal
           messageSource: "internal",
           initiatorAgentId: currentAgent.id,
+          assignedTo: input.assignToMe ? currentAgent.id : null,
           status: "open",
           createdAt: now,
           updatedAt: now,
@@ -542,6 +533,16 @@ export const chatsRouter = createTRPCRouter({
           message: "Falha ao criar chat",
         });
       }
+
+      // Atualizar lastMessage com "Nova sessão criada"
+      await tenantDb
+        .update(chat)
+        .set({
+          lastMessageAt: newChat.createdAt,
+          lastMessageContent: "Nova sessão criada",
+          lastMessageSender: "system",
+        })
+        .where(and(eq(chat.id, newChat.id), eq(chat.createdAt, newChat.createdAt)));
 
       // Emitir eventos Socket.io PERSONALIZADOS para cada participante
 
@@ -802,6 +803,16 @@ export const chatsRouter = createTRPCRouter({
         },
       });
 
+      // Atualizar lastMessage com "Sessão transferida"
+      await ctx.tenantDb
+        .update(chat)
+        .set({
+          lastMessageAt: updated.updatedAt,
+          lastMessageContent: "Sessão transferida",
+          lastMessageSender: "system",
+        })
+        .where(and(eq(chat.id, updated.id), eq(chat.createdAt, updated.createdAt)));
+
       // Publicar evento de atualização para todos da organização
       const organizationId = ctx.session.session.activeOrganizationId;
       if (organizationId) {
@@ -963,6 +974,16 @@ export const chatsRouter = createTRPCRouter({
           },
         });
 
+        // Atualizar lastMessage com "Sessão transferida"
+        await ctx.tenantDb
+          .update(chat)
+          .set({
+            lastMessageAt: updated.updatedAt,
+            lastMessageContent: "Sessão transferida",
+            lastMessageSender: "system",
+          })
+          .where(and(eq(chat.id, updated.id), eq(chat.createdAt, updated.createdAt)));
+
         // Publicar evento de atualização para todos da organização
         const organizationId = ctx.session.session.activeOrganizationId;
         if (organizationId) {
@@ -1003,6 +1024,16 @@ export const chatsRouter = createTRPCRouter({
             message: "Chat não encontrado",
           });
         }
+
+        // Atualizar lastMessage com "Sessão transferida"
+        await ctx.tenantDb
+          .update(chat)
+          .set({
+            lastMessageAt: updated.updatedAt,
+            lastMessageContent: "Sessão transferida",
+            lastMessageSender: "system",
+          })
+          .where(and(eq(chat.id, updated.id), eq(chat.createdAt, updated.createdAt)));
 
         // Publicar evento de atualização para todos da organização
         const organizationId = ctx.session.session.activeOrganizationId;
@@ -1212,6 +1243,50 @@ Duração: ${duration}`;
           code: "NOT_FOUND",
           message: "Chat não encontrado",
         });
+      }
+
+      // Criar mensagem de sistema
+      await ctx.tenantDb.insert(message).values({
+        chatId: updated.id,
+        messageSource: updated.messageSource,
+        sender: "system",
+        senderId: null,
+        messageType: "system",
+        content: "Nova sessão criada",
+        status: "sent",
+        timestamp: new Date(),
+        metadata: {
+          systemEventType: "session_reopened",
+          agentName: ctx.session.user.name,
+          agentId: ctx.session.user.id,
+          reopenedAt: new Date().toISOString(),
+        },
+      });
+
+      // Atualizar lastMessage com "Nova sessão criada"
+      await ctx.tenantDb
+        .update(chat)
+        .set({
+          lastMessageAt: updated.updatedAt,
+          lastMessageContent: "Nova sessão criada",
+          lastMessageSender: "system",
+        })
+        .where(and(eq(chat.id, updated.id), eq(chat.createdAt, updated.createdAt)));
+
+      // Publicar evento de atualização para todos da organização
+      const organizationId = ctx.session.session.activeOrganizationId;
+      if (organizationId) {
+        await publishChatEvent(
+          {
+            type: "chat:updated",
+            organizationId,
+            chatId: updated.id,
+            data: {
+              chat: updated as unknown as Record<string, unknown>,
+            },
+          },
+          env.REDIS_URL,
+        );
       }
 
       return updated;

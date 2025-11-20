@@ -197,11 +197,10 @@ export function ChatWindowHeaderActions({
 
   // APENAS quem está assigned pode transferir, adicionar tags ou finalizar
   const isAssigned = chat.assignedTo === currentAgent?.id;
+  const isClosed = chat.status === "closed";
 
-  // Se não está assigned, não mostra nenhuma ação
-  if (!isAssigned) {
-    return null;
-  }
+  // Mostrar ações apenas se assigned E chat aberto
+  const showActions = isAssigned && !isClosed;
 
   const handleCloseChat = () => {
     closeMutation.mutate({
@@ -212,39 +211,43 @@ export function ChatWindowHeaderActions({
 
   return (
     <div className={cn("flex items-center gap-1", className)}>
-      <ChatTransferDropdown chatId={chatId} chatCreatedAt={chatCreatedAt} />
+      {showActions && (
+        <>
+          <ChatTransferDropdown chatId={chatId} chatCreatedAt={chatCreatedAt} />
 
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Etiquetas"
-          >
-            <Tag className="h-4 w-4" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>Etiquetas</p>
-        </TooltipContent>
-      </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Etiquetas"
+              >
+                <Tag className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Etiquetas</p>
+            </TooltipContent>
+          </Tooltip>
 
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Finalizar"
-            onClick={handleCloseChat}
-            disabled={closeMutation.isPending || chat.status === "closed"}
-          >
-            <CheckCircle className="h-4 w-4" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>
-          <p>Finalizar</p>
-        </TooltipContent>
-      </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Finalizar"
+                onClick={handleCloseChat}
+                disabled={closeMutation.isPending}
+              >
+                <CheckCircle className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Finalizar</p>
+            </TooltipContent>
+          </Tooltip>
+        </>
+      )}
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

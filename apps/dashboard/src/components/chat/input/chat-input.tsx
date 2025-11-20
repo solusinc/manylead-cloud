@@ -2,6 +2,7 @@
 
 import type { KeyboardEvent } from "react";
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Mic, MessageSquare, UserCheck } from "lucide-react";
 import TextareaAutosize from "react-textarea-autosize";
@@ -40,6 +41,7 @@ export function ChatInput({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const shouldFocusRef = useRef(false);
+  const router = useRouter();
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const { register } = useMessageDeduplication();
@@ -67,6 +69,12 @@ export function ChatInput({
     enabled: chatStatus === "closed",
   });
 
+  // Buscar chat atual para criar nova sessão
+  const { data: currentChat } = useQuery({
+    ...trpc.chats.getById.queryOptions({ id: chatId, createdAt: chatCreatedAt }),
+    enabled: chatStatus === "closed",
+  });
+
   // Mutation para atribuir chat ao agent atual
   const assignMutation = useMutation(
     trpc.chats.assign.mutationOptions({
@@ -91,6 +99,78 @@ export function ChatInput({
       createdAt: chatCreatedAt,
       agentId: currentAgent.id,
     });
+  };
+
+  // Mutation para criar nova sessão (chat interno)
+  const createNewSessionMutation = useMutation(
+    trpc.chats.createNewSession.mutationOptions({
+      onSuccess: (chat) => {
+        void queryClient.invalidateQueries({ queryKey: [["chats", "list"]] });
+        toast.success("Nova sessão criada");
+        // Navegar para o novo chat
+        router.push(`/chats/${chat.id}`);
+      },
+      onError: (error) => {
+        toast.error(error.message || "Erro ao criar nova sessão");
+      },
+    })
+  );
+
+  const handleNovoAtendimento = async () => {
+    if (!currentChat) {
+      toast.error("Erro ao carregar dados do chat");
+      return;
+    }
+
+    if (!currentAgent?.id) {
+      toast.error("Erro ao identificar agent");
+      return;
+    }
+
+    // Se for chat interno, criar nova sessão com o outro participante
+    if (currentChat.chat.messageSource === "internal") {
+      // Determinar quem é o "outro" participante
+      const isInitiator = currentChat.chat.initiatorAgentId === currentAgent.id;
+
+      // Se sou o iniciador, o outro é o contact (que tem agentId no metadata)
+      // Se não sou, o outro é o iniciator
+      let targetAgentId: string | null = null;
+
+      if (isInitiator && currentChat.contact?.metadata) {
+        targetAgentId = (currentChat.contact.metadata as { agentId?: string }).agentId ?? null;
+      } else {
+        targetAgentId = currentChat.chat.initiatorAgentId;
+      }
+
+      if (!targetAgentId) {
+        toast.error("Erro ao identificar participante");
+        return;
+      }
+
+      // Buscar instanceCode do target agent
+      try {
+        const targetAgent = await queryClient.fetchQuery(
+          trpc.agents.getById.queryOptions({ id: targetAgentId })
+        );
+
+        if (!targetAgent.instanceCode) {
+          toast.error("Erro ao obter código da instância");
+          return;
+        }
+
+        createNewSessionMutation.mutate({
+          targetInstanceCode: targetAgent.instanceCode,
+          assignToMe: true,
+        });
+      } catch {
+        toast.error("Erro ao buscar dados do participante");
+      }
+    } else {
+      // WhatsApp - TODO: implementar criação de nova sessão WhatsApp
+      toast("Em breve", {
+        description: "Criação de nova sessão WhatsApp será implementada em breve.",
+      });
+    }
   };
 
   // PROFESSIONAL: Auto-focus after sending (runs after all React updates)
@@ -386,7 +466,7 @@ export function ChatInput({
   // Se não está atribuído, mostrar UI de "Aguardando atendimento"
   if (!assignedTo) {
     return (
-      <div className={cn("flex w-full flex-col items-center gap-3 rounded-lg border bg-muted/30 py-4", className)} {...props}>
+      <div className={cn("flex w-[calc(100%+2rem)] flex-col items-center gap-3 border-t bg-muted/30 py-4 -mx-4 -mb-2", className)} {...props}>
         <p className="text-sm text-muted-foreground">Aguardando atendimento</p>
         <div className="flex gap-2">
           <Button variant="outline" size="default">
@@ -409,14 +489,14 @@ export function ChatInput({
 
   // Se o chat está fechado, mostrar "Atendimento finalizado por..."
   if (chatStatus === "closed") {
-    // Buscar mensagem de sistema de fechamento
-    const closedMessage = messagesData?.pages
-      .flatMap((page) => page.items)
-      .find(
-        (item) =>
-          item.message.sender === "system" &&
-          (item.message.metadata as Record<string, unknown> | undefined)?.systemEventType === "session_closed"
-      );
+    // Buscar ÚLTIMA mensagem de sistema de fechamento (em caso de reaberturas)
+    const allMessages = messagesData?.pages.flatMap((page) => page.items) ?? [];
+    const closedMessages = allMessages.filter(
+      (item) =>
+        item.message.sender === "system" &&
+        (item.message.metadata as Record<string, unknown> | undefined)?.systemEventType === "session_closed"
+    );
+    const closedMessage = closedMessages[closedMessages.length - 1];
 
     const closedMetadata = closedMessage?.message.metadata as Record<string, string> | undefined;
     const closedBy = closedMetadata?.agentName ?? "Agente";
@@ -425,7 +505,7 @@ export function ChatInput({
     const formattedClosedAt = `${closedDate.toLocaleDateString("pt-BR")} às ${closedDate.toLocaleTimeString("pt-BR")}`;
 
     return (
-      <div className={cn("flex w-full flex-col items-center gap-3 rounded-lg border bg-muted/30 py-4", className)} {...props}>
+      <div className={cn("flex w-[calc(100%+2rem)] flex-col items-center gap-3 border-t bg-muted/30 py-4 -mx-4 -mb-2", className)} {...props}>
         <p className="text-sm text-muted-foreground">
           Atendimento finalizado por <span className="font-bold">{closedBy}</span> {formattedClosedAt}
         </p>
@@ -434,9 +514,14 @@ export function ChatInput({
             <MessageSquare className="mr-2 h-4 w-4" />
             Comentário
           </Button>
-          <Button variant="default" size="default">
+          <Button
+            variant="default"
+            size="default"
+            onClick={handleNovoAtendimento}
+            disabled={createNewSessionMutation.isPending}
+          >
             <UserCheck className="mr-2 h-4 w-4" />
-            Novo atendimento
+            {createNewSessionMutation.isPending ? "Criando..." : "Novo atendimento"}
           </Button>
         </div>
       </div>
@@ -446,7 +531,7 @@ export function ChatInput({
   // Se está atribuído para outro agent, mostrar "Em atendimento com..."
   if (assignedTo && assignedTo !== currentAgent?.id) {
     return (
-      <div className={cn("flex w-full flex-col items-center gap-3 rounded-lg border bg-muted/30 py-4", className)} {...props}>
+      <div className={cn("flex w-[calc(100%+2rem)] flex-col items-center gap-3 border-t bg-muted/30 py-4 -mx-4 -mb-2", className)} {...props}>
         <p className="text-sm text-muted-foreground">
           Em atendimento com <span className="font-bold">{assignedAgent?.user?.name ?? "..."}</span>
         </p>
