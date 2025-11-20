@@ -510,7 +510,44 @@ export const chatsRouter = createTRPCRouter({
         });
       }
 
-      // 5. Criar novo chat interno (SEMPRE cria nova sessão)
+      // 5. Verificar se já existe chat OPEN com o mesmo participante
+      const [existingOpenChat] = await tenantDb
+        .select()
+        .from(chat)
+        .where(
+          and(
+            eq(chat.messageSource, "internal"),
+            eq(chat.contactId, targetContact.id),
+            eq(chat.status, "open"),
+          ),
+        )
+        .limit(1);
+
+      // Se existe chat open, retornar ele (atribuir se necessário)
+      if (existingOpenChat) {
+        // Se assignToMe é true e ainda não está atribuído, atribuir
+        if (input.assignToMe && !existingOpenChat.assignedTo) {
+          const [updated] = await tenantDb
+            .update(chat)
+            .set({
+              assignedTo: currentAgent.id,
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(chat.id, existingOpenChat.id),
+                eq(chat.createdAt, existingOpenChat.createdAt),
+              ),
+            )
+            .returning();
+
+          return updated ?? existingOpenChat;
+        }
+
+        return existingOpenChat;
+      }
+
+      // 6. Criar novo chat interno (apenas se não existe chat open)
       const now = new Date();
       const [newChat] = await tenantDb
         .insert(chat)
