@@ -436,83 +436,81 @@ export const messagesRouter = createTRPCRouter({
               );
             }
 
-            if (mirroredChat) {
-              // Criar mensagem espelhada na org target
-              const [mirroredMessage] = await targetTenantDb
-                .insert(message)
-                .values({
-                  chatId: mirroredChat.id,
-                  messageSource: "internal",
-                  sender: "agent",
-                  senderId: null,
-                  messageType: "text",
-                  content: formattedContent,
-                  metadata: input.metadata,
-                  status: "sent",
-                  timestamp: now,
-                  sentAt: now,
+            // Criar mensagem espelhada na org target
+            const [mirroredMessage] = await targetTenantDb
+              .insert(message)
+              .values({
+                chatId: mirroredChat.id,
+                messageSource: "internal",
+                sender: "agent",
+                senderId: null,
+                messageType: "text",
+                content: formattedContent,
+                metadata: input.metadata,
+                status: "sent",
+                timestamp: now,
+                sentAt: now,
+              })
+              .returning();
+
+            // Atualizar lastMessage do chat espelhado
+            if (mirroredChat.assignedTo) {
+              // Chat ASSIGNED: NÃO incrementar chat.unreadCount, apenas incrementar participants
+              await targetTenantDb
+                .update(chat)
+                .set({
+                  lastMessageAt: now,
+                  lastMessageContent: input.content,
+                  lastMessageSender: "agent",
+                  totalMessages: sql`${chat.totalMessages} + 1`,
+                  // NÃO incrementar unreadCount
+                  updatedAt: now,
                 })
-                .returning();
+                .where(eq(chat.id, mirroredChat.id));
 
-              // Atualizar lastMessage do chat espelhado
-              if (mirroredChat.assignedTo) {
-                // Chat ASSIGNED: NÃO incrementar chat.unreadCount, apenas incrementar participants
-                await targetTenantDb
-                  .update(chat)
-                  .set({
-                    lastMessageAt: now,
-                    lastMessageContent: input.content,
-                    lastMessageSender: "agent",
-                    totalMessages: sql`${chat.totalMessages} + 1`,
-                    // NÃO incrementar unreadCount
-                    updatedAt: now,
-                  })
-                  .where(eq(chat.id, mirroredChat.id));
-
-                // Incrementar unreadCount de TODOS os participants
-                await targetTenantDb
-                  .update(chatParticipant)
-                  .set({
-                    unreadCount: sql`COALESCE(${chatParticipant.unreadCount}, 0) + 1`,
-                    updatedAt: now,
-                  })
-                  .where(
-                    and(
-                      eq(chatParticipant.chatId, mirroredChat.id),
-                      eq(chatParticipant.chatCreatedAt, mirroredChat.createdAt),
-                    ),
-                  );
-              } else {
-                // Chat PENDING: incrementar chat.unreadCount
-                await targetTenantDb
-                  .update(chat)
-                  .set({
-                    lastMessageAt: now,
-                    lastMessageContent: input.content,
-                    lastMessageSender: "agent",
-                    totalMessages: sql`${chat.totalMessages} + 1`,
-                    unreadCount: sql`${chat.unreadCount} + 1`,
-                    updatedAt: now,
-                  })
-                  .where(eq(chat.id, mirroredChat.id));
-              }
-
-              // Broadcast mensagem para a org target com o ID correto
-              if (mirroredMessage) {
-                await publishMessageEvent(
-                  {
-                    type: "message:new",
-                    organizationId: targetOrgId,
-                    chatId: mirroredChat.id,
-                    messageId: mirroredMessage.id,
-                    senderId: undefined,
-                    data: {
-                      message: mirroredMessage as unknown as Record<string, unknown>,
-                    },
-                  },
-                  env.REDIS_URL,
+              // Incrementar unreadCount de TODOS os participants
+              await targetTenantDb
+                .update(chatParticipant)
+                .set({
+                  unreadCount: sql`COALESCE(${chatParticipant.unreadCount}, 0) + 1`,
+                  updatedAt: now,
+                })
+                .where(
+                  and(
+                    eq(chatParticipant.chatId, mirroredChat.id),
+                    eq(chatParticipant.chatCreatedAt, mirroredChat.createdAt),
+                  ),
                 );
-              }
+            } else {
+              // Chat PENDING: incrementar chat.unreadCount
+              await targetTenantDb
+                .update(chat)
+                .set({
+                  lastMessageAt: now,
+                  lastMessageContent: input.content,
+                  lastMessageSender: "agent",
+                  totalMessages: sql`${chat.totalMessages} + 1`,
+                  unreadCount: sql`${chat.unreadCount} + 1`,
+                  updatedAt: now,
+                })
+                .where(eq(chat.id, mirroredChat.id));
+            }
+
+            // Broadcast mensagem para a org target com o ID correto
+            if (mirroredMessage) {
+              await publishMessageEvent(
+                {
+                  type: "message:new",
+                  organizationId: targetOrgId,
+                  chatId: mirroredChat.id,
+                  messageId: mirroredMessage.id,
+                  senderId: undefined,
+                  data: {
+                    message: mirroredMessage as unknown as Record<string, unknown>,
+                  },
+                },
+                env.REDIS_URL,
+              );
             }
           }
         }

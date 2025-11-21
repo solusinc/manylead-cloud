@@ -1,15 +1,17 @@
 "use client";
 
-import { cn } from "@manylead/ui";
-import { Avatar, AvatarFallback, AvatarImage } from "@manylead/ui/avatar";
-import { Skeleton } from "@manylead/ui/skeleton";
 import { useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { MessageSquarePlus, Phone } from "lucide-react";
+
+import { cn } from "@manylead/ui";
+import { Avatar, AvatarFallback, AvatarImage } from "@manylead/ui/avatar";
+import { Button } from "@manylead/ui/button";
+import { Skeleton } from "@manylead/ui/skeleton";
+
 import { useTRPC } from "~/lib/trpc/react";
 import { useChatSearchStore } from "~/stores/use-chat-search-store";
-import { Phone, MessageSquarePlus } from "lucide-react";
-import { Button } from "@manylead/ui/button";
 import { NewChatDialog } from "../new-chat-dialog";
 
 export function ChatSidebarContactsList({
@@ -27,11 +29,12 @@ export function ChatSidebarContactsList({
       search: searchTerm,
       limit: 100,
       offset: 0,
-    })
+    }),
   );
 
   const contacts = contactsData?.items ?? [];
 
+  // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
     count: contacts.length,
     getScrollElement: () => parentRef.current,
@@ -48,10 +51,7 @@ export function ChatSidebarContactsList({
         {...props}
       >
         {Array.from({ length: 8 }).map((_, i) => (
-          <div
-            key={i}
-            className="flex items-center gap-3 p-4 border-b"
-          >
+          <div key={i} className="flex items-center gap-3 border-b p-4">
             <Skeleton className="h-12 w-12 rounded-full" />
             <div className="flex-1 space-y-2">
               <Skeleton className="h-4 w-32" />
@@ -68,16 +68,16 @@ export function ChatSidebarContactsList({
     return (
       <div
         className={cn(
-          "flex-1 flex items-center justify-center p-8 text-center",
-          className
+          "flex flex-1 items-center justify-center p-8 text-center",
+          className,
         )}
         {...props}
       >
         <div className="space-y-2">
-          <p className="text-sm text-muted-foreground">
+          <p className="text-muted-foreground text-sm">
             Nenhum contato encontrado
           </p>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-muted-foreground text-xs">
             Tente buscar por nome ou telefone
           </p>
         </div>
@@ -119,20 +119,14 @@ export function ChatSidebarContactsList({
                   transform: `translateY(${virtualItem.start}px)`,
                 }}
               >
-                <ContactItem
-                  contact={contact}
-                  onClick={handleContactClick}
-                />
+                <ContactItem contact={contact} onClick={handleContactClick} />
               </div>
             );
           })}
         </div>
       </div>
 
-      <NewChatDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-      />
+      <NewChatDialog open={dialogOpen} onOpenChange={setDialogOpen} />
     </>
   );
 }
@@ -153,7 +147,7 @@ function ContactItem({
     <div
       onClick={onClick}
       className={cn(
-        "flex items-center gap-3 p-4 cursor-pointer hover:bg-accent transition-colors border-b"
+        "hover:bg-accent flex cursor-pointer items-center gap-3 border-b p-4 transition-colors",
       )}
     >
       <Avatar className="h-12 w-12">
@@ -161,13 +155,13 @@ function ContactItem({
         <AvatarFallback>{contact.name[0]?.toUpperCase() ?? "?"}</AvatarFallback>
       </Avatar>
 
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center justify-between mb-1">
-          <span className="font-medium truncate">{contact.name}</span>
+      <div className="min-w-0 flex-1">
+        <div className="mb-1 flex items-center justify-between">
+          <span className="truncate font-medium">{contact.name}</span>
         </div>
 
         {contact.phoneNumber && (
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
             <Phone className="h-3 w-3" />
             <span className="truncate">{contact.phoneNumber}</span>
           </div>
@@ -177,7 +171,7 @@ function ContactItem({
       <Button
         variant="ghost"
         size="icon"
-        className="h-8 w-8 flex-shrink-0"
+        className="h-8 w-8 shrink-0"
         onClick={(e) => {
           e.stopPropagation();
           onClick();

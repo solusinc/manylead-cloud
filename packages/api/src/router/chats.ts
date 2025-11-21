@@ -765,6 +765,7 @@ export const chatsRouter = createTRPCRouter({
       }
 
       const now = new Date();
+      const organizationId = ctx.session.session.activeOrganizationId;
 
       // Atualizar chatParticipant APENAS para o agent atual
       const [updated] = await ctx.tenantDb
@@ -826,18 +827,20 @@ export const chatsRouter = createTRPCRouter({
         .limit(1);
 
       // Broadcast para o agent que marcou como lido
-      await publishChatEvent(
-        {
-          type: "chat:updated",
-          organizationId: ctx.session.session.activeOrganizationId!,
-          chatId: input.id,
-          targetAgentId: currentAgent.id,
-          data: {
-            chat: chatRecord as unknown as Record<string, unknown>,
+      if (organizationId) {
+        await publishChatEvent(
+          {
+            type: "chat:updated",
+            organizationId,
+            chatId: input.id,
+            targetAgentId: currentAgent.id,
+            data: {
+              chat: chatRecord as unknown as Record<string, unknown>,
+            },
           },
-        },
-        env.REDIS_URL,
-      );
+          env.REDIS_URL,
+        );
+      }
 
       return chatRecord ?? updated;
     }),

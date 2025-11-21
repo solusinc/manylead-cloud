@@ -4,6 +4,6 @@
     "jsx": "react-jsx",
     "lib": ["ES2022", "DOM"]
   },
-  "include": [".", "src/env.ts"],
+  "include": ["src", "emails"],
   "exclude": ["dist", "build", "node_modules"]
 }
