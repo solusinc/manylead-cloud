@@ -5,7 +5,7 @@ import type { SocketData } from "./types";
 import { env } from "../env";
 import { authMiddleware, validateOrganizationAccess } from "./middleware";
 import { RedisPubSubManager } from "./redis-pubsub";
-import { agent, chat, contact, eq } from "@manylead/db";
+import { agent, and, chat, contact, eq } from "@manylead/db";
 import { tenantManager } from "../libs/tenant-manager";
 
 /**
@@ -211,43 +211,86 @@ export class SocketManager {
             return;
           }
 
-          // Se for chat interno, enviar apenas para o outro participante
-          if (chatRecord.messageSource === "internal" && chatRecord.initiatorAgentId) {
-            // Buscar agent do usuário atual
-            const [currentAgent] = await tenantDb
+          // Se for chat interno cross-org, enviar para a org target
+          if (chatRecord.messageSource === "internal") {
+            // Buscar contact para verificar se é cross-org
+            const [contactRecord] = await tenantDb
               .select()
-              .from(agent)
-              .where(eq(agent.userId, userId ?? ""))
+              .from(contact)
+              .where(eq(contact.id, chatRecord.contactId))
               .limit(1);
 
-            if (!currentAgent) {
-              console.warn(`[Socket] Agent not found for user: ${userId}`);
-              return;
-            }
+            const metadata = contactRecord?.metadata as { targetOrganizationId?: string; targetOrganizationInstanceCode?: string } | null;
 
-            // Identificar o outro participante
-            const isInitiator = currentAgent.id === chatRecord.initiatorAgentId;
-            const targetAgentId = isInitiator
-              ? (await tenantDb
+            // Chat CROSS-ORG: enviar para org target
+            if (metadata?.targetOrganizationId) {
+              const targetOrgId = metadata.targetOrganizationId;
+
+              // Buscar chat mirrored na org target
+              const targetTenantDb = await tenantManager.getConnection(targetOrgId);
+
+              const targetContacts = await targetTenantDb
+                .select()
+                .from(contact)
+                .where(eq(contact.organizationId, targetOrgId));
+
+              const sourceContact = targetContacts.find(
+                (c) =>
+                  (c.metadata as { source?: string; targetOrganizationId?: string } | null)?.source === "internal" &&
+                  (c.metadata as { targetOrganizationId?: string } | null)?.targetOrganizationId === organizationId
+              );
+
+              if (sourceContact) {
+                const [mirroredChat] = await targetTenantDb
                   .select()
-                  .from(contact)
-                  .where(eq(contact.id, chatRecord.contactId))
-                  .limit(1)
-                  .then((rows) => {
-                    const metadata = rows[0]?.metadata as { agentId?: string } | null;
-                    return metadata?.agentId;
-                  }))
-              : chatRecord.initiatorAgentId;
+                  .from(chat)
+                  .where(
+                    and(
+                      eq(chat.messageSource, "internal"),
+                      eq(chat.contactId, sourceContact.id)
+                    )
+                  )
+                  .limit(1);
 
-            if (targetAgentId) {
-              // Enviar APENAS para o agent room do outro participante
-              const targetRoom = `agent:${targetAgentId}`;
-              this.io.to(targetRoom).emit("typing:start", {
-                chatId: data.chatId,
-                agentId: currentAgent.id,
-                agentName: "Agent",
-              });
-              console.log(`[Socket.io] → ${targetRoom} | typing:start (private)`);
+                if (mirroredChat) {
+                  // Broadcast para TODA a org target
+                  const targetOrgRoom = `org:${targetOrgId}`;
+                  this.io.to(targetOrgRoom).emit("typing:start", {
+                    chatId: mirroredChat.id, // Chat ID da org target!
+                    agentId: userId ?? "unknown",
+                    agentName: "Agent",
+                  });
+                  console.log(`[Socket.io] → ${targetOrgRoom} | typing:start (cross-org to target)`);
+                }
+              }
+            }
+            // Chat INTRA-ORG: enviar para outro participante
+            else if (chatRecord.initiatorAgentId) {
+              const [currentAgent] = await tenantDb
+                .select()
+                .from(agent)
+                .where(eq(agent.userId, userId ?? ""))
+                .limit(1);
+
+              if (!currentAgent) {
+                console.warn(`[Socket] Agent not found for user: ${userId}`);
+                return;
+              }
+
+              const isInitiator = currentAgent.id === chatRecord.initiatorAgentId;
+              const targetAgentId = isInitiator
+                ? (contactRecord?.metadata as { agentId?: string } | null)?.agentId
+                : chatRecord.initiatorAgentId;
+
+              if (targetAgentId) {
+                const targetRoom = `agent:${targetAgentId}`;
+                this.io.to(targetRoom).emit("typing:start", {
+                  chatId: data.chatId,
+                  agentId: currentAgent.id,
+                  agentName: "Agent",
+                });
+                console.log(`[Socket.io] → ${targetRoom} | typing:start (intra-org private)`);
+              }
             }
           } else {
             // Chat WhatsApp - broadcast para toda a org
@@ -256,7 +299,7 @@ export class SocketManager {
               agentId: userId ?? "unknown",
               agentName: "Agent",
             });
-            console.log(`[Socket.io] → ${orgRoom} | typing:start (broadcast)`);
+            console.log(`[Socket.io] → ${orgRoom} | typing:start (whatsapp broadcast)`);
           }
         } catch (error) {
           console.error("[Socket] Error handling typing:start:", error);
@@ -293,42 +336,84 @@ export class SocketManager {
             return;
           }
 
-          // Se for chat interno, enviar apenas para o outro participante
-          if (chatRecord.messageSource === "internal" && chatRecord.initiatorAgentId) {
-            // Buscar agent do usuário atual
-            const [currentAgent] = await tenantDb
+          // Se for chat interno cross-org, enviar para a org target
+          if (chatRecord.messageSource === "internal") {
+            // Buscar contact para verificar se é cross-org
+            const [contactRecord] = await tenantDb
               .select()
-              .from(agent)
-              .where(eq(agent.userId, userId ?? ""))
+              .from(contact)
+              .where(eq(contact.id, chatRecord.contactId))
               .limit(1);
 
-            if (!currentAgent) {
-              console.warn(`[Socket] Agent not found for user: ${userId}`);
-              return;
-            }
+            const metadata = contactRecord?.metadata as { targetOrganizationId?: string; targetOrganizationInstanceCode?: string } | null;
 
-            // Identificar o outro participante
-            const isInitiator = currentAgent.id === chatRecord.initiatorAgentId;
-            const targetAgentId = isInitiator
-              ? (await tenantDb
+            // Chat CROSS-ORG: enviar para org target
+            if (metadata?.targetOrganizationId) {
+              const targetOrgId = metadata.targetOrganizationId;
+
+              // Buscar chat mirrored na org target
+              const targetTenantDb = await tenantManager.getConnection(targetOrgId);
+
+              const targetContacts = await targetTenantDb
+                .select()
+                .from(contact)
+                .where(eq(contact.organizationId, targetOrgId));
+
+              const sourceContact = targetContacts.find(
+                (c) =>
+                  (c.metadata as { source?: string; targetOrganizationId?: string } | null)?.source === "internal" &&
+                  (c.metadata as { targetOrganizationId?: string } | null)?.targetOrganizationId === organizationId
+              );
+
+              if (sourceContact) {
+                const [mirroredChat] = await targetTenantDb
                   .select()
-                  .from(contact)
-                  .where(eq(contact.id, chatRecord.contactId))
-                  .limit(1)
-                  .then((rows) => {
-                    const metadata = rows[0]?.metadata as { agentId?: string } | null;
-                    return metadata?.agentId;
-                  }))
-              : chatRecord.initiatorAgentId;
+                  .from(chat)
+                  .where(
+                    and(
+                      eq(chat.messageSource, "internal"),
+                      eq(chat.contactId, sourceContact.id)
+                    )
+                  )
+                  .limit(1);
 
-            if (targetAgentId) {
-              // Enviar APENAS para o agent room do outro participante
-              const targetRoom = `agent:${targetAgentId}`;
-              this.io.to(targetRoom).emit("typing:stop", {
-                chatId: data.chatId,
-                agentId: currentAgent.id,
-              });
-              console.log(`[Socket.io] → ${targetRoom} | typing:stop (private)`);
+                if (mirroredChat) {
+                  // Broadcast para TODA a org target
+                  const targetOrgRoom = `org:${targetOrgId}`;
+                  this.io.to(targetOrgRoom).emit("typing:stop", {
+                    chatId: mirroredChat.id, // Chat ID da org target!
+                    agentId: userId ?? "unknown",
+                  });
+                  console.log(`[Socket.io] → ${targetOrgRoom} | typing:stop (cross-org to target)`);
+                }
+              }
+            }
+            // Chat INTRA-ORG: enviar para outro participante
+            else if (chatRecord.initiatorAgentId) {
+              const [currentAgent] = await tenantDb
+                .select()
+                .from(agent)
+                .where(eq(agent.userId, userId ?? ""))
+                .limit(1);
+
+              if (!currentAgent) {
+                console.warn(`[Socket] Agent not found for user: ${userId}`);
+                return;
+              }
+
+              const isInitiator = currentAgent.id === chatRecord.initiatorAgentId;
+              const targetAgentId = isInitiator
+                ? (contactRecord?.metadata as { agentId?: string } | null)?.agentId
+                : chatRecord.initiatorAgentId;
+
+              if (targetAgentId) {
+                const targetRoom = `agent:${targetAgentId}`;
+                this.io.to(targetRoom).emit("typing:stop", {
+                  chatId: data.chatId,
+                  agentId: currentAgent.id,
+                });
+                console.log(`[Socket.io] → ${targetRoom} | typing:stop (intra-org private)`);
+              }
             }
           } else {
             // Chat WhatsApp - broadcast para toda a org
@@ -336,7 +421,7 @@ export class SocketManager {
               chatId: data.chatId,
               agentId: userId ?? "unknown",
             });
-            console.log(`[Socket.io] → ${orgRoom} | typing:stop (broadcast)`);
+            console.log(`[Socket.io] → ${orgRoom} | typing:stop (whatsapp broadcast)`);
           }
         } catch (error) {
           console.error("[Socket] Error handling typing:stop:", error);

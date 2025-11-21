@@ -386,46 +386,81 @@ export const messagesRouter = createTRPCRouter({
 
             if (mirroredChat) {
               // Criar mensagem espelhada na org target
-              await targetTenantDb.insert(message).values({
-                chatId: mirroredChat.id,
-                messageSource: "internal",
-                sender: "agent",
-                senderId: null,
-                messageType: "text",
-                content: formattedContent,
-                metadata: input.metadata,
-                status: "sent",
-                timestamp: now,
-                sentAt: now,
-              });
+              const [mirroredMessage] = await targetTenantDb
+                .insert(message)
+                .values({
+                  chatId: mirroredChat.id,
+                  messageSource: "internal",
+                  sender: "agent",
+                  senderId: null,
+                  messageType: "text",
+                  content: formattedContent,
+                  metadata: input.metadata,
+                  status: "sent",
+                  timestamp: now,
+                  sentAt: now,
+                })
+                .returning();
 
               // Atualizar lastMessage do chat espelhado
-              await targetTenantDb
-                .update(chat)
-                .set({
-                  lastMessageAt: now,
-                  lastMessageContent: input.content,
-                  lastMessageSender: "agent",
-                  totalMessages: sql`${chat.totalMessages} + 1`,
-                  unreadCount: sql`${chat.unreadCount} + 1`,
-                  updatedAt: now,
-                })
-                .where(eq(chat.id, mirroredChat.id));
+              if (mirroredChat.assignedTo) {
+                // Chat ASSIGNED: NÃO incrementar chat.unreadCount, apenas incrementar participants
+                await targetTenantDb
+                  .update(chat)
+                  .set({
+                    lastMessageAt: now,
+                    lastMessageContent: input.content,
+                    lastMessageSender: "agent",
+                    totalMessages: sql`${chat.totalMessages} + 1`,
+                    // NÃO incrementar unreadCount
+                    updatedAt: now,
+                  })
+                  .where(eq(chat.id, mirroredChat.id));
 
-              // Broadcast mensagem para a org target
-              await publishMessageEvent(
-                {
-                  type: "message:new",
-                  organizationId: targetOrgId,
-                  chatId: mirroredChat.id,
-                  messageId: newMessage.id,
-                  senderId: undefined,
-                  data: {
-                    message: newMessage as unknown as Record<string, unknown>,
+                // Incrementar unreadCount de TODOS os participants
+                await targetTenantDb
+                  .update(chatParticipant)
+                  .set({
+                    unreadCount: sql`COALESCE(${chatParticipant.unreadCount}, 0) + 1`,
+                    updatedAt: now,
+                  })
+                  .where(
+                    and(
+                      eq(chatParticipant.chatId, mirroredChat.id),
+                      eq(chatParticipant.chatCreatedAt, mirroredChat.createdAt),
+                    ),
+                  );
+              } else {
+                // Chat PENDING: incrementar chat.unreadCount
+                await targetTenantDb
+                  .update(chat)
+                  .set({
+                    lastMessageAt: now,
+                    lastMessageContent: input.content,
+                    lastMessageSender: "agent",
+                    totalMessages: sql`${chat.totalMessages} + 1`,
+                    unreadCount: sql`${chat.unreadCount} + 1`,
+                    updatedAt: now,
+                  })
+                  .where(eq(chat.id, mirroredChat.id));
+              }
+
+              // Broadcast mensagem para a org target com o ID correto
+              if (mirroredMessage) {
+                await publishMessageEvent(
+                  {
+                    type: "message:new",
+                    organizationId: targetOrgId,
+                    chatId: mirroredChat.id,
+                    messageId: mirroredMessage.id,
+                    senderId: undefined,
+                    data: {
+                      message: mirroredMessage as unknown as Record<string, unknown>,
+                    },
                   },
-                },
-                env.REDIS_URL,
-              );
+                  env.REDIS_URL,
+                );
+              }
             }
           }
         }

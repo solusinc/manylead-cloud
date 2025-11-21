@@ -213,7 +213,16 @@ export function ChatWindowHeaderActions({
     <div className={cn("flex items-center gap-1", className)}>
       {showActions && (
         <>
-          <ChatTransferDropdown chatId={chatId} chatCreatedAt={chatCreatedAt} />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div>
+                <ChatTransferDropdown chatId={chatId} chatCreatedAt={chatCreatedAt} />
+              </div>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Transferir</p>
+            </TooltipContent>
+          </Tooltip>
 
           <Tooltip>
             <TooltipTrigger asChild>

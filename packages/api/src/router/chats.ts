@@ -194,9 +194,17 @@ export const chatsRouter = createTRPCRouter({
         ),
       ];
 
-      // Se não tem nenhum para resolver, retorna direto
+      // Se não tem nenhum para resolver, mapear unreadCount e retornar
       if (initiatorAgentIds.length === 0) {
-        return { items, total: totalResult[0]?.count ?? 0, limit, offset };
+        const itemsWithCorrectUnreadCount = items.map((item) => ({
+          ...item,
+          chat: {
+            ...item.chat,
+            unreadCount: item.participant?.unreadCount ?? item.chat.unreadCount,
+          },
+        }));
+
+        return { items: itemsWithCorrectUnreadCount, total: totalResult[0]?.count ?? 0, limit, offset };
       }
 
       // Buscar TODOS initiator agents (1 query ao invés de N)
@@ -223,6 +231,11 @@ export const chatsRouter = createTRPCRouter({
           return item;
         }
 
+        // Chat CROSS-ORG: não substituir contact (já representa a org target)
+        if (item.contact?.metadata?.targetOrganizationId) {
+          return item;
+        }
+
         // Usuário é INICIADOR: retorna contact (target)
         if (item.chat.initiatorAgentId === currentAgent.id) {
           return item;
@@ -243,7 +256,7 @@ export const chatsRouter = createTRPCRouter({
           return item;
         }
 
-        // Substituir contact pelos dados do INITIATOR
+        // Chat INTRA-ORG: Substituir contact pelos dados do INITIATOR
         return {
           ...item,
           contact: {
@@ -600,13 +613,13 @@ export const chatsRouter = createTRPCRouter({
         })
         .where(and(eq(chat.id, newChat.id), eq(chat.createdAt, newChat.createdAt)));
 
-      // Broadcast Socket.io para a organização SOURCE (quem criou)
+      // Broadcast Socket.io para TODA a organização SOURCE (não só quem criou)
       await publishChatEvent(
         {
           type: "chat:created",
           organizationId: sourceOrganizationId,
           chatId: newChat.id,
-          targetAgentId: currentAgent.id,
+          targetAgentId: undefined, // Broadcast para TODOS os agents
           data: {
             chat: newChat as unknown as Record<string, unknown>,
             contact: targetContact as unknown as Record<string, unknown>,
@@ -633,6 +646,14 @@ export const chatsRouter = createTRPCRouter({
           targetOrganizationId: targetOrg.id,
         },
       });
+
+      // Incrementar totalMessages para que o chat apareça para TODOS os agents
+      await sourceTenantDb
+        .update(chat)
+        .set({
+          totalMessages: 1,
+        })
+        .where(and(eq(chat.id, newChat.id), eq(chat.createdAt, newChat.createdAt)));
 
       return newChat;
     }),
@@ -803,6 +824,20 @@ export const chatsRouter = createTRPCRouter({
         .from(chat)
         .where(and(eq(chat.id, input.id), eq(chat.createdAt, input.createdAt)))
         .limit(1);
+
+      // Broadcast para o agent que marcou como lido
+      await publishChatEvent(
+        {
+          type: "chat:updated",
+          organizationId: ctx.session.session.activeOrganizationId!,
+          chatId: input.id,
+          targetAgentId: currentAgent.id,
+          data: {
+            chat: chatRecord as unknown as Record<string, unknown>,
+          },
+        },
+        env.REDIS_URL,
+      );
 
       return chatRecord ?? updated;
     }),
