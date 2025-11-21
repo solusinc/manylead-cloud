@@ -5,7 +5,7 @@ import type { SocketData } from "./types";
 import { env } from "../env";
 import { authMiddleware, validateOrganizationAccess } from "./middleware";
 import { RedisPubSubManager } from "./redis-pubsub";
-import { agent, and, chat, contact, eq } from "@manylead/db";
+import { agent, and, chat, contact, eq, or } from "@manylead/db";
 import { tenantManager } from "../libs/tenant-manager";
 
 /**
@@ -241,13 +241,15 @@ export class SocketManager {
               );
 
               if (sourceContact) {
+                // Buscar apenas chat ATIVO (não enviar typing para chat fechado)
                 const [mirroredChat] = await targetTenantDb
                   .select()
                   .from(chat)
                   .where(
                     and(
                       eq(chat.messageSource, "internal"),
-                      eq(chat.contactId, sourceContact.id)
+                      eq(chat.contactId, sourceContact.id),
+                      or(eq(chat.status, "pending"), eq(chat.status, "open"))
                     )
                   )
                   .limit(1);
@@ -366,13 +368,15 @@ export class SocketManager {
               );
 
               if (sourceContact) {
+                // Buscar apenas chat ATIVO (não enviar typing para chat fechado)
                 const [mirroredChat] = await targetTenantDb
                   .select()
                   .from(chat)
                   .where(
                     and(
                       eq(chat.messageSource, "internal"),
-                      eq(chat.contactId, sourceContact.id)
+                      eq(chat.contactId, sourceContact.id),
+                      or(eq(chat.status, "pending"), eq(chat.status, "open"))
                     )
                   )
                   .limit(1);

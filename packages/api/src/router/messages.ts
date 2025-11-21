@@ -1,7 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
-import { agent, and, attachment, channel, chat, chatParticipant, contact, desc, eq, lt, message, organization, sql } from "@manylead/db";
+import { agent, and, attachment, channel, chat, chatParticipant, contact, desc, eq, lt, message, or, organization, sql } from "@manylead/db";
 import { EvolutionAPIClient } from "@manylead/evolution-api-client";
 import { publishChatEvent, publishMessageEvent } from "@manylead/shared";
 
@@ -372,17 +372,69 @@ export const messagesRouter = createTRPCRouter({
           );
 
           if (sourceContact) {
-            // Buscar chat espelhado na org target
-            const [mirroredChat] = await targetTenantDb
+            // Buscar chat espelhado na org target que esteja ATIVO (pending ou open)
+            // Se o chat estiver fechado, criar uma nova sessão
+            let mirroredChat = await targetTenantDb
               .select()
               .from(chat)
               .where(
                 and(
                   eq(chat.messageSource, "internal"),
                   eq(chat.contactId, sourceContact.id),
+                  or(eq(chat.status, "pending"), eq(chat.status, "open")),
                 ),
               )
-              .limit(1);
+              .limit(1)
+              .then((rows) => rows[0]);
+
+            // Se não encontrar chat ativo, criar uma nova sessão
+            if (!mirroredChat) {
+              const now = new Date();
+
+              // Criar novo chat na org target
+              const [newChat] = await targetTenantDb
+                .insert(chat)
+                .values({
+                  organizationId: targetOrgId,
+                  contactId: sourceContact.id,
+                  messageSource: "internal",
+                  status: "pending",
+                  assignedTo: null,
+                  unreadCount: 0,
+                  totalMessages: 0,
+                  createdAt: now,
+                  updatedAt: now,
+                })
+                .returning();
+
+              if (!newChat) {
+                throw new TRPCError({
+                  code: "INTERNAL_SERVER_ERROR",
+                  message: "Failed to create mirrored chat in target organization",
+                });
+              }
+
+              mirroredChat = newChat;
+
+              // Broadcast chat:created para a org target
+              await publishChatEvent(
+                {
+                  type: "chat:created",
+                  organizationId: targetOrgId,
+                  chatId: newChat.id,
+                  targetAgentId: undefined,
+                  data: {
+                    chat: newChat as unknown as Record<string, unknown>,
+                    contact: sourceContact as unknown as Record<string, unknown>,
+                  },
+                },
+                env.REDIS_URL,
+              );
+
+              console.log(
+                `[messages.create] Nova sessão criada na org target ${targetOrgId}: chat ${newChat.id}`,
+              );
+            }
 
             if (mirroredChat) {
               // Criar mensagem espelhada na org target
