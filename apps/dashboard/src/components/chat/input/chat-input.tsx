@@ -449,7 +449,7 @@ export function ChatInput({
   // Se não está atribuído, mostrar UI de "Aguardando atendimento"
   if (!assignedTo) {
     return (
-      <div className={cn("flex w-[calc(100%+2rem)] flex-col items-center gap-3 border-t bg-muted/30 py-4 -mx-4 -mb-2", className)} {...props}>
+      <div className={cn("flex flex-col items-center gap-3 bg-muted/30 py-4", className)} {...props}>
         <p className="text-sm text-muted-foreground">Aguardando atendimento</p>
         <div className="flex gap-2">
           <Button variant="outline" size="default">

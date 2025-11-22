@@ -206,14 +206,68 @@ export function ChatMessageList({
     };
   }, [socket.isConnected, chatId, socket]);
 
-  // Escutar eventos de message:updated para invalidar queries (ex: star toggle)
+  // Escutar eventos de message:updated para atualizar mensagens (star toggle, read status)
   useEffect(() => {
     if (!socket.isConnected) return;
 
     const unsubscribeMessageUpdated = socket.onMessageUpdated((event) => {
       const messageChatId = event.message.chatId as string;
       if (messageChatId === chatId) {
-        void queryClient.invalidateQueries({ queryKey: [["messages"]] });
+        const updatedMessage = event.message;
+        const messageId = updatedMessage.id as string;
+
+        // Atualizar diretamente no cache ao invés de invalidar (mais rápido)
+        const queries = queryClient.getQueryCache().findAll({
+          queryKey: [["messages", "list"]],
+          exact: false,
+        });
+
+        queries.forEach((query) => {
+          const queryState = query.state.data as {
+            pages: {
+              items: {
+                message: Record<string, unknown>;
+                attachment: Record<string, unknown> | null;
+                isOwnMessage: boolean;
+              }[];
+              nextCursor: string | undefined;
+              hasMore: boolean;
+            }[];
+            pageParams: unknown[];
+          } | undefined;
+
+          if (!queryState?.pages) return;
+
+          // Atualizar a mensagem no cache
+          const newPages = queryState.pages.map((page) => ({
+            ...page,
+            items: page.items.map((item) =>
+              item.message.id === messageId
+                ? {
+                    ...item,
+                    message: {
+                      ...item.message,
+                      status: updatedMessage.status,
+                      isStarred: updatedMessage.isStarred,
+                      readAt: updatedMessage.readAt,
+                    } as Record<string, unknown>,
+                  }
+                : item
+            ),
+          }));
+
+          queryClient.setQueryData(query.queryKey, {
+            ...queryState,
+            pages: newPages,
+            pageParams: queryState.pageParams,
+          });
+
+          // Force re-render
+          void queryClient.invalidateQueries({
+            queryKey: query.queryKey,
+            refetchType: "none",
+          });
+        });
       }
     });
 

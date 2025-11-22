@@ -594,9 +594,195 @@ export const messagesRouter = createTRPCRouter({
     }),
 
   /**
+   * Marcar todas as mensagens de um chat como lidas (bulk)
+   * Apenas mensagens do contato (sender !== agent) que ainda não foram lidas
+   */
+  markAllAsRead: memberProcedure
+    .input(
+      z.object({
+        chatId: z.string().uuid(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const organizationId = ctx.session.session.activeOrganizationId;
+      if (!organizationId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Nenhuma organização ativa",
+        });
+      }
+
+      const userId = ctx.session.user.id;
+      const now = new Date();
+
+      // Buscar o agent do usuário logado
+      const [currentAgent] = await ctx.tenantDb
+        .select()
+        .from(agent)
+        .where(eq(agent.userId, userId))
+        .limit(1);
+
+      if (!currentAgent) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Agent não encontrado para o usuário",
+        });
+      }
+
+      // Atualizar TODAS as mensagens não lidas que NÃO são do agent atual
+      // Para WhatsApp: sender = "contact"
+      // Para Internal: senderId IS NULL ou senderId != currentAgent.id
+      // Performance: uma única query UPDATE ao invés de múltiplas
+      const updatedMessages = await ctx.tenantDb
+        .update(message)
+        .set({
+          status: "read",
+          readAt: now,
+        })
+        .where(
+          and(
+            eq(message.chatId, input.chatId),
+            sql`${message.status} != 'read'`, // Apenas não lidas
+            or(
+              eq(message.sender, "contact"), // Mensagens WhatsApp do contato
+              sql`${message.senderId} IS NULL`, // Mensagens internas de outra org
+              sql`${message.senderId} != ${currentAgent.id}`, // Mensagens de outro agent
+            ),
+          ),
+        )
+        .returning();
+
+      // Emitir eventos socket para cada mensagem atualizada na org atual
+      // Isso permite que a UI local atualize em tempo real
+      if (updatedMessages.length > 0) {
+        await Promise.all(
+          updatedMessages.map((msg) =>
+            publishMessageEvent(
+              {
+                type: "message:updated",
+                organizationId,
+                chatId: msg.chatId,
+                messageId: msg.id,
+                data: {
+                  message: msg as unknown as Record<string, unknown>,
+                },
+              },
+              env.REDIS_URL,
+            ),
+          ),
+        );
+      }
+
+      // Para mensagens internas, também atualizar na org do remetente
+      // Isso faz os ticks mudarem em tempo real no lado do remetente
+      // IMPORTANTE: Fazer isso SEMPRE, mesmo se não atualizou nada localmente,
+      // porque mensagens antigas podem já estar marcadas como 'read' aqui mas não na outra org
+      const [chatRecord] = await ctx.tenantDb
+        .select()
+        .from(chat)
+        .where(eq(chat.id, input.chatId))
+        .limit(1);
+
+      if (chatRecord?.messageSource === "internal") {
+        // Buscar contact para pegar targetOrganizationId
+        const [contactRecord] = await ctx.tenantDb
+          .select()
+          .from(contact)
+          .where(eq(contact.id, chatRecord.contactId))
+          .limit(1);
+
+        const metadata = contactRecord?.metadata as Record<string, unknown> | undefined;
+        const targetOrgId = metadata?.targetOrganizationId as string | undefined;
+
+        if (targetOrgId) {
+          // Conectar ao banco da org remetente
+          const { tenantManager } = await import("../trpc");
+          const targetTenantDb = await tenantManager.getConnection(targetOrgId);
+
+          // Buscar contact na org remetente que representa a nossa org
+          const [targetContact] = await targetTenantDb
+            .select()
+            .from(contact)
+            .where(sql`${contact.metadata} @> jsonb_build_object('targetOrganizationId', ${organizationId}::text)`)
+            .limit(1);
+
+          if (targetContact) {
+            // Buscar chat espelhado na org remetente
+            const [targetChat] = await targetTenantDb
+              .select()
+              .from(chat)
+              .where(
+                and(
+                  eq(chat.contactId, targetContact.id),
+                  eq(chat.messageSource, "internal"),
+                ),
+              )
+              .limit(1);
+
+            if (targetChat) {
+              // Buscar TODAS as mensagens do chat que foram enviadas pela outra org
+              // (não apenas as que foram atualizadas agora)
+              const allTargetMessages = await targetTenantDb
+                .select()
+                .from(message)
+                .where(
+                  and(
+                    eq(message.chatId, targetChat.id),
+                    sql`${message.senderId} IS NOT NULL`, // Apenas mensagens enviadas (não recebidas)
+                    sql`${message.status} != 'read'`, // Apenas não lidas
+                  ),
+                );
+
+              // Atualizar todas de uma vez
+              if (allTargetMessages.length > 0) {
+                const updatedTargetMessages = await targetTenantDb
+                  .update(message)
+                  .set({
+                    status: "read",
+                    readAt: now,
+                  })
+                  .where(
+                    and(
+                      eq(message.chatId, targetChat.id),
+                      sql`${message.senderId} IS NOT NULL`,
+                      sql`${message.status} != 'read'`,
+                    ),
+                  )
+                  .returning();
+
+                // Emitir eventos na org remetente para atualizar ticks em tempo real
+                await Promise.all(
+                  updatedTargetMessages.map((msg) =>
+                    publishMessageEvent(
+                      {
+                        type: "message:updated",
+                        organizationId: targetOrgId,
+                        chatId: targetChat.id,
+                        messageId: msg.id,
+                        data: {
+                          message: msg as unknown as Record<string, unknown>,
+                        },
+                      },
+                      env.REDIS_URL,
+                    ),
+                  ),
+                );
+              }
+            }
+          }
+        }
+      }
+
+      return {
+        updatedCount: updatedMessages.length,
+        messages: updatedMessages,
+      };
+    }),
+
+  /**
    * Marcar mensagem como lida
    */
-  markAsRead: ownerProcedure
+  markAsRead: memberProcedure
     .input(
       z.object({
         id: z.string().uuid(),
@@ -604,6 +790,14 @@ export const messagesRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      const organizationId = ctx.session.session.activeOrganizationId;
+      if (!organizationId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Nenhuma organização ativa",
+        });
+      }
+
       const [updated] = await ctx.tenantDb
         .update(message)
         .set({
@@ -621,6 +815,20 @@ export const messagesRouter = createTRPCRouter({
           message: "Mensagem não encontrada",
         });
       }
+
+      // Emitir evento socket para atualizar status da mensagem
+      await publishMessageEvent(
+        {
+          type: "message:updated",
+          organizationId,
+          chatId: updated.chatId,
+          messageId: updated.id,
+          data: {
+            message: updated as unknown as Record<string, unknown>,
+          },
+        },
+        env.REDIS_URL,
+      );
 
       return updated;
     }),

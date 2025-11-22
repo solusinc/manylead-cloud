@@ -75,16 +75,28 @@ export function ChatWindow({
     hasMarkedAsReadRef.current = false;
   }, [chatId]);
 
+  // Mutation para marcar todas as mensagens como lidas
+  const markAllMessagesAsReadMutation = useMutation(
+    trpc.messages.markAllAsRead.mutationOptions(),
+  );
+
   // Marcar chat como lido quando abrir (apenas uma vez por chat)
   useEffect(() => {
     if (chatItem && !hasMarkedAsReadRef.current && chatItem.chat.unreadCount > 0) {
       hasMarkedAsReadRef.current = true;
+
+      // Marcar o chat como lido (zera unreadCount)
       markAsReadMutation.mutate({
         id: chatItem.chat.id,
         createdAt: chatItem.chat.createdAt,
       });
+
+      // Marcar todas as mensagens do contato como lidas (atualiza ticks)
+      markAllMessagesAsReadMutation.mutate({
+        chatId: chatItem.chat.id,
+      });
     }
-  }, [chatItem, markAsReadMutation]);
+  }, [chatItem, markAsReadMutation, markAllMessagesAsReadMutation]);
 
   // Marcar como lido automaticamente quando receber mensagem no chat ativo
   useEffect(() => {
@@ -94,15 +106,21 @@ export function ChatWindow({
       // Se a mensagem é para este chat, marcar como lido automaticamente
       const messageChatId = event.message.chatId as string;
       if (messageChatId === chatId) {
+        // Marcar o chat como lido (zera unreadCount)
         markAsReadMutation.mutate({
           id: chatItem.chat.id,
           createdAt: chatItem.chat.createdAt,
+        });
+
+        // Marcar todas as mensagens do contato como lidas (atualiza ticks)
+        markAllMessagesAsReadMutation.mutate({
+          chatId: chatItem.chat.id,
         });
       }
     });
 
     return unsubscribe;
-  }, [socket, socket.isConnected, chatId, chatItem, markAsReadMutation]);
+  }, [socket, socket.isConnected, chatId, chatItem, markAsReadMutation, markAllMessagesAsReadMutation]);
 
   // Detectar quando o chat é atribuído para outro agent (APENAS para members)
   useEffect(() => {
@@ -244,17 +262,15 @@ export function ChatWindow({
           </ScrollArea>
 
           {/* Input bar - WhatsApp style: empurra mensagens para cima ao invés de ficar sticky */}
-          <div className="min-h-14 items-center bg-background px-4 py-2">
-            <div className="mx-2">
-              <ChatInput
-                chatId={chatId}
-                chatCreatedAt={chatItem.chat.createdAt}
-                chatStatus={chat.status}
-                assignedTo={chat.assignedTo}
-                onTypingStart={() => socket.emitTypingStart(chatId)}
-                onTypingStop={() => socket.emitTypingStop(chatId)}
-              />
-            </div>
+          <div className={cn("min-h-14 items-center bg-background", chat.status === "open" && "px-4 py-2")}>
+            <ChatInput
+              chatId={chatId}
+              chatCreatedAt={chatItem.chat.createdAt}
+              chatStatus={chat.status}
+              assignedTo={chat.assignedTo}
+              onTypingStart={() => socket.emitTypingStart(chatId)}
+              onTypingStop={() => socket.emitTypingStop(chatId)}
+            />
           </div>
         </div>
       </ScrollToBottomContext.Provider>
