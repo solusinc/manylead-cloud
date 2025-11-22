@@ -10,7 +10,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { useInfiniteQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2 } from "lucide-react";
 import { isSameDay } from "date-fns";
 
@@ -62,6 +62,7 @@ export function ChatMessageList({
   const previousMessageCountRef = useRef<number>(0);
   const trpc = useTRPC();
   const socket = useChatSocketContext();
+  const queryClient = useQueryClient();
   const [isTyping, setIsTyping] = useState(false);
 
   // TanStack Query handles ALL the complexity for us
@@ -96,6 +97,7 @@ export function ChatMessageList({
       | "read"
       | undefined,
     messageType: item.message.messageType as string | undefined,
+    isStarred: item.message.isStarred,
   }));
 
   // Scroll to bottom on initial load
@@ -201,6 +203,22 @@ export function ChatMessageList({
       unsubscribeTypingStop();
     };
   }, [socket.isConnected, chatId, socket]);
+
+  // Escutar eventos de message:updated para invalidar queries (ex: star toggle)
+  useEffect(() => {
+    if (!socket.isConnected) return;
+
+    const unsubscribeMessageUpdated = socket.onMessageUpdated((event) => {
+      const messageChatId = event.message.chatId as string;
+      if (messageChatId === chatId) {
+        void queryClient.invalidateQueries({ queryKey: [["messages"]] });
+      }
+    });
+
+    return () => {
+      unsubscribeMessageUpdated();
+    };
+  }, [socket.isConnected, chatId, socket, queryClient]);
 
   // Auto-scroll: ALWAYS when YOU send, only if near bottom when receiving
   const previousMessagesLengthRef = useRef(messages.length);

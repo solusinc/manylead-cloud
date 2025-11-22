@@ -1064,4 +1064,62 @@ export const messagesRouter = createTRPCRouter({
         });
       }
     }),
+
+  /**
+   * Toggle star (favoritar) uma mensagem
+   */
+  toggleStar: memberProcedure
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        timestamp: z.date(),
+        isStarred: z.boolean(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const organizationId = ctx.session.session.activeOrganizationId;
+      if (!organizationId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Nenhuma organização ativa",
+        });
+      }
+
+      // Atualizar mensagem
+      const [updated] = await ctx.tenantDb
+        .update(message)
+        .set({
+          isStarred: input.isStarred,
+        })
+        .where(
+          and(
+            eq(message.id, input.id),
+            eq(message.timestamp, input.timestamp),
+          ),
+        )
+        .returning();
+
+      if (!updated) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Mensagem não encontrada",
+        });
+      }
+
+      // Emitir evento para propagar para outros agents
+      await publishMessageEvent(
+        {
+          type: "message:updated",
+          organizationId,
+          chatId: updated.chatId,
+          messageId: updated.id,
+          data: {
+            message: updated as unknown as Record<string, unknown>,
+          },
+        },
+        env.REDIS_URL,
+      );
+
+      return updated;
+    }),
 });

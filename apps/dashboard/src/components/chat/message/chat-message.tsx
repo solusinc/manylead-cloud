@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { format } from "date-fns";
 import { Check, CheckCheck, Clock, MessageCircle, Star, ChevronDown, ArrowRightLeft } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 import { cn } from "@manylead/ui";
 import { Button } from "@manylead/ui/button";
@@ -12,6 +14,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@manylead/ui/dropdown-menu";
+import { useTRPC } from "~/lib/trpc/react";
 
 interface Message {
   id: string;
@@ -20,6 +23,7 @@ interface Message {
   timestamp: Date;
   status?: "pending" | "sent" | "delivered" | "read";
   messageType?: string;
+  isStarred?: boolean;
 }
 
 export function ChatMessage({
@@ -88,7 +92,7 @@ export function ChatMessageBubble({
               : 'radial-gradient(circle at 66% 25%, var(--msg-incoming) 0%, var(--msg-incoming) 55%, transparent 70%)'
           }}
         >
-          <ChatMessageActions isOutgoing={isOutgoing} onOpenChange={onMenuOpenChange} />
+          <ChatMessageActions message={message} isOutgoing={isOutgoing} onOpenChange={onMenuOpenChange} />
         </div>
       )}
       <ChatMessageContent content={message.content} isOutgoing={isOutgoing} />
@@ -96,6 +100,7 @@ export function ChatMessageBubble({
         timestamp={message.timestamp}
         status={message.status}
         isOutgoing={isOutgoing}
+        isStarred={message.isStarred}
       />
     </div>
   );
@@ -140,15 +145,18 @@ export function ChatMessageFooter({
   timestamp,
   status,
   isOutgoing,
+  isStarred = false,
   className,
 }: {
   timestamp: Date;
   status?: "pending" | "sent" | "delivered" | "read";
   isOutgoing: boolean;
+  isStarred?: boolean;
   className?: string;
 }) {
   return (
     <div className={cn("mt-1 flex items-center justify-end gap-1", className)}>
+      {isStarred && <Star className="h-3 w-3 fill-current opacity-70" />}
       <ChatMessageTime timestamp={timestamp} />
       {isOutgoing && status && <ChatMessageStatus status={status} />}
     </div>
@@ -193,10 +201,12 @@ export function ChatMessageStatus({
 }
 
 export function ChatMessageActions({
+  message,
   isOutgoing,
   onOpenChange,
   className,
 }: {
+  message: Message;
   isOutgoing: boolean;
   onOpenChange?: (open: boolean) => void;
   className?: string;
@@ -221,12 +231,44 @@ export function ChatMessageActions({
           <MessageCircle className="h-4 w-4" />
           <span>Responder</span>
         </DropdownMenuItem>
-        <DropdownMenuItem className="gap-3 cursor-pointer">
-          <Star className="h-4 w-4" />
-          <span>Favoritar</span>
-        </DropdownMenuItem>
+        <ChatMessageActionStar message={message} />
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+export function ChatMessageActionStar({ message }: { message: Message }) {
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
+
+  const toggleStarMutation = useMutation(
+    trpc.messages.toggleStar.mutationOptions({
+      onSuccess: () => {
+        void queryClient.invalidateQueries({ queryKey: [["messages"]] });
+      },
+      onError: (error) => {
+        toast.error(error.message || "Erro ao favoritar mensagem");
+      },
+    }),
+  );
+
+  const handleToggleStar = () => {
+    toggleStarMutation.mutate({
+      id: message.id,
+      timestamp: message.timestamp,
+      isStarred: !message.isStarred,
+    });
+  };
+
+  return (
+    <DropdownMenuItem
+      className="gap-3 cursor-pointer"
+      onClick={handleToggleStar}
+      disabled={toggleStarMutation.isPending}
+    >
+      <Star className={cn("h-4 w-4", message.isStarred && "fill-current")} />
+      <span>{message.isStarred ? "Desfavoritar" : "Favoritar"}</span>
+    </DropdownMenuItem>
   );
 }
 

@@ -15,6 +15,13 @@
       "when": 1763836282985,
       "tag": "0001_damp_clea",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1763837535580,
+      "tag": "0002_vengeful_chamber",
+      "breakpoints": true
     }
   ]
 }

@@ -69,6 +69,7 @@ export const message = pgTable(
     // Flags
     isDeleted: boolean("is_deleted").notNull().default(false),
     isEdited: boolean("is_edited").notNull().default(false),
+    isStarred: boolean("is_starred").notNull().default(false),
 
     visibleTo: varchar("visible_to", { length: 20 }).default("all"),
     // "all" | "agents_only" (para notas internas)
