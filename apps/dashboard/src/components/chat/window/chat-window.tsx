@@ -8,7 +8,9 @@ import { cn } from "@manylead/ui";
 import { ScrollArea } from "@manylead/ui/scroll-area";
 import { Skeleton } from "@manylead/ui/skeleton";
 
+import { useAccessDeniedModal } from "~/components/providers/access-denied-modal-provider";
 import { useChatSocketContext } from "~/components/providers/chat-socket-provider";
+import { useServerSession } from "~/components/providers/session-provider";
 import { useTRPC } from "~/lib/trpc/react";
 import { ChatInput } from "../input";
 import { ChatMessageList } from "../message";
@@ -26,9 +28,11 @@ export function ChatWindow({
   const trpc = useTRPC();
   const socket = useChatSocketContext();
   const router = useRouter();
+  const session = useServerSession();
   const queryClient = useQueryClient();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const hasMarkedAsReadRef = useRef(false);
+  const { showAccessDeniedModal } = useAccessDeniedModal();
 
   // Buscar chat da API
   const { data: chatData, isLoading } = useQuery(
@@ -36,6 +40,11 @@ export function ChatWindow({
       limit: 100,
       offset: 0,
     }),
+  );
+
+  // Buscar agent atual
+  const { data: currentAgent } = useQuery(
+    trpc.agents.getByUserId.queryOptions({ userId: session.user.id }),
   );
 
   // Encontrar o chat específico
@@ -94,6 +103,43 @@ export function ChatWindow({
     return unsubscribe;
   }, [socket, socket.isConnected, chatId, chatItem, markAsReadMutation]);
 
+  // Detectar quando o chat é atribuído para outro agent (APENAS para members)
+  useEffect(() => {
+    if (!socket.isConnected || !chatItem || !currentAgent) return;
+
+    // Owner e Admin podem ver todos os chats, não aplicar restrição
+    if (currentAgent.role === "owner" || currentAgent.role === "admin") {
+      console.log("[ChatWindow] Owner/Admin - sem restrição de acesso");
+      return;
+    }
+
+    const unsubscribe = socket.onChatUpdated((event) => {
+      const updatedChatId = event.chat.id as string;
+      const updatedAssignedTo = event.chat.assignedTo as string | null;
+
+      console.log("[ChatWindow] Chat atualizado:", {
+        updatedChatId,
+        currentChatId: chatId,
+        updatedAssignedTo,
+        currentAgentId: currentAgent.id,
+        shouldBlock: updatedChatId === chatId && updatedAssignedTo && updatedAssignedTo !== currentAgent.id,
+      });
+
+      // Se é o chat atual E foi atribuído para outro agent (member não pode mais ver)
+      if (
+        updatedChatId === chatId &&
+        updatedAssignedTo &&
+        updatedAssignedTo !== currentAgent.id
+      ) {
+        console.log("[ChatWindow] 🚫 Acesso negado - chamando modal global");
+        // Mostrar modal global e redirecionar
+        showAccessDeniedModal();
+      }
+    });
+
+    return unsubscribe;
+  }, [socket, socket.isConnected, chatId, chatItem, currentAgent, router, showAccessDeniedModal]);
+
   // Loading skeleton
   if (isLoading || !chatItem) {
     return (
@@ -146,6 +192,7 @@ export function ChatWindow({
       name: chatItem.contact?.name ?? "Sem nome",
       phoneNumber: chatItem.contact?.phoneNumber ?? "",
       avatar: chatItem.contact?.avatar ?? null,
+      instanceCode: chatItem.contact?.metadata?.targetOrganizationInstanceCode,
     },
     status: chatItem.chat.status as "open" | "closed",
     assignedTo: chatItem.chat.assignedTo,

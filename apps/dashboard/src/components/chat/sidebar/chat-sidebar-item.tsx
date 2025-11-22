@@ -91,8 +91,8 @@ export function ChatSidebarItemAvatar({
         )}
       </Avatar>
 
-      {/* Badge no canto inferior direito */}
-      <div className="absolute -bottom-0.5 -right-0.5 flex h-5 w-5 items-center justify-center rounded-full border-2 border-background bg-background">
+      {/* Badge no canto inferior esquerdo */}
+      <div className="absolute -bottom-0.5 -left-0.5 flex h-5 w-5 items-center justify-center rounded-full border-2 border-background bg-background">
         {messageSource === "whatsapp" ? (
           <FaWhatsapp className="h-3 w-3 text-green-500" />
         ) : (

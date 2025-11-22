@@ -41,6 +41,7 @@ interface ChatWindowHeaderProps {
       name: string;
       phoneNumber: string;
       avatar: string | null;
+      instanceCode?: string;
     };
     status: "open" | "closed";
     assignedTo: string | null;
@@ -81,6 +82,7 @@ export function ChatWindowHeader({
         open={detailsOpen}
         onOpenChange={setDetailsOpen}
         contact={chat.contact}
+        source={chat.source}
       />
     </>
   );

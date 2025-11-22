@@ -16,6 +16,7 @@ import {
   inArray,
   isNull,
   message,
+  ne,
   or,
   organization,
   sql,
@@ -66,17 +67,23 @@ export const chatsRouter = createTRPCRouter({
       // Construir where conditions
       const conditions = [];
 
-      // Lógica de visibilidade:
-      // 1. Chat pending (cross-org): aparece para TODOS (qualquer agent pode pegar)
-      // 2. Chat com mensagens: aparece para TODOS
-      // 3. Chat sem mensagens e não pending: só aparece para assigned agent
-      conditions.push(
-        or(
-          eq(chat.status, "pending"), // Chats pending aparecem para todos
-          sql`${chat.totalMessages} > 0`, // Chats com mensagens aparecem para todos
-          currentAgent ? eq(chat.assignedTo, currentAgent.id) : undefined, // Ou atribuído a mim
-        ),
-      );
+      // Aplicar permissões baseadas no role:
+      // - owner/admin: vê TODAS as conversas
+      // - member: só vê conversas pending (não atribuídas) OU atribuídas a ele
+      if (currentAgent) {
+        const role = currentAgent.role as "owner" | "admin" | "member";
+
+        if (role === "member") {
+          // Agents (members) só veem conversas pending OU atribuídas a eles
+          conditions.push(
+            or(
+              eq(chat.status, "pending"), // Conversas pending (qualquer um pode pegar)
+              eq(chat.assignedTo, currentAgent.id), // OU conversas atribuídas a mim
+            ),
+          );
+        }
+        // owner e admin não têm restrição, veem tudo
+      }
 
       // Filtro de departamento baseado em permissões do agent
       if (currentAgent?.permissions.departments) {
@@ -131,8 +138,10 @@ export const chatsRouter = createTRPCRouter({
 
       // Filtrar apenas conversas com mensagens não lidas
       // IMPORTANTE: Agora filtra baseado em chatParticipant.unreadCount
+      // E exclui chats pending (que não pertencem a ninguém ainda)
       if (unreadOnly && currentAgent) {
         conditions.push(sql`${chatParticipant.unreadCount} > 0`);
+        conditions.push(ne(chat.status, "pending"));
       }
 
       const where = conditions.length > 0 ? and(...conditions) : undefined;
@@ -165,12 +174,22 @@ export const chatsRouter = createTRPCRouter({
           .limit(limit)
           .offset(offset)
           .orderBy(desc(chat.lastMessageAt)),
-        // Query de count precisa do JOIN quando há busca por contact
-        search
+        // Query de count precisa do JOIN quando há busca por contact ou unreadOnly
+        search || unreadOnly
           ? ctx.tenantDb
               .select({ count: count() })
               .from(chat)
               .leftJoin(contact, eq(chat.contactId, contact.id))
+              .leftJoin(
+                chatParticipant,
+                currentAgent
+                  ? and(
+                      eq(chatParticipant.chatId, chat.id),
+                      eq(chatParticipant.chatCreatedAt, chat.createdAt),
+                      eq(chatParticipant.agentId, currentAgent.id),
+                    )
+                  : undefined,
+              )
               .where(where)
           : ctx.tenantDb.select({ count: count() }).from(chat).where(where),
       ]);
@@ -200,7 +219,9 @@ export const chatsRouter = createTRPCRouter({
           ...item,
           chat: {
             ...item.chat,
-            unreadCount: item.participant?.unreadCount ?? item.chat.unreadCount,
+            // Pending chats não têm unreadCount (ninguém foi atribuído ainda)
+            // Chats atribuídos usam unreadCount do participant (0 se não tiver participant)
+            unreadCount: item.chat.status === "pending" ? 0 : (item.participant?.unreadCount ?? 0),
           },
         }));
 
@@ -277,8 +298,9 @@ export const chatsRouter = createTRPCRouter({
         ...item,
         chat: {
           ...item.chat,
-          // Usar unreadCount do participant, ou do chat se pending (sem participant)
-          unreadCount: item.participant?.unreadCount ?? item.chat.unreadCount,
+          // Pending chats não têm unreadCount (ninguém foi atribuído ainda)
+          // Chats atribuídos usam unreadCount do participant (0 se não tiver participant)
+          unreadCount: item.chat.status === "pending" ? 0 : (item.participant?.unreadCount ?? 0),
         },
       }));
 

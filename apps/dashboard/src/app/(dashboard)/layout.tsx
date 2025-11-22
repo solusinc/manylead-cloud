@@ -6,6 +6,7 @@ import { SidebarInset, SidebarProvider } from "@manylead/ui/sidebar";
 
 import { AppSidebar } from "~/components/nav/app-sidebar";
 import { OrganizationGuard } from "~/components/nav/organization-guard";
+import { AccessDeniedModalProvider } from "~/components/providers/access-denied-modal-provider";
 import { SessionProvider } from "~/components/providers/session-provider";
 import { auth } from "~/lib/auth/server";
 import { AbilityProvider } from "~/lib/permissions";
@@ -88,8 +89,10 @@ async function HydrateSidebar({
   return (
     <SessionProvider session={session}>
       <HydrateClient>
-        <OrganizationGuard />
-        {children}
+        <AccessDeniedModalProvider>
+          <OrganizationGuard />
+          {children}
+        </AccessDeniedModalProvider>
       </HydrateClient>
     </SessionProvider>
   );

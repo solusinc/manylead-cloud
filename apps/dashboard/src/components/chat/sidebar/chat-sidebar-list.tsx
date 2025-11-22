@@ -31,6 +31,7 @@ export function ChatSidebarList({
   const isSearchActive = useIsSearchActive();
   const searchTerm = useChatSearchStore((state) => state.searchTerm);
   const showUnreadOnly = useChatFiltersStore((state) => state.showUnreadOnly);
+  const headerFilters = useChatFiltersStore((state) => state.headerFilters);
 
   // Estado para rastrear quem está digitando (chatId -> true/false)
   const [typingChats, setTypingChats] = useState<Set<string>>(new Set());
@@ -40,8 +41,14 @@ export function ChatSidebarList({
     trpc.agents.getByUserId.queryOptions({ userId: session.user.id })
   );
 
-  // Determinar os parâmetros do filtro baseado no activeFilter
+  // Determinar os parâmetros do filtro baseado em headerFilters (prioridade) ou activeFilter
   const filterParams = (() => {
+    // PRIORIDADE: Se headerFilters.status está definido (não "all"), usar ele
+    if (headerFilters.status !== "all") {
+      return { status: headerFilters.status };
+    }
+
+    // Caso contrário, usar activeFilter dos tabs
     if (activeFilter === "pending") {
       return { status: "pending" as const };
     }

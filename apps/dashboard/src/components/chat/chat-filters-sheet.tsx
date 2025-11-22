@@ -1,26 +1,21 @@
 "use client";
 
-import { useState } from "react";
 import { Button } from "@manylead/ui/button";
 import { Label } from "@manylead/ui/label";
 import { RadioGroup, RadioGroupItem } from "@manylead/ui/radio-group";
 import { useChatFiltersStore } from "~/stores/use-chat-filters-store";
 
-type StatusFilter = "all" | "in_progress" | "finished" | "waiting";
+import type { StatusFilter } from "~/stores/use-chat-filters-store";
 
 export function ChatFiltersSheet() {
-  const { isOpen, close } = useChatFiltersStore();
-  const [status, setStatus] = useState<StatusFilter>("all");
+  const { isOpen, close, headerFilters, setHeaderFilter, clearHeaderFilters } = useChatFiltersStore();
 
   const handleApply = () => {
-    // TODO: Aplicar filtros
-    console.log("Aplicando filtros:", { status });
     close();
   };
 
   const handleClearFilters = () => {
-    setStatus("all");
-    // TODO: Limpar outros filtros quando implementados
+    clearHeaderFilters();
   };
 
   if (!isOpen) return null;
@@ -40,7 +35,10 @@ export function ChatFiltersSheet() {
           {/* Situação */}
           <div className="space-y-3">
             <Label className="text-base font-semibold">Situação</Label>
-            <RadioGroup value={status} onValueChange={(v) => setStatus(v as StatusFilter)}>
+            <RadioGroup
+              value={headerFilters.status}
+              onValueChange={(v) => setHeaderFilter("status", v as StatusFilter)}
+            >
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="all" id="status-all" />
                 <Label htmlFor="status-all" className="font-normal cursor-pointer">
@@ -48,20 +46,20 @@ export function ChatFiltersSheet() {
                 </Label>
               </div>
               <div className="flex items-center space-x-2">
-                <RadioGroupItem value="in_progress" id="status-in-progress" />
-                <Label htmlFor="status-in-progress" className="font-normal cursor-pointer">
+                <RadioGroupItem value="open" id="status-open" />
+                <Label htmlFor="status-open" className="font-normal cursor-pointer">
                   Em atendimento
                 </Label>
               </div>
               <div className="flex items-center space-x-2">
-                <RadioGroupItem value="finished" id="status-finished" />
-                <Label htmlFor="status-finished" className="font-normal cursor-pointer">
+                <RadioGroupItem value="closed" id="status-closed" />
+                <Label htmlFor="status-closed" className="font-normal cursor-pointer">
                   Finalizadas
                 </Label>
               </div>
               <div className="flex items-center space-x-2">
-                <RadioGroupItem value="waiting" id="status-waiting" />
-                <Label htmlFor="status-waiting" className="font-normal cursor-pointer">
+                <RadioGroupItem value="pending" id="status-pending" />
+                <Label htmlFor="status-pending" className="font-normal cursor-pointer">
                   Aguardando atendimento
                 </Label>
               </div>

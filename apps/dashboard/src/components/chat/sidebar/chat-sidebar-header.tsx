@@ -5,6 +5,7 @@ import { Search, MessageSquarePlus, Eye, SlidersHorizontal, X } from "lucide-rea
 import { useDebouncedCallback } from "use-debounce";
 
 import { cn } from "@manylead/ui";
+import { Badge } from "@manylead/ui/badge";
 import { Input } from "@manylead/ui/input";
 import { Button } from "@manylead/ui/button";
 import {
@@ -151,7 +152,8 @@ export function ChatSidebarFilterButton({
   className,
   ...props
 }: React.ComponentProps<typeof Button>) {
-  const { isOpen, open, close } = useChatFiltersStore();
+  const { isOpen, open, close, getActiveFilterCount } = useChatFiltersStore();
+  const activeFilterCount = getActiveFilterCount();
 
   return (
     <Tooltip>
@@ -159,16 +161,25 @@ export function ChatSidebarFilterButton({
         <Button
           variant="ghost"
           size="icon"
-          className={cn("h-9 w-9 flex-shrink-0", className)}
+          className={cn("h-9 w-9 flex-shrink-0 relative", className)}
           aria-label="Filtros"
           onClick={isOpen ? close : open}
           {...props}
         >
-          {isOpen ? (
-            <X className="h-5 w-5" />
-          ) : (
-            <SlidersHorizontal className="h-5 w-5" />
-          )}
+          <div className="relative">
+            {isOpen ? (
+              <X className="h-5 w-5" />
+            ) : (
+              <SlidersHorizontal className="h-5 w-5" />
+            )}
+            {!isOpen && activeFilterCount > 0 && (
+              <Badge
+                className="absolute -right-2 -top-2 h-4 min-w-4 rounded-full bg-green-500 px-1 text-[10px] leading-none text-black"
+              >
+                {activeFilterCount}
+              </Badge>
+            )}
+          </div>
         </Button>
       </TooltipTrigger>
       <TooltipContent side="top">

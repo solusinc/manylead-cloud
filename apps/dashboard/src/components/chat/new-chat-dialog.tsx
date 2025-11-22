@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { useMutation } from "@tanstack/react-query";
 import { FaWhatsapp } from "react-icons/fa";
 import { toast } from "sonner";
@@ -90,7 +91,24 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
 
             <div className="space-y-2">
               <NewChatOption
-                icon={<span className="text-sm font-bold">ML</span>}
+                icon={
+                  <>
+                    <Image
+                      src="/assets/manylead-icon-light.png"
+                      alt="ManyLead"
+                      width={24}
+                      height={24}
+                      className="dark:hidden"
+                    />
+                    <Image
+                      src="/assets/manylead-icon-dark.png"
+                      alt="ManyLead"
+                      width={24}
+                      height={24}
+                      className="hidden dark:block"
+                    />
+                  </>
+                }
                 label="Manylead"
                 description="Conversa com outra organização"
                 onClick={() => setSelectedType("internal")}
@@ -123,6 +141,11 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
                     placeholder="manylead-xxxxxxxxxx"
                     value={organizationInstanceCode}
                     onChange={(e) => setOrganizationInstanceCode(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && organizationInstanceCode.trim() && !createNewSessionMutation.isPending) {
+                        void handleStartChat();
+                      }
+                    }}
                     autoFocus
                   />
                   <p className="text-muted-foreground text-xs">
@@ -137,6 +160,11 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
                     placeholder="+55 11 99999-9999"
                     value={phoneNumber}
                     onChange={(e) => setPhoneNumber(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && phoneNumber.trim() && !createNewSessionMutation.isPending) {
+                        void handleStartChat();
+                      }
+                    }}
                     autoFocus
                   />
                   <p className="text-muted-foreground text-xs">

@@ -13,6 +13,7 @@ import { List, Hourglass, MessageCircle, UserCircle } from "lucide-react";
 import { useTRPC } from "~/lib/trpc/react";
 import { useQuery } from "@tanstack/react-query";
 import { useIsSearchActive } from "~/stores/use-chat-search-store";
+import { useChatFiltersStore } from "~/stores/use-chat-filters-store";
 import { ChatSidebarSearchTabs } from "./chat-sidebar-search-tabs";
 
 type FilterType = "all" | "pending" | "open" | "mine";
@@ -27,11 +28,14 @@ export function ChatSidebarFilters({
   onFilterChange?: (filter: FilterType) => void;
 } & React.ComponentProps<"div">) {
   const isSearchActive = useIsSearchActive();
+  const showUnreadOnly = useChatFiltersStore((state) => state.showUnreadOnly);
   const trpc = useTRPC();
 
   // Buscar todos os chats para contar pending (sempre chamar o hook)
+  // IMPORTANTE: usar showUnreadOnly para contar apenas chats não lidas quando filtro ativo
   const { data: chatsData, isLoading: isLoadingChats } = useQuery(
     trpc.chats.list.queryOptions({
+      unreadOnly: showUnreadOnly || undefined,
       limit: 100,
       offset: 0,
     })
@@ -116,22 +120,23 @@ export function ChatSidebarFilterButton({
           variant="ghost"
           size="icon"
           className={cn(
-            "relative h-12 flex-1 rounded-none border-b-2 border-transparent text-muted-foreground",
-            active && "border-b-primary text-foreground",
+            "h-12 flex-1 rounded-none border-b-2 border-transparent",
+            active && "border-b-primary",
             className
           )}
           aria-label={label}
           {...props}
         >
-          <Icon className="h-6 w-6" />
-          {badge !== undefined && (
-            <Badge
-              variant="destructive"
-              className="absolute right-2 top-1 h-4 min-w-4 rounded-full px-1 text-[10px] leading-none"
-            >
-              {badge}
-            </Badge>
-          )}
+          <div className="relative">
+            <Icon className="h-6 w-6" />
+            {badge !== undefined && (
+              <Badge
+                className="absolute -right-5 -top-2 h-4 min-w-4 rounded-full bg-green-500 px-1 text-[10px] leading-none text-black"
+              >
+                {badge}
+              </Badge>
+            )}
+          </div>
         </Button>
       </TooltipTrigger>
       <TooltipContent side="bottom">

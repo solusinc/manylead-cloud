@@ -24,15 +24,18 @@ interface ContactDetailsSheetProps {
     name: string;
     phoneNumber: string;
     avatar: string | null;
+    instanceCode?: string;
     customName?: string;
     notes?: string;
   };
+  source?: "whatsapp" | "internal";
 }
 
 export function ContactDetailsSheet({
   open,
   onOpenChange,
   contact,
+  source = "whatsapp",
 }: ContactDetailsSheetProps) {
   const [customName, setCustomName] = useState(contact.customName ?? "");
   const [notes, setNotes] = useState(contact.notes ?? "");
@@ -86,7 +89,7 @@ export function ContactDetailsSheet({
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto">
-          <ContactDetailsAvatar contact={contact} />
+          <ContactDetailsAvatar contact={contact} source={source} />
 
           <div className="space-y-6 px-4 py-6">
             <ContactDetailsField
@@ -147,12 +150,15 @@ export function ContactDetailsSheet({
 
 function ContactDetailsAvatar({
   contact,
+  source = "whatsapp",
 }: {
   contact: {
     name: string;
     phoneNumber: string;
     avatar: string | null;
+    instanceCode?: string;
   };
+  source?: "whatsapp" | "internal";
 }) {
   return (
     <div className="flex flex-col items-center py-8">
@@ -172,12 +178,18 @@ function ContactDetailsAvatar({
       </Avatar>
 
       <h2 className="mb-1 text-xl font-semibold">{contact.name}</h2>
-      <div className="flex items-center gap-1.5">
+      {source === "internal" ? (
         <p className="text-muted-foreground text-sm">
-          {formatBrazilianPhone(contact.phoneNumber)}
+          {contact.instanceCode ?? "Sem código"}
         </p>
-        <FaWhatsapp className="text-muted-foreground h-4 w-4" />
-      </div>
+      ) : (
+        <div className="flex items-center gap-1.5">
+          <p className="text-muted-foreground text-sm">
+            {formatBrazilianPhone(contact.phoneNumber)}
+          </p>
+          <FaWhatsapp className="text-muted-foreground h-4 w-4" />
+        </div>
+      )}
     </div>
   );
 }
