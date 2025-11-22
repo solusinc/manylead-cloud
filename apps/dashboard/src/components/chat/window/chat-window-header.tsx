@@ -38,10 +38,14 @@ interface ChatWindowHeaderProps {
     id: string;
     createdAt: Date;
     contact: {
+      id: string;
       name: string;
       phoneNumber: string;
       avatar: string | null;
       instanceCode?: string;
+      customName?: string | null;
+      notes?: string | null;
+      customFields?: Record<string, string> | null;
     };
     status: "open" | "closed";
     assignedTo: string | null;
@@ -99,12 +103,15 @@ export function ChatWindowHeaderInfo({
     name: string;
     phoneNumber: string;
     avatar: string | null;
+    customName?: string | null;
   };
   source?: "whatsapp" | "internal";
   isTyping?: boolean;
   className?: string;
   onClick?: () => void;
 }) {
+  const displayName = contact.customName ?? contact.name;
+
   return (
     <button
       onClick={onClick}
@@ -115,7 +122,7 @@ export function ChatWindowHeaderInfo({
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={contact.avatar}
-            alt={contact.name}
+            alt={displayName}
             className="object-cover"
           />
         ) : (
@@ -128,7 +135,7 @@ export function ChatWindowHeaderInfo({
       <div className="flex-1 text-left">
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-semibold">
-            {contact.name}
+            {displayName}
           </h3>
           {source === "whatsapp" ? (
             <FaWhatsapp className="h-4 w-4" />

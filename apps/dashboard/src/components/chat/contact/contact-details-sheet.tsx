@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { Check, Plus, X } from "lucide-react";
 import { FaUser, FaWhatsapp } from "react-icons/fa";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 import { formatBrazilianPhone } from "@manylead/shared/utils";
 import { Avatar, AvatarFallback } from "@manylead/ui/avatar";
@@ -16,17 +18,20 @@ import {
   SheetTitle,
 } from "@manylead/ui/sheet";
 import { Textarea } from "@manylead/ui/textarea";
+import { useTRPC } from "~/lib/trpc/react";
 
 interface ContactDetailsSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   contact: {
+    id: string;
     name: string;
     phoneNumber: string;
     avatar: string | null;
     instanceCode?: string;
-    customName?: string;
-    notes?: string;
+    customName?: string | null;
+    notes?: string | null;
+    customFields?: Record<string, string> | null;
   };
   source?: "whatsapp" | "internal";
 }
@@ -37,11 +42,24 @@ export function ContactDetailsSheet({
   contact,
   source = "whatsapp",
 }: ContactDetailsSheetProps) {
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
+
+  // Inicializar campos do banco
   const [customName, setCustomName] = useState(contact.customName ?? "");
   const [notes, setNotes] = useState(contact.notes ?? "");
+
+  // Inicializar customFields do banco
+  const initialCustomFields = contact.customFields ?? {};
   const [customFields, setCustomFields] = useState<
     { id: string; label: string; value: string }[]
-  >([]);
+  >(
+    Object.entries(initialCustomFields).map(([label, value], index) => ({
+      id: String(index),
+      label,
+      value,
+    })),
+  );
 
   const handleAddField = () => {
     const newFieldNumber = customFields.length + 1;
@@ -55,33 +73,63 @@ export function ContactDetailsSheet({
     ]);
   };
 
+  const updateMutation = useMutation(
+    trpc.contacts.update.mutationOptions({
+      onSuccess: () => {
+        void queryClient.invalidateQueries({ queryKey: [["chats"]] });
+        void queryClient.invalidateQueries({ queryKey: [["contacts"]] });
+        toast.success("Contato atualizado com sucesso!");
+        onOpenChange(false);
+      },
+      onError: (error) => {
+        toast.error(error.message || "Erro ao atualizar contato");
+      },
+    }),
+  );
+
   const handleSave = () => {
-    // TODO: Implement save mutation
-    console.log("Saving contact details:", {
-      customName,
-      notes,
-      customFields,
+    // Converter customFields array para objeto
+    const customFieldsObject = customFields.reduce(
+      (acc, field) => {
+        if (field.label && field.value) {
+          acc[field.label] = field.value;
+        }
+        return acc;
+      },
+      {} as Record<string, string>,
+    );
+
+    updateMutation.mutate({
+      id: contact.id,
+      customName: customName.trim() || null,
+      notes: notes.trim() || null,
+      customFields: customFieldsObject,
     });
-    onOpenChange(false);
   };
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet
+      key={`${contact.id}-${open}`}
+      open={open}
+      onOpenChange={onOpenChange}
+    >
       <SheetContent className="flex w-full flex-col p-0 sm:max-w-md [&>button]:hidden">
         <SheetHeader className="flex-row items-center justify-between space-y-0 border-b px-4 py-3">
           <Button
             variant="ghost"
             size="icon"
             onClick={handleSave}
+            disabled={updateMutation.isPending}
             className="h-9 w-9"
           >
             <Check className="h-5 w-5" />
           </Button>
-          <SheetTitle className="text-base">Salvar</SheetTitle>
+          <SheetTitle className="sr-only">Detalhes do Contato</SheetTitle>
           <Button
             variant="ghost"
             size="icon"
             onClick={() => onOpenChange(false)}
+            disabled={updateMutation.isPending}
             className="h-9 w-9"
           >
             <X className="h-5 w-5" />

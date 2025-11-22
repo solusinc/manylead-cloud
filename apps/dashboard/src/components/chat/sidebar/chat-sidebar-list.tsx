@@ -99,7 +99,7 @@ export function ChatSidebarList({
   const chats = chatsData?.items.map((item) => ({
     id: item.chat.id,
     contact: {
-      name: item.contact?.name ?? "Sem nome",
+      name: item.contact?.customName ?? item.contact?.name ?? "Sem nome",
       avatar: item.contact?.avatar ?? null,
     },
     lastMessage: item.chat.lastMessageContent ?? "",

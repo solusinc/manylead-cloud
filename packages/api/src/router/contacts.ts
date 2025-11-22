@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import {
   agent,
+  chat,
   contact,
   count,
   desc,
@@ -11,10 +12,12 @@ import {
   or,
   user,
 } from "@manylead/db";
+import { publishChatEvent } from "@manylead/shared";
 
+import { env } from "../env";
 import {
   createTRPCRouter,
-  ownerProcedure,
+  memberProcedure,
   protectedProcedure,
   tenantManager,
 } from "../trpc";
@@ -28,7 +31,7 @@ export const contactsRouter = createTRPCRouter({
   /**
    * Listar contatos com paginação e busca
    */
-  list: ownerProcedure
+  list: memberProcedure
     .input(
       z.object({
         search: z.string().optional(),
@@ -71,7 +74,7 @@ export const contactsRouter = createTRPCRouter({
   /**
    * Buscar contato por ID
    */
-  getById: ownerProcedure
+  getById: memberProcedure
     .input(z.object({ id: z.string().uuid() }))
     .query(async ({ ctx, input }) => {
       const [contactRecord] = await ctx.tenantDb
@@ -94,7 +97,7 @@ export const contactsRouter = createTRPCRouter({
    * Buscar ou criar contato por número de telefone
    * Usado internamente pelos webhooks para garantir que o contato existe
    */
-  findOrCreate: ownerProcedure
+  findOrCreate: memberProcedure
     .input(
       z.object({
         phoneNumber: z.string().min(1),
@@ -277,18 +280,28 @@ export const contactsRouter = createTRPCRouter({
   /**
    * Atualizar contato
    */
-  update: ownerProcedure
+  update: memberProcedure
     .input(
       z.object({
         id: z.string().uuid(),
         name: z.string().optional(),
         email: z.string().email().optional(),
         avatar: z.string().url().optional(),
+        customName: z.string().nullable().optional(),
+        notes: z.string().nullable().optional(),
         customFields: z.record(z.string(), z.string()).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
       const { id, ...data } = input;
+
+      const organizationId = ctx.session.session.activeOrganizationId;
+      if (!organizationId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Nenhuma organização ativa",
+        });
+      }
 
       const [updated] = await ctx.tenantDb
         .update(contact)
@@ -306,13 +319,38 @@ export const contactsRouter = createTRPCRouter({
         });
       }
 
+      // Buscar todos os chats que usam esse contato
+      const affectedChats = await ctx.tenantDb
+        .select()
+        .from(chat)
+        .where(eq(chat.contactId, id));
+
+      // Emitir evento chat:updated para cada chat afetado
+      // Isso vai fazer o frontend invalidar as queries e refetch
+      await Promise.all(
+        affectedChats.map((chatRecord) =>
+          publishChatEvent(
+            {
+              type: "chat:updated",
+              organizationId,
+              chatId: chatRecord.id,
+              data: {
+                chat: chatRecord as unknown as Record<string, unknown>,
+                contact: updated as unknown as Record<string, unknown>,
+              },
+            },
+            env.REDIS_URL,
+          ),
+        ),
+      );
+
       return updated;
     }),
 
   /**
    * Deletar contato
    */
-  delete: ownerProcedure
+  delete: memberProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
       const [deleted] = await ctx.tenantDb

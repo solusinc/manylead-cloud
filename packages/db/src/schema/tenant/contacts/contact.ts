@@ -38,6 +38,12 @@ export const contact = pgTable(
 
     email: varchar("email", { length: 255 }),
 
+    // Nome personalizado (sobrescreve o nome padrão na UI)
+    customName: varchar("custom_name", { length: 255 }),
+
+    // Observações sobre o contato
+    notes: text("notes"),
+
     // Campos customizados (key-value strings, ex: "Campo-1": "valor")
     customFields: jsonb("custom_fields").$type<Record<string, string>>(),
 
