@@ -1334,4 +1334,89 @@ export const messagesRouter = createTRPCRouter({
 
       return updated;
     }),
+
+  /**
+   * Adicionar comentário interno (mensagem de sistema visível apenas para agents)
+   */
+  addComment: memberProcedure
+    .input(
+      z.object({
+        chatId: z.string().uuid(),
+        content: z.string().min(1).max(2000),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const organizationId = ctx.session.session.activeOrganizationId;
+      if (!organizationId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Nenhuma organização ativa",
+        });
+      }
+
+      const userId = ctx.session.user.id;
+      const now = new Date();
+
+      // Buscar agent do usuário logado
+      const [currentAgent] = await ctx.tenantDb
+        .select()
+        .from(agent)
+        .where(eq(agent.userId, userId))
+        .limit(1);
+
+      if (!currentAgent) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Agent não encontrado",
+        });
+      }
+
+      // Criar mensagem de comentário (visível apenas para agents)
+      const agentName = ctx.session.user.name;
+
+      const [commentMessage] = await ctx.tenantDb
+        .insert(message)
+        .values({
+          chatId: input.chatId,
+          messageSource: "internal",
+          sender: "system",
+          senderId: null,
+          messageType: "comment",
+          content: input.content,
+          metadata: {
+            agentId: currentAgent.id,
+            agentName,
+          },
+          status: "read",
+          visibleTo: "agents_only", // Apenas agents podem ver
+          timestamp: now,
+          sentAt: now,
+          readAt: now,
+        })
+        .returning();
+
+      if (!commentMessage) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Erro ao criar comentário",
+        });
+      }
+
+      // Emitir evento socket para propagar para outros agents
+      await publishMessageEvent(
+        {
+          type: "message:new",
+          organizationId,
+          chatId: input.chatId,
+          messageId: commentMessage.id,
+          senderId: currentAgent.id,
+          data: {
+            message: commentMessage as unknown as Record<string, unknown>,
+          },
+        },
+        env.REDIS_URL,
+      );
+
+      return commentMessage;
+    }),
 });

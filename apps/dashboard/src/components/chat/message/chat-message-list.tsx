@@ -19,7 +19,7 @@ import { Skeleton } from "@manylead/ui/skeleton";
 
 import { useChatSocketContext } from "~/components/providers/chat-socket-provider";
 import { useTRPC } from "~/lib/trpc/react";
-import { ChatMessage, ChatMessageSystem } from "./chat-message";
+import { ChatMessage, ChatMessageSystem, ChatMessageComment } from "./chat-message";
 import { ChatMessageDateDivider } from "./chat-message-date";
 
 // Context to expose refetch function to parent components
@@ -409,7 +409,9 @@ export function ChatMessageList({
               {showDateDivider && !shouldHideBadge && (
                 <ChatMessageDateDivider date={new Date(message.timestamp)} />
               )}
-              {message.sender === "system" ? (
+              {message.messageType === "comment" ? (
+                <ChatMessageComment message={message} />
+              ) : message.sender === "system" ? (
                 <ChatMessageSystem message={message} />
               ) : (
                 <ChatMessage

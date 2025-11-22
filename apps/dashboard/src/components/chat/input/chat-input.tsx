@@ -4,7 +4,7 @@ import type { KeyboardEvent } from "react";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Mic, MessageSquare, UserCheck } from "lucide-react";
+import { Mic, UserCheck } from "lucide-react";
 import TextareaAutosize from "react-textarea-autosize";
 import { toast } from "sonner";
 import { v7 as uuidv7 } from "uuid";
@@ -12,6 +12,7 @@ import { v7 as uuidv7 } from "uuid";
 import { cn } from "@manylead/ui";
 import { Button } from "@manylead/ui/button";
 
+import { ChatCommentDialog } from "./chat-comment-dialog";
 import { ChatInputToolbar } from "./chat-input-toolbar";
 import { ChatReplyPreview } from "./chat-reply-preview";
 import { useTRPC } from "~/lib/trpc/react";
@@ -452,10 +453,7 @@ export function ChatInput({
       <div className={cn("flex flex-col items-center gap-3 bg-muted/30 py-4", className)} {...props}>
         <p className="text-sm text-muted-foreground">Aguardando atendimento</p>
         <div className="flex gap-2">
-          <Button variant="outline" size="default">
-            <MessageSquare className="mr-2 h-4 w-4" />
-            Comentário
-          </Button>
+          <ChatCommentDialog chatId={chatId} />
           <Button
             variant="default"
             size="default"
@@ -493,10 +491,7 @@ export function ChatInput({
           Atendimento finalizado por <span className="font-bold">{closedBy}</span> {formattedClosedAt}
         </p>
         <div className="flex gap-2">
-          <Button variant="outline" size="default">
-            <MessageSquare className="mr-2 h-4 w-4" />
-            Comentário
-          </Button>
+          <ChatCommentDialog chatId={chatId} />
           <Button
             variant="default"
             size="default"
@@ -519,10 +514,7 @@ export function ChatInput({
           Em atendimento com <span className="font-bold">{assignedAgent?.user?.name ?? "..."}</span>
         </p>
         <div className="flex gap-2">
-          <Button variant="outline" size="default">
-            <MessageSquare className="mr-2 h-4 w-4" />
-            Comentário
-          </Button>
+          <ChatCommentDialog chatId={chatId} />
           <Button
             variant="default"
             size="default"
@@ -557,7 +549,7 @@ export function ChatInput({
             isMultiLine ? "rounded-3xl" : "rounded-full"
           )}
         >
-          <ChatInputToolbar onEmojiSelect={insertEmoji} />
+          <ChatInputToolbar chatId={chatId} onEmojiSelect={insertEmoji} />
 
           <ChatInputArea
             ref={textareaRef}

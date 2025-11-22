@@ -391,6 +391,34 @@ export function ChatMessageActionStar({ message }: { message: Message }) {
 }
 
 /**
+ * Mensagem de comentário interno (visível apenas para agents)
+ * Renderizada com ícone de mensagem e nome do agent
+ */
+export function ChatMessageComment({
+  message,
+  className,
+}: {
+  message: Message;
+  className?: string;
+}) {
+  const agentName = message.metadata?.agentName as string | undefined;
+
+  return (
+    <div className={cn("mb-4 flex justify-center", className)}>
+      <div className="flex items-start gap-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 px-4 py-3 text-sm shadow-sm max-w-2xl">
+        <MessageCircle className="h-4 w-4 mt-0.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+        <div className="flex-1 space-y-1">
+          <p className="font-semibold text-emerald-700 dark:text-emerald-300">
+            {agentName ?? "Agente"}
+          </p>
+          <p className="text-foreground whitespace-pre-wrap">{message.content}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
  * Mensagem de sistema (ex: "Sessão criada", "Transferida de X para Y")
  * Renderizada como badge centralizado na timeline
  * Suporta multi-linha para mensagens de fechamento com layout em 2 colunas (lg/md)
