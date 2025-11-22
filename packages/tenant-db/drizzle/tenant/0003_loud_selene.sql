@@ -1,0 +1,1 @@
+ALTER TABLE "message" ADD COLUMN "replied_to_message_id" uuid;

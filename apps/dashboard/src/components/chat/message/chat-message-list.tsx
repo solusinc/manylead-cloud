@@ -98,6 +98,8 @@ export function ChatMessageList({
       | undefined,
     messageType: item.message.messageType as string | undefined,
     isStarred: item.message.isStarred,
+    repliedToMessageId: item.message.repliedToMessageId as string | null | undefined,
+    metadata: item.message.metadata as Record<string, unknown> | undefined,
   }));
 
   // Scroll to bottom on initial load

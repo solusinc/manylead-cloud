@@ -15,6 +15,7 @@ import {
   DropdownMenuTrigger,
 } from "@manylead/ui/dropdown-menu";
 import { useTRPC } from "~/lib/trpc/react";
+import { useChatReply } from "../providers/chat-reply-provider";
 
 interface Message {
   id: string;
@@ -24,6 +25,8 @@ interface Message {
   status?: "pending" | "sent" | "delivered" | "read";
   messageType?: string;
   isStarred?: boolean;
+  repliedToMessageId?: string | null;
+  metadata?: Record<string, unknown>;
 }
 
 export function ChatMessage({
@@ -73,10 +76,17 @@ export function ChatMessageBubble({
   onMenuOpenChange?: (open: boolean) => void;
   className?: string;
 }) {
+  // Extrair dados da mensagem respondida do metadata
+  const repliedMessage = message.metadata && message.repliedToMessageId ? {
+    content: message.metadata.repliedToContent as string,
+    senderName: message.metadata.repliedToSender as string,
+  } : null;
+
   return (
     <div
       className={cn(
-        "max-w-[280px] sm:max-w-md md:max-w-lg lg:max-w-xl rounded-2xl px-4 py-2 relative overflow-hidden",
+        "max-w-[280px] sm:max-w-md md:max-w-lg lg:max-w-xl rounded-2xl relative overflow-hidden",
+        repliedMessage ? "px-2 py-1.5" : "px-4 py-2",
         isOutgoing
           ? "bg-msg-outgoing rounded-br-sm"
           : "bg-msg-incoming rounded-bl-sm",
@@ -95,6 +105,16 @@ export function ChatMessageBubble({
           <ChatMessageActions message={message} isOutgoing={isOutgoing} onOpenChange={onMenuOpenChange} />
         </div>
       )}
+
+      {/* Reply preview - se existe mensagem respondida */}
+      {repliedMessage && (
+        <ChatMessageReplyPreview
+          content={repliedMessage.content}
+          senderName={repliedMessage.senderName}
+          isOutgoing={isOutgoing}
+        />
+      )}
+
       <ChatMessageContent content={message.content} isOutgoing={isOutgoing} />
       <ChatMessageFooter
         timestamp={message.timestamp}
@@ -102,6 +122,89 @@ export function ChatMessageBubble({
         isOutgoing={isOutgoing}
         isStarred={message.isStarred}
       />
+    </div>
+  );
+}
+
+/**
+ * Preview da mensagem sendo respondida dentro do bubble
+ */
+export function ChatMessageReplyPreview({
+  content,
+  senderName,
+  isOutgoing,
+  className,
+}: {
+  content: string;
+  senderName: string;
+  isOutgoing: boolean;
+  className?: string;
+}) {
+  const { messageSource, instanceCode, organizationName } = useChatReply();
+
+  // Remover formatação **Nome**\n do conteúdo (se houver)
+  const cleanContent = content.replace(/^\*\*.*?\*\*\n/, "");
+
+  // Truncar conteúdo se for muito longo
+  const truncatedContent = cleanContent.length > 50
+    ? `${cleanContent.substring(0, 50)}...`
+    : cleanContent;
+
+  // Se for internal, mostrar: OrgName + instanceCode / AgentName / Content
+  // Se for WhatsApp, mostrar: ContactName / Content
+  const isInternal = messageSource === "internal";
+
+  return (
+    <div
+      className={cn(
+        "mb-1.5 rounded-md border-l-4 bg-black/10 px-2 py-1 dark:bg-white/10",
+        isOutgoing ? "border-primary" : "border-primary/70",
+        className,
+      )}
+    >
+      {isInternal ? (
+        <>
+          {/* Linha 1: Nome da Org + instanceCode */}
+          <div className="flex items-center gap-1.5 mb-1">
+            <p className={cn(
+              "text-xs font-semibold",
+              isOutgoing ? "text-primary dark:text-primary" : "text-primary/90"
+            )}>
+              {organizationName}
+            </p>
+            {instanceCode && (
+              <span className={cn(
+                "text-[10px] opacity-60",
+                isOutgoing && "dark:text-white/60"
+              )}>
+                {instanceCode}
+              </span>
+            )}
+          </div>
+          {/* Linha 2: Nome do agente */}
+          <p className={cn(
+            "text-[11px] opacity-70",
+            isOutgoing && "dark:text-white/70"
+          )}>
+            {senderName}
+          </p>
+        </>
+      ) : (
+        /* WhatsApp: apenas nome do contato */
+        <p className={cn(
+          "text-xs font-semibold",
+          isOutgoing ? "text-primary dark:text-primary" : "text-primary/90"
+        )}>
+          {senderName}
+        </p>
+      )}
+      {/* Linha 3 (ou 2 se WhatsApp): Conteúdo */}
+      <p className={cn(
+        "text-xs opacity-80 truncate",
+        isOutgoing && "dark:text-white/80"
+      )}>
+        {truncatedContent}
+      </p>
     </div>
   );
 }
@@ -211,6 +314,21 @@ export function ChatMessageActions({
   onOpenChange?: (open: boolean) => void;
   className?: string;
 }) {
+  const { setReplyingTo, contactName } = useChatReply();
+
+  const handleReply = () => {
+    // Extrair nome do sender do conteúdo (formato: **Nome**\nConteúdo)
+    const match = /^\*\*(.*?)\*\*/.exec(message.content);
+    const senderName = match?.[1] ?? (isOutgoing ? "Você" : contactName);
+
+    setReplyingTo({
+      id: message.id,
+      content: message.content,
+      senderName,
+      timestamp: message.timestamp,
+    });
+  };
+
   return (
     <DropdownMenu onOpenChange={onOpenChange}>
       <DropdownMenuTrigger asChild>
@@ -227,7 +345,7 @@ export function ChatMessageActions({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-48 bg-background/95 backdrop-blur-sm">
-        <DropdownMenuItem className="gap-3 cursor-pointer">
+        <DropdownMenuItem className="gap-3 cursor-pointer" onClick={handleReply}>
           <MessageCircle className="h-4 w-4" />
           <span>Responder</span>
         </DropdownMenuItem>

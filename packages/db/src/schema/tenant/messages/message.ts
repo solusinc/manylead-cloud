@@ -48,8 +48,12 @@ export const message = pgTable(
 
     content: text("content").notNull(),
 
+    // Resposta a outra mensagem (reply)
+    repliedToMessageId: uuid("replied_to_message_id"),
+    // ID da mensagem sendo respondida (NULL se não for resposta)
+
     metadata: jsonb("metadata").$type<Record<string, unknown>>(),
-    // Dados adicionais (contexto, replied message, etc)
+    // Dados adicionais (contexto, etc)
 
     // Status (principalmente para mensagens enviadas)
     status: varchar("status", { length: 20 }).notNull().default("pending"),

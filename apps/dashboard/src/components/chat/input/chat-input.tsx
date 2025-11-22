@@ -13,9 +13,11 @@ import { cn } from "@manylead/ui";
 import { Button } from "@manylead/ui/button";
 
 import { ChatInputToolbar } from "./chat-input-toolbar";
+import { ChatReplyPreview } from "./chat-reply-preview";
 import { useTRPC } from "~/lib/trpc/react";
 import { useMessageDeduplication } from "~/hooks/use-message-deduplication";
 import { useServerSession } from "~/components/providers/session-provider";
+import { useChatReply } from "../providers/chat-reply-provider";
 
 export function ChatInput({
   chatId,
@@ -46,6 +48,7 @@ export function ChatInput({
   const queryClient = useQueryClient();
   const { register } = useMessageDeduplication();
   const session = useServerSession();
+  const { replyingTo, cancelReply } = useChatReply();
 
   // Buscar agent atual para pegar ID ao atribuir
   const { data: currentAgent } = useQuery(
@@ -356,15 +359,21 @@ export function ChatInput({
     // Mark that we need to restore focus after sending completes
     shouldFocusRef.current = true;
 
-    // 4. Send to server (with tempId) - NO AWAIT, fire and forget
+    // 4. Send to server (with tempId and repliedToMessageId) - NO AWAIT, fire and forget
     sendMessageMutation.mutateAsync({
       chatId,
       content: messageContent,
       tempId,
+      metadata: replyingTo ? {
+        repliedToMessageId: replyingTo.id,
+        repliedToContent: replyingTo.content,
+        repliedToSender: replyingTo.senderName,
+      } : undefined,
     }).catch((error) => {
       console.error("Failed to send message:", error);
     }).finally(() => {
       setIsSending(false);
+      cancelReply(); // Limpar reply após enviar
       // useEffect will handle focus restoration when isSending becomes false
     });
   };
@@ -529,25 +538,38 @@ export function ChatInput({
   }
 
   return (
-    <div className={cn("flex w-full items-end", className)} {...props}>
-      <div
-        className={cn(
-          "border-input bg-background flex flex-1 items-center gap-1 border px-2 transition-all",
-          isMultiLine ? "rounded-3xl" : "rounded-full"
-        )}
-      >
-        <ChatInputToolbar onEmojiSelect={insertEmoji} />
+    <div className={cn("flex w-full flex-col gap-2", className)} {...props}>
+      {/* Reply preview - aparece acima do input quando está respondendo */}
+      <ChatReplyPreview
+        repliedMessage={replyingTo ? {
+          id: replyingTo.id,
+          content: replyingTo.content,
+          senderName: replyingTo.senderName,
+        } : null}
+        onCancel={cancelReply}
+      />
 
-        <ChatInputArea
-          ref={textareaRef}
-          value={content}
-          onChange={(e) => handleContentChange(e.target.value)}
-          onKeyDown={handleKeyDown}
-          disabled={isSending}
-          autoFocus
-        />
+      {/* Input area */}
+      <div className="flex w-full items-end">
+        <div
+          className={cn(
+            "border-input bg-background flex flex-1 items-center gap-1 border px-2 transition-all",
+            isMultiLine ? "rounded-3xl" : "rounded-full"
+          )}
+        >
+          <ChatInputToolbar onEmojiSelect={insertEmoji} />
 
-        <ChatInputMicButton />
+          <ChatInputArea
+            ref={textareaRef}
+            value={content}
+            onChange={(e) => handleContentChange(e.target.value)}
+            onKeyDown={handleKeyDown}
+            disabled={isSending}
+            autoFocus
+          />
+
+          <ChatInputMicButton />
+        </div>
       </div>
     </div>
   );

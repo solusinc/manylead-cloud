@@ -15,6 +15,7 @@ import { useTRPC } from "~/lib/trpc/react";
 import { ChatInput } from "../input";
 import { ChatMessageList } from "../message";
 import { ChatWindowHeader } from "./chat-window-header";
+import { ChatReplyProvider } from "../providers/chat-reply-provider";
 
 // Context for scroll to bottom function
 const ScrollToBottomContext = createContext<(() => void) | null>(null);
@@ -218,37 +219,46 @@ export function ChatWindow({
   };
 
   return (
-    <ScrollToBottomContext.Provider value={scrollToBottom}>
-      <div
-        className={cn(
-          "flex h-full max-h-[calc(100vh-3.5rem)] flex-col sm:max-h-full",
-          "bg-auto] bg-[url('/assets/chat-messages-bg-light.png')] bg-repeat dark:bg-[url('/assets/chat-messages-bg-dark.png')]",
-          className,
-        )}
-        {...props}
-      >
-        <ChatWindowHeader chat={chat} />
-
-        <ScrollArea
-          ref={scrollAreaRef}
-          className="flex-1 overflow-auto px-6 py-0"
+    <ChatReplyProvider
+      contactName={chat.contact.customName ?? chat.contact.name}
+      messageSource={chat.source}
+      instanceCode={chat.contact.instanceCode}
+      organizationName={chat.contact.name}
+    >
+      <ScrollToBottomContext.Provider value={scrollToBottom}>
+        <div
+          className={cn(
+            "flex h-full max-h-[calc(100vh-3.5rem)] flex-col sm:max-h-full",
+            "bg-auto] bg-[url('/assets/chat-messages-bg-light.png')] bg-repeat dark:bg-[url('/assets/chat-messages-bg-dark.png')]",
+            className,
+          )}
+          {...props}
         >
-          <ChatMessageList chatId={chatId} />
-        </ScrollArea>
+          <ChatWindowHeader chat={chat} />
 
-        {/* Input bar - WhatsApp style: empurra mensagens para cima ao invés de ficar sticky */}
-        <div className="mb-2 flex min-h-14 items-center px-4">
-          <ChatInput
-            chatId={chatId}
-            chatCreatedAt={chatItem.chat.createdAt}
-            chatStatus={chat.status}
-            assignedTo={chat.assignedTo}
-            onTypingStart={() => socket.emitTypingStart(chatId)}
-            onTypingStop={() => socket.emitTypingStop(chatId)}
-          />
+          <ScrollArea
+            ref={scrollAreaRef}
+            className="flex-1 overflow-auto px-6 py-0"
+          >
+            <ChatMessageList chatId={chatId} />
+          </ScrollArea>
+
+          {/* Input bar - WhatsApp style: empurra mensagens para cima ao invés de ficar sticky */}
+          <div className="min-h-14 items-center bg-background px-4 py-2">
+            <div className="mx-2">
+              <ChatInput
+                chatId={chatId}
+                chatCreatedAt={chatItem.chat.createdAt}
+                chatStatus={chat.status}
+                assignedTo={chat.assignedTo}
+                onTypingStart={() => socket.emitTypingStart(chatId)}
+                onTypingStop={() => socket.emitTypingStop(chatId)}
+              />
+            </div>
+          </div>
         </div>
-      </div>
-    </ScrollToBottomContext.Provider>
+      </ScrollToBottomContext.Provider>
+    </ChatReplyProvider>
   );
 }
 

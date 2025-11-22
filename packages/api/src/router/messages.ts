@@ -178,6 +178,9 @@ export const messagesRouter = createTRPCRouter({
       // Formatar mensagem com assinatura: **Nome**\nConteúdo
       const formattedContent = `**${userName}**\n${input.content}`;
 
+      // Extrair repliedToMessageId do metadata (se existir)
+      const repliedToMessageId = input.metadata?.repliedToMessageId as string | undefined;
+
       // Criar mensagem (drizzle gera ID automaticamente)
       const [newMessage] = await ctx.tenantDb
         .insert(message)
@@ -188,6 +191,7 @@ export const messagesRouter = createTRPCRouter({
           senderId: currentAgent.id,
           messageType: "text",
           content: formattedContent,
+          repliedToMessageId: repliedToMessageId ?? null,
           metadata: {
             ...input.metadata,
             tempId: input.tempId, // Save client tempId for deduplication
