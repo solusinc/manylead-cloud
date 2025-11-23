@@ -358,11 +358,7 @@ export class TenantDatabaseManager {
     // Try Redis cache (distributed)
     let tenantRecord = await this.tenantCache.get(organizationId);
 
-    if (tenantRecord) {
-      console.log(`[TenantManager] ✅ Redis cache HIT for ${organizationId}`);
-    } else {
-      console.log(`[TenantManager] ❌ Redis cache MISS for ${organizationId}`);
-
+    if (!tenantRecord) {
       // Redis cache miss - query catalog database
       const result = await this.catalogDb
         .select()
@@ -375,7 +371,6 @@ export class TenantDatabaseManager {
       // Save to Redis cache for next time
       if (tenantRecord) {
         await this.tenantCache.set(organizationId, tenantRecord);
-        console.log(`[TenantManager] ✅ Saved to Redis cache for ${organizationId}`);
       }
     }
 
@@ -389,18 +384,11 @@ export class TenantDatabaseManager {
       );
     }
 
-    console.log(
-      `[TenantManager] Creating connection to ${tenantRecord.databaseName} via ${tenantRecord.port === 6432 ? "PgBouncer" : "PostgreSQL direct"}`,
-    );
-
     // Singleton pattern: reuse client if already exists for this connection string
     // Prevents memory leak from creating unlimited client objects
     let client = this.clientCache.get(tenantRecord.connectionString);
 
     if (!client) {
-      console.log(
-        `[TenantManager] 🆕 Creating new postgres client for ${tenantRecord.databaseName}`,
-      );
 
       // Create new postgres client (lightweight wrapper, not a real TCP connection)
       // PgBouncer handles connection pooling centrally
