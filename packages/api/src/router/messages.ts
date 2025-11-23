@@ -1419,4 +1419,90 @@ export const messagesRouter = createTRPCRouter({
 
       return commentMessage;
     }),
+
+  /**
+   * Deletar comentário interno
+   */
+  deleteComment: memberProcedure
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        chatId: z.string().uuid(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const organizationId = ctx.session.session.activeOrganizationId;
+      if (!organizationId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Nenhuma organização ativa",
+        });
+      }
+
+      const userId = ctx.session.user.id;
+
+      // Buscar agent do usuário logado
+      const [currentAgent] = await ctx.tenantDb
+        .select()
+        .from(agent)
+        .where(eq(agent.userId, userId))
+        .limit(1);
+
+      if (!currentAgent) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Agent não encontrado",
+        });
+      }
+
+      // Buscar mensagem para verificar se é um comentário e se pertence ao agent
+      const [existingMessage] = await ctx.tenantDb
+        .select()
+        .from(message)
+        .where(eq(message.id, input.id))
+        .limit(1);
+
+      if (!existingMessage) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Comentário não encontrado",
+        });
+      }
+
+      if (existingMessage.messageType !== "comment") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Esta mensagem não é um comentário",
+        });
+      }
+
+      // Verificar se o comentário pertence ao agent logado
+      const metadata = existingMessage.metadata as { agentId?: string } | null;
+      if (metadata?.agentId !== currentAgent.id) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Você não tem permissão para deletar este comentário",
+        });
+      }
+
+      // Deletar comentário
+      await ctx.tenantDb
+        .delete(message)
+        .where(eq(message.id, input.id));
+
+      // Emitir evento socket para propagar para outros agents
+      await publishMessageEvent(
+        {
+          type: "message:deleted",
+          organizationId,
+          chatId: input.chatId,
+          messageId: input.id,
+          senderId: currentAgent.id,
+          data: {},
+        },
+        env.REDIS_URL,
+      );
+
+      return { success: true };
+    }),
 });

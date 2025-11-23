@@ -262,7 +262,7 @@ export function ChatWindow({
           </ScrollArea>
 
           {/* Input bar - WhatsApp style: empurra mensagens para cima ao invés de ficar sticky */}
-          <div className={cn("min-h-14 items-center bg-background", chat.status === "open" && "px-4 py-2")}>
+          <div className={cn("min-h-14 items-center bg-background", chat.status === "open" && "px-4 py-4")}>
             <ChatInput
               chatId={chatId}
               chatCreatedAt={chatItem.chat.createdAt}

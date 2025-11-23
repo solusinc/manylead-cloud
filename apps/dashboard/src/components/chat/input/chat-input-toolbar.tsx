@@ -65,7 +65,7 @@ export function ChatInputEmojiButton({
           aria-label="Add emoji"
           {...props}
         >
-          <Smile className="h-5 w-5" />
+          <Smile className="size-5" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-full border-0 p-0" side="top" align="start">
@@ -118,7 +118,7 @@ export function ChatInputAttachButton({
             aria-label="Attach"
             {...props}
           >
-            <Plus className="h-5 w-5" />
+            <Plus className="size-5" />
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-56 p-2" side="top" align="start">

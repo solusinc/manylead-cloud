@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { format } from "date-fns";
-import { Check, CheckCheck, Clock, MessageCircle, Star, ChevronDown, ArrowRightLeft } from "lucide-react";
+import { Check, CheckCheck, Clock, MessageCircle, Star, ChevronDown, ArrowRightLeft, Trash2 } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -27,6 +27,7 @@ interface Message {
   isStarred?: boolean;
   repliedToMessageId?: string | null;
   metadata?: Record<string, unknown>;
+  chatId?: string;
 }
 
 export function ChatMessage({
@@ -402,10 +403,16 @@ export function ChatMessageComment({
   className?: string;
 }) {
   const agentName = message.metadata?.agentName as string | undefined;
+  const [isHovered, setIsHovered] = useState(false);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   return (
-    <div className={cn("mb-4 flex justify-center", className)}>
-      <div className="flex items-start gap-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 px-4 py-3 text-sm shadow-sm max-w-2xl">
+    <div className={cn("mb-4 flex justify-center group", className)}>
+      <div
+        className="flex items-start gap-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 px-4 py-3 text-sm shadow-sm max-w-2xl relative"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
         <MessageCircle className="h-4 w-4 mt-0.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
         <div className="flex-1 space-y-1">
           <p className="font-semibold text-emerald-700 dark:text-emerald-300">
@@ -413,8 +420,83 @@ export function ChatMessageComment({
           </p>
           <p className="text-foreground whitespace-pre-wrap">{message.content}</p>
         </div>
+        {(isHovered || isMenuOpen) && (
+          <div
+            className="absolute top-1 right-1 rounded-full p-0.5 transition-all duration-200 bg-emerald-50/50 dark:bg-emerald-950/50"
+          >
+            <ChatCommentActions message={message} onOpenChange={setIsMenuOpen} />
+          </div>
+        )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Ações do comentário (deletar)
+ */
+export function ChatCommentActions({
+  message,
+  onOpenChange,
+  className,
+}: {
+  message: Message;
+  onOpenChange?: (open: boolean) => void;
+  className?: string;
+}) {
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
+
+  const deleteCommentMutation = useMutation(
+    trpc.messages.deleteComment.mutationOptions({
+      onSuccess: () => {
+        toast.success("Comentário removido");
+        void queryClient.invalidateQueries({ queryKey: [["messages"]] });
+      },
+      onError: (error) => {
+        toast.error(error.message || "Erro ao remover comentário");
+      },
+    }),
+  );
+
+  const handleDelete = () => {
+    if (!message.chatId) {
+      toast.error("Erro ao identificar o chat");
+      return;
+    }
+
+    deleteCommentMutation.mutate({
+      id: message.id,
+      chatId: message.chatId,
+    });
+  };
+
+  return (
+    <DropdownMenu onOpenChange={onOpenChange}>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn(
+            "h-6 w-6 rounded-sm hover:!bg-transparent hover:!text-current text-emerald-600 dark:text-emerald-400",
+            "focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=open]:!bg-transparent",
+            className
+          )}
+        >
+          <ChevronDown className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" side="top" className="w-48 bg-background/95 backdrop-blur-sm">
+        <DropdownMenuItem
+          className="gap-3 cursor-pointer text-destructive focus:text-destructive"
+          onClick={handleDelete}
+          disabled={deleteCommentMutation.isPending}
+        >
+          <Trash2 className="h-4 w-4" />
+          <span>Deletar comentário</span>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

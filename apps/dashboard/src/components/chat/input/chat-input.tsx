@@ -617,7 +617,7 @@ export function ChatInputMicButton({
       aria-label="Voice message"
       {...props}
     >
-      <Mic className="h-5 w-5" />
+      <Mic className="size-5" />
     </Button>
   );
 }

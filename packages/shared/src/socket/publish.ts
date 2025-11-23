@@ -23,7 +23,7 @@ export interface MessageEvent {
   senderId?: string; // Agent ID who sent the message (for filtering/deduplication)
   targetAgentId?: string; // Para enviar evento apenas para um agent específico (chats internos)
   data: {
-    message: Record<string, unknown>;
+    message?: Record<string, unknown>; // Opcional para message:deleted
     sender?: Record<string, unknown>;
   };
 }

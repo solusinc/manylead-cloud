@@ -11,10 +11,11 @@ import {
   useState,
 } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2 } from "lucide-react";
+import { Loader2, ChevronDown } from "lucide-react";
 import { isSameDay } from "date-fns";
 
 import { cn } from "@manylead/ui";
+import { Button } from "@manylead/ui/button";
 import { Skeleton } from "@manylead/ui/skeleton";
 
 import { useChatSocketContext } from "~/components/providers/chat-socket-provider";
@@ -64,6 +65,8 @@ export function ChatMessageList({
   const socket = useChatSocketContext();
   const queryClient = useQueryClient();
   const [isTyping, setIsTyping] = useState(false);
+  const [showScrollButton, setShowScrollButton] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   // TanStack Query handles ALL the complexity for us
   const { data, isLoading, isFetchingNextPage, fetchNextPage, hasNextPage } =
@@ -100,6 +103,7 @@ export function ChatMessageList({
     isStarred: item.message.isStarred,
     repliedToMessageId: item.message.repliedToMessageId as string | null | undefined,
     metadata: item.message.metadata as Record<string, unknown> | undefined,
+    chatId,
   }));
 
   // Scroll to bottom on initial load
@@ -276,6 +280,60 @@ export function ChatMessageList({
     };
   }, [socket.isConnected, chatId, socket, queryClient]);
 
+  // Escutar eventos de message:deleted para remover mensagens deletadas
+  useEffect(() => {
+    if (!socket.isConnected) return;
+
+    const unsubscribeMessageDeleted = socket.onMessageDeleted((event) => {
+      const messageId = event.messageId;
+
+      // Remover mensagem do cache
+      const queries = queryClient.getQueryCache().findAll({
+        queryKey: [["messages", "list"]],
+        exact: false,
+      });
+
+      queries.forEach((query) => {
+        const queryState = query.state.data as {
+          pages: {
+            items: {
+              message: Record<string, unknown>;
+              attachment: Record<string, unknown> | null;
+              isOwnMessage: boolean;
+            }[];
+            nextCursor: string | undefined;
+            hasMore: boolean;
+          }[];
+          pageParams: unknown[];
+        } | undefined;
+
+        if (!queryState?.pages) return;
+
+        // Remover a mensagem do cache
+        const newPages = queryState.pages.map((page) => ({
+          ...page,
+          items: page.items.filter((item) => item.message.id !== messageId),
+        }));
+
+        queryClient.setQueryData(query.queryKey, {
+          ...queryState,
+          pages: newPages,
+          pageParams: queryState.pageParams,
+        });
+
+        // Force re-render
+        void queryClient.invalidateQueries({
+          queryKey: query.queryKey,
+          refetchType: "none",
+        });
+      });
+    });
+
+    return () => {
+      unsubscribeMessageDeleted();
+    };
+  }, [socket.isConnected, socket, queryClient]);
+
   // Auto-scroll: ALWAYS when YOU send, only if near bottom when receiving
   const previousMessagesLengthRef = useRef(messages.length);
   const lastMessageIdRef = useRef<string | null>(null);
@@ -331,6 +389,24 @@ export function ChatMessageList({
     }
   }, [isTyping, scrollToBottom]);
 
+  // Detectar scroll para mostrar/esconder botão
+  useEffect(() => {
+    const viewport = scrollViewportRef.current;
+    if (!viewport) return;
+
+    const handleScroll = () => {
+      const distanceFromBottom =
+        viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+      setShowScrollButton(distanceFromBottom > 300);
+    };
+
+    // Verificar posição inicial
+    handleScroll();
+
+    viewport.addEventListener("scroll", handleScroll);
+    return () => viewport.removeEventListener("scroll", handleScroll);
+  }, [messages.length]);
+
   // CRITICAL: Restore scroll position after loading older messages
   // useLayoutEffect executes SYNCHRONOUSLY before browser paint - prevents visual jump
   useLayoutEffect(() => {
@@ -377,7 +453,7 @@ export function ChatMessageList({
   }
 
   return (
-    <div className={cn("relative space-y-4", className)} {...props}>
+    <div ref={containerRef} className={cn("relative space-y-4", className)} {...props}>
       {/* SENTINEL ELEMENT - IntersectionObserver watches this */}
       {hasNextPage && <div ref={sentinelRef} className="h-px" />}
 
@@ -429,6 +505,20 @@ export function ChatMessageList({
         {/* Anchor for scroll-to-bottom */}
         <div ref={messagesEndRef} className="h-4" />
       </div>
+
+      {/* Scroll to bottom button - Fixed position */}
+      {showScrollButton && (
+        <div className="fixed bottom-24 right-8 z-50 animate-in fade-in slide-in-from-bottom-2">
+          <Button
+            onClick={() => scrollToBottom("auto")}
+            size="icon"
+            className="h-11 w-11 rounded-full shadow-lg hover:shadow-xl transition-shadow"
+            aria-label="Ir para mensagens recentes"
+          >
+            <ChevronDown className="h-5 w-5" />
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

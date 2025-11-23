@@ -65,7 +65,7 @@ export function ChatWindowHeader({
     <>
       <div
         className={cn(
-          "bg-background flex h-14 shrink-0 items-center justify-between gap-4 border-b px-4",
+          "bg-background flex h-14 shrink-0 items-center justify-between gap-4 border-b px-4 shadow-sm",
           className,
         )}
         {...props}
@@ -134,7 +134,7 @@ export function ChatWindowHeaderInfo({
 
       <div className="flex-1 text-left">
         <div className="flex items-center gap-2">
-          <h3 className="text-sm font-semibold">
+          <h3 className="font-semibold">
             {displayName}
           </h3>
           {source === "whatsapp" ? (
@@ -240,7 +240,7 @@ export function ChatWindowHeaderActions({
                 size="icon"
                 aria-label="Etiquetas"
               >
-                <Tag className="h-4 w-4" />
+                <Tag className="size-5" />
               </Button>
             </TooltipTrigger>
             <TooltipContent>
@@ -257,7 +257,7 @@ export function ChatWindowHeaderActions({
                 onClick={handleCloseChat}
                 disabled={closeMutation.isPending}
               >
-                <CheckCircle className="h-4 w-4" />
+                <CheckCircle className="size-5" />
               </Button>
             </TooltipTrigger>
             <TooltipContent>
@@ -274,7 +274,7 @@ export function ChatWindowHeaderActions({
             size="icon"
             aria-label="More options"
           >
-            <MoreVertical className="h-4 w-4" />
+            <MoreVertical className="size-5" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">

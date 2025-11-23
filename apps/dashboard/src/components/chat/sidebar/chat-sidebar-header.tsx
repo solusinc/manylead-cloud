@@ -107,7 +107,7 @@ export function ChatSidebarNewButton({
           onClick={onClick}
           {...props}
         >
-          <MessageSquarePlus className="h-5 w-5" />
+          <MessageSquarePlus className="size-5" />
         </Button>
       </TooltipTrigger>
       <TooltipContent side="top">
@@ -138,7 +138,7 @@ export function ChatSidebarUnreadButton({
           onClick={toggleUnreadOnly}
           {...props}
         >
-          <Eye className="h-5 w-5" />
+          <Eye className="size-5" />
         </Button>
       </TooltipTrigger>
       <TooltipContent side="top">
@@ -168,9 +168,9 @@ export function ChatSidebarFilterButton({
         >
           <div className="relative">
             {isOpen ? (
-              <X className="h-5 w-5" />
+              <X className="size-5" />
             ) : (
-              <SlidersHorizontal className="h-5 w-5" />
+              <SlidersHorizontal className="size-5" />
             )}
             {!isOpen && activeFilterCount > 0 && (
               <Badge

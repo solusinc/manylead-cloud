@@ -81,13 +81,13 @@ export function ChatTransferDropdown({
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon" aria-label="Transferir">
-          <ArrowRightLeft className="h-4 w-4" />
+          <ArrowRightLeft className="size-5" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-72 p-0">
         {/* Header com título */}
         <div className="px-4 py-3 border-b">
-          <p className="text-sm font-medium">Transferir</p>
+          <p className="text-sm font-medium">Transferir atendimento</p>
         </div>
 
         {/* Tabs */}
