@@ -60,6 +60,7 @@ export function ChatMessageList({
   const observerRef = useRef<IntersectionObserver | null>(null);
   const scrollViewportRef = useRef<HTMLElement | null>(null);
   const previousScrollHeightRef = useRef<number>(0);
+  const previousScrollTopRef = useRef<number>(0);
   const previousMessageCountRef = useRef<number>(0);
   const trpc = useTRPC();
   const socket = useChatSocketContext();
@@ -160,10 +161,12 @@ export function ChatMessageList({
         // When sentinel becomes visible AND we're not already fetching
         // Note: hasNextPage is already checked before observer setup (line 92)
         if (entry.isIntersecting && !isFetchingNextPage) {
-          // CRITICAL: Store scroll height BEFORE fetching
+          // CRITICAL: Store scroll height AND position BEFORE fetching
           if (scrollViewportRef.current) {
             previousScrollHeightRef.current =
               scrollViewportRef.current.scrollHeight;
+            previousScrollTopRef.current =
+              scrollViewportRef.current.scrollTop;
             previousMessageCountRef.current = messages.length;
           }
 
@@ -337,43 +340,65 @@ export function ChatMessageList({
   // Auto-scroll: ALWAYS when YOU send, only if near bottom when receiving
   const previousMessagesLengthRef = useRef(messages.length);
   const lastMessageIdRef = useRef<string | null>(null);
+  const firstMessageIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     const currentLength = messages.length;
     const previousLength = previousMessagesLengthRef.current;
 
+    // Skip auto-scroll if we're restoring scroll position after loading older messages
+    const isRestoringScroll = previousScrollHeightRef.current > 0;
+
     // Only scroll if messages were ADDED (not initial load, not loading older messages)
     if (
       currentLength > previousLength &&
       !isInitialLoadRef.current &&
-      !isFetchingNextPage
+      !isFetchingNextPage &&
+      !isRestoringScroll
     ) {
+      const firstMessage = messages[0];
       const lastMessage = messages[messages.length - 1];
 
-      // Check if this is a NEW message we haven't seen before
-      if (lastMessage && lastMessage.id !== lastMessageIdRef.current) {
-        const isOwnMessage = lastMessage.sender === "agent";
+      // Initialize firstMessageIdRef if not set
+      if (!firstMessageIdRef.current && firstMessage) {
+        firstMessageIdRef.current = firstMessage.id;
+      }
 
-        // WhatsApp behavior: ALWAYS scroll when YOU send
-        if (isOwnMessage) {
-          scrollToBottom("instant");
-        } else {
-          // Only scroll if near bottom for received messages
-          const viewport = scrollViewportRef.current;
-          if (viewport) {
-            const distanceFromBottom =
-              viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
-            const isNearBottom = distanceFromBottom < 200;
+      // Check if first message ID changed - means we loaded OLDER messages at the top
+      // In this case, DON'T auto-scroll
+      const loadedOlderMessages = firstMessage && firstMessage.id !== firstMessageIdRef.current;
 
-            if (isNearBottom) {
-              setTimeout(() => {
-                scrollToBottom("smooth");
-              }, 50);
+      if (!loadedOlderMessages) {
+        // Check if this is a NEW message we haven't seen before (at the bottom)
+        if (lastMessage && lastMessage.id !== lastMessageIdRef.current) {
+          const isOwnMessage = lastMessage.sender === "agent";
+
+          // WhatsApp behavior: ALWAYS scroll when YOU send
+          if (isOwnMessage) {
+            scrollToBottom("instant");
+          } else {
+            // Only scroll if near bottom for received messages
+            const viewport = scrollViewportRef.current;
+            if (viewport) {
+              const distanceFromBottom =
+                viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+              const isNearBottom = distanceFromBottom < 200;
+
+              if (isNearBottom) {
+                setTimeout(() => {
+                  scrollToBottom("smooth");
+                }, 50);
+              }
             }
           }
-        }
 
-        lastMessageIdRef.current = lastMessage.id;
+          lastMessageIdRef.current = lastMessage.id;
+        }
+      }
+
+      // Update firstMessageIdRef
+      if (firstMessage) {
+        firstMessageIdRef.current = firstMessage.id;
       }
     }
 
@@ -405,7 +430,7 @@ export function ChatMessageList({
 
     viewport.addEventListener("scroll", handleScroll);
     return () => viewport.removeEventListener("scroll", handleScroll);
-  }, [messages.length]);
+  }, []); // Remover messages.length da dependency para evitar conflitos
 
   // CRITICAL: Restore scroll position after loading older messages
   // useLayoutEffect executes SYNCHRONOUSLY before browser paint - prevents visual jump
@@ -418,18 +443,24 @@ export function ChatMessageList({
     // Only adjust if we loaded MORE messages (older messages were added)
     if (messages.length > previousMessageCountRef.current) {
       const viewport = scrollViewportRef.current;
-      const currentScrollHeight = viewport.scrollHeight;
-      const heightDifference =
-        currentScrollHeight - previousScrollHeightRef.current;
 
-      // Adjust scroll position to maintain visual position
-      if (heightDifference > 0) {
-        viewport.scrollTop = viewport.scrollTop + heightDifference;
-      }
+      // Use requestAnimationFrame to ensure DOM is fully updated
+      requestAnimationFrame(() => {
+        const currentScrollHeight = viewport.scrollHeight;
+        const heightDifference =
+          currentScrollHeight - previousScrollHeightRef.current;
 
-      // Reset for next load
-      previousScrollHeightRef.current = 0;
-      previousMessageCountRef.current = messages.length;
+        // Adjust scroll position to maintain visual position
+        // Use the SAVED scrollTop, not the current one (which may have changed)
+        if (heightDifference > 0) {
+          viewport.scrollTop = previousScrollTopRef.current + heightDifference;
+        }
+
+        // Reset for next load
+        previousScrollHeightRef.current = 0;
+        previousScrollTopRef.current = 0;
+        previousMessageCountRef.current = messages.length;
+      });
     }
   }, [messages.length]);
 
@@ -512,10 +543,11 @@ export function ChatMessageList({
           <Button
             onClick={() => scrollToBottom("auto")}
             size="icon"
-            className="h-11 w-11 rounded-full shadow-lg hover:shadow-xl transition-shadow"
+            variant="secondary"
+            className="h-11 w-11 rounded-full shadow-lg hover:shadow-xl transition-shadow bg-accent hover:bg-accent"
             aria-label="Ir para mensagens recentes"
           >
-            <ChevronDown className="h-5 w-5" />
+            <ChevronDown className="h-5 w-5 text-foreground/70" />
           </Button>
         </div>
       )}
