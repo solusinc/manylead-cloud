@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { format, isToday, isYesterday, isThisWeek } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { Clock, User } from "lucide-react";
 import { FaUser, FaWhatsapp } from "react-icons/fa";
 
 import type { Tag } from "@manylead/db";
@@ -33,9 +34,10 @@ interface ChatSidebarItemProps {
     lastMessage: string;
     lastMessageAt: Date;
     unreadCount: number;
-    status: "open" | "closed";
+    status: "open" | "closed" | "pending";
     messageSource?: "whatsapp" | "internal";
     tags?: Pick<Tag, "id" | "name" | "color">[];
+    assignedAgentName?: string | null;
   };
   isActive?: boolean;
   isTyping?: boolean;
@@ -50,12 +52,13 @@ export function ChatSidebarItem({
   ...props
 }: ChatSidebarItemProps & React.ComponentProps<"a">) {
   const isClosed = chat.status === "closed";
+  const isPending = chat.status === "pending";
 
   return (
     <Link
       href={`/chats/${chat.id}`}
       className={cn(
-        "hover:bg-accent/50 flex cursor-pointer items-start gap-3 border-b p-4 transition-colors",
+        "group hover:bg-accent/50 relative flex h-24 cursor-pointer items-start gap-3 border-b p-4 transition-colors",
         isActive && "bg-accent",
         isClosed && "grayscale opacity-60",
         className,
@@ -78,6 +81,23 @@ export function ChatSidebarItem({
           tags={chat.tags}
         />
       </div>
+
+      {/* Hover info - absolute no canto inferior direito (não exibe em chats finalizados) */}
+      {!isClosed && (
+        <div className="absolute bottom-1 right-2 flex items-center gap-1 text-[10px] text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
+          {isPending || !chat.assignedAgentName ? (
+            <>
+              <Clock className="h-3 w-3" />
+              <span>Aguardando atendimento</span>
+            </>
+          ) : (
+            <>
+              <User className="h-3 w-3" />
+              <span>{chat.assignedAgentName}</span>
+            </>
+          )}
+        </div>
+      )}
     </Link>
   );
 }

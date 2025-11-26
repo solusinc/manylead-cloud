@@ -227,6 +227,25 @@ export const chatsRouter = createTRPCRouter({
         });
       }
 
+      // BATCH OPTIMIZATION: Buscar nomes dos agents atribuídos
+      const assignedUserIds = [
+        ...new Set(
+          items
+            .map((i) => i.assignedAgent?.userId)
+            .filter((id): id is string => id !== null && id !== undefined),
+        ),
+      ];
+
+      const assignedUsers = assignedUserIds.length > 0
+        ? await ctx.db
+            .select({ id: user.id, name: user.name })
+            .from(user)
+            .where(inArray(user.id, assignedUserIds))
+        : [];
+
+      // Map de userId -> nome para lookup O(1)
+      const assignedUserNameMap = new Map(assignedUsers.map((u) => [u.id, u.name]));
+
       // BATCH OPTIMIZATION: Resolver "outro participante" para chats internos
       // Coletar IDs únicos de initiators que precisam ser buscados
       const initiatorAgentIds = [
@@ -257,6 +276,9 @@ export const chatsRouter = createTRPCRouter({
             unreadCount: item.chat.status === "pending" ? 0 : (item.participant?.unreadCount ?? 0),
           },
           tags: tagsByChat.get(item.chat.id) ?? [],
+          assignedAgentName: item.assignedAgent?.userId
+            ? assignedUserNameMap.get(item.assignedAgent.userId) ?? null
+            : null,
         }));
 
         return { items: itemsWithCorrectUnreadCount, total: totalResult[0]?.count ?? 0, limit, offset };
@@ -341,6 +363,9 @@ export const chatsRouter = createTRPCRouter({
           unreadCount: item.chat.status === "pending" ? 0 : (item.participant?.unreadCount ?? 0),
         },
         tags: tagsByChat.get(item.chat.id) ?? [],
+        assignedAgentName: item.assignedAgent?.userId
+          ? assignedUserNameMap.get(item.assignedAgent.userId) ?? null
+          : null,
       }));
 
       return {

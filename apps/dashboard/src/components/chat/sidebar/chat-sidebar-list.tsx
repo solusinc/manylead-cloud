@@ -105,15 +105,16 @@ export function ChatSidebarList({
     lastMessage: item.chat.lastMessageContent ?? "",
     lastMessageAt: item.chat.lastMessageAt ?? item.chat.createdAt,
     unreadCount: item.chat.unreadCount,
-    status: item.chat.status as "open" | "closed",
+    status: item.chat.status as "open" | "closed" | "pending",
     messageSource: item.chat.messageSource as "whatsapp" | "internal",
     tags: item.tags,
+    assignedAgentName: item.assignedAgentName,
   })) ?? [];
 
   const virtualizer = useVirtualizer({
     count: chats.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 80,
+    estimateSize: () => 96,
     overscan: 5,
   });
 
