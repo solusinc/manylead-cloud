@@ -47,16 +47,20 @@ export const chatsRouter = createTRPCRouter({
       z.object({
         status: z.enum(["open", "pending", "closed", "snoozed"]).optional(),
         assignedTo: z.string().uuid().optional(),
+        agentIds: z.array(z.string().uuid()).optional(),
         departmentId: z.string().uuid().optional(),
+        departmentIds: z.array(z.string().uuid()).optional(),
         messageSource: z.enum(["whatsapp", "internal"]).optional(),
+        messageSources: z.array(z.enum(["whatsapp", "internal"])).optional(),
         search: z.string().optional(),
         unreadOnly: z.boolean().optional(),
+        tagIds: z.array(z.string().uuid()).optional(),
         limit: z.number().min(1).max(100).default(50),
         offset: z.number().min(0).default(0),
       }),
     )
     .query(async ({ ctx, input }) => {
-      const { status, assignedTo, departmentId, messageSource, search, unreadOnly, limit, offset } =
+      const { status, assignedTo, agentIds, departmentId, departmentIds, messageSource, messageSources, search, unreadOnly, tagIds, limit, offset } =
         input;
 
       // Buscar o agent do usuário atual
@@ -120,12 +124,27 @@ export const chatsRouter = createTRPCRouter({
         conditions.push(eq(chat.assignedTo, assignedTo));
       }
 
+      // Filtro por múltiplos agents (OR - qualquer um dos selecionados)
+      if (agentIds && agentIds.length > 0) {
+        conditions.push(inArray(chat.assignedTo, agentIds));
+      }
+
       if (departmentId) {
         conditions.push(eq(chat.departmentId, departmentId));
       }
 
+      // Filtro por múltiplos departamentos (OR - qualquer um dos selecionados)
+      if (departmentIds && departmentIds.length > 0) {
+        conditions.push(inArray(chat.departmentId, departmentIds));
+      }
+
       if (messageSource) {
         conditions.push(eq(chat.messageSource, messageSource));
+      }
+
+      // Filtro por múltiplos provedores (OR - qualquer um dos selecionados)
+      if (messageSources && messageSources.length > 0) {
+        conditions.push(inArray(chat.messageSource, messageSources));
       }
 
       // Busca em nome do contato e telefone
@@ -144,6 +163,21 @@ export const chatsRouter = createTRPCRouter({
       if (unreadOnly && currentAgent) {
         conditions.push(sql`${chatParticipant.unreadCount} > 0`);
         conditions.push(ne(chat.status, "pending"));
+      }
+
+      // Filtrar por tags (chats que têm TODAS as tags selecionadas)
+      if (tagIds && tagIds.length > 0) {
+        // Subquery: encontrar chats que têm todas as tags especificadas
+        const chatsWithAllTags = sql`
+          ${chat.id} IN (
+            SELECT ct.chat_id
+            FROM chat_tag ct
+            WHERE ct.tag_id IN (${sql.join(tagIds.map(id => sql`${id}`), sql`, `)})
+            GROUP BY ct.chat_id, ct.chat_created_at
+            HAVING COUNT(DISTINCT ct.tag_id) = ${tagIds.length}
+          )
+        `;
+        conditions.push(chatsWithAllTags);
       }
 
       const where = conditions.length > 0 ? and(...conditions) : undefined;

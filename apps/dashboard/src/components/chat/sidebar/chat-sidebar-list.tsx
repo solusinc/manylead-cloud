@@ -68,6 +68,10 @@ export function ChatSidebarList({
       ...filterParams,
       search: isSearchActive ? searchTerm : undefined,
       unreadOnly: showUnreadOnly || undefined,
+      tagIds: headerFilters.tagIds.length > 0 ? headerFilters.tagIds : undefined,
+      agentIds: headerFilters.agentIds.length > 0 ? headerFilters.agentIds : undefined,
+      departmentIds: headerFilters.departmentIds.length > 0 ? headerFilters.departmentIds : undefined,
+      messageSources: headerFilters.messageSources.length > 0 ? headerFilters.messageSources : undefined,
       limit: 100,
       offset: 0,
     })

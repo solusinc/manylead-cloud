@@ -1,13 +1,16 @@
 import { create } from "zustand";
 
 export type StatusFilter = "all" | "open" | "closed" | "pending";
+export type MessageSourceFilter = "whatsapp" | "internal";
 
 interface HeaderFilters {
   status: StatusFilter;
+  tagIds: string[];
+  agentIds: string[];
+  departmentIds: string[];
+  messageSources: MessageSourceFilter[];
   // TODO: Adicionar outros filtros futuros
   // period?: { start: Date; end: Date };
-  // userIds?: string[];
-  // departmentIds?: string[];
 }
 
 interface ChatFiltersState {
@@ -26,12 +29,20 @@ interface ChatFiltersState {
   toggleUnreadOnly: () => void;
   resetUnreadOnly: () => void;
   setHeaderFilter: <K extends keyof HeaderFilters>(key: K, value: HeaderFilters[K]) => void;
+  toggleTagFilter: (tagId: string) => void;
+  toggleAgentFilter: (agentId: string) => void;
+  toggleDepartmentFilter: (departmentId: string) => void;
+  toggleMessageSourceFilter: (source: MessageSourceFilter) => void;
   clearHeaderFilters: () => void;
   getActiveFilterCount: () => number;
 }
 
 const defaultHeaderFilters: HeaderFilters = {
   status: "all",
+  tagIds: [],
+  agentIds: [],
+  departmentIds: [],
+  messageSources: [],
 };
 
 export const useChatFiltersStore = create<ChatFiltersState>((set, get) => ({
@@ -49,6 +60,50 @@ export const useChatFiltersStore = create<ChatFiltersState>((set, get) => ({
       headerFilters: { ...state.headerFilters, [key]: value }
     })),
 
+  toggleTagFilter: (tagId) =>
+    set((state) => {
+      const currentTags = state.headerFilters.tagIds;
+      const newTags = currentTags.includes(tagId)
+        ? currentTags.filter((id) => id !== tagId)
+        : [...currentTags, tagId];
+      return {
+        headerFilters: { ...state.headerFilters, tagIds: newTags }
+      };
+    }),
+
+  toggleAgentFilter: (agentId) =>
+    set((state) => {
+      const currentAgents = state.headerFilters.agentIds;
+      const newAgents = currentAgents.includes(agentId)
+        ? currentAgents.filter((id) => id !== agentId)
+        : [...currentAgents, agentId];
+      return {
+        headerFilters: { ...state.headerFilters, agentIds: newAgents }
+      };
+    }),
+
+  toggleDepartmentFilter: (departmentId) =>
+    set((state) => {
+      const currentDepartments = state.headerFilters.departmentIds;
+      const newDepartments = currentDepartments.includes(departmentId)
+        ? currentDepartments.filter((id) => id !== departmentId)
+        : [...currentDepartments, departmentId];
+      return {
+        headerFilters: { ...state.headerFilters, departmentIds: newDepartments }
+      };
+    }),
+
+  toggleMessageSourceFilter: (source) =>
+    set((state) => {
+      const currentSources = state.headerFilters.messageSources;
+      const newSources = currentSources.includes(source)
+        ? currentSources.filter((s) => s !== source)
+        : [...currentSources, source];
+      return {
+        headerFilters: { ...state.headerFilters, messageSources: newSources }
+      };
+    }),
+
   clearHeaderFilters: () => set({ headerFilters: defaultHeaderFilters }),
 
   getActiveFilterCount: () => {
@@ -56,7 +111,12 @@ export const useChatFiltersStore = create<ChatFiltersState>((set, get) => ({
     let count = 0;
 
     // Contar apenas filtros que não são "all" ou valores default
+    // Cada tipo de filtro conta como 1, independente de quantos valores
     if (headerFilters.status !== "all") count++;
+    if (headerFilters.tagIds.length > 0) count++;
+    if (headerFilters.agentIds.length > 0) count++;
+    if (headerFilters.departmentIds.length > 0) count++;
+    if (headerFilters.messageSources.length > 0) count++;
     // TODO: Adicionar contagem de outros filtros quando implementados
 
     return count;
