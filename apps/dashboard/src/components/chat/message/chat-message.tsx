@@ -45,8 +45,9 @@ export function ChatMessage({
 
   return (
     <div
+      data-message-id={message.id}
       className={cn(
-        "mb-2 flex gap-2 group relative",
+        "mb-2 flex gap-2 group relative scroll-mt-20",
         isOutgoing ? "justify-end" : "justify-start",
         className,
       )}
@@ -113,6 +114,7 @@ export function ChatMessageBubble({
           content={repliedMessage.content}
           senderName={repliedMessage.senderName}
           isOutgoing={isOutgoing}
+          repliedToMessageId={message.repliedToMessageId}
         />
       )}
 
@@ -128,17 +130,35 @@ export function ChatMessageBubble({
 }
 
 /**
+ * Scroll para uma mensagem específica e destacá-la
+ */
+function scrollToMessage(messageId: string) {
+  const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
+  if (messageElement) {
+    messageElement.scrollIntoView({ behavior: "smooth", block: "center" });
+
+    // Adicionar classe de highlight temporária
+    messageElement.classList.add("reply-highlight");
+    setTimeout(() => {
+      messageElement.classList.remove("reply-highlight");
+    }, 2000);
+  }
+}
+
+/**
  * Preview da mensagem sendo respondida dentro do bubble
  */
 export function ChatMessageReplyPreview({
   content,
   senderName,
   isOutgoing,
+  repliedToMessageId,
   className,
 }: {
   content: string;
   senderName: string;
   isOutgoing: boolean;
+  repliedToMessageId?: string | null;
   className?: string;
 }) {
   const { messageSource, instanceCode, organizationName } = useChatReply();
@@ -155,11 +175,19 @@ export function ChatMessageReplyPreview({
   // Se for WhatsApp, mostrar: ContactName / Content
   const isInternal = messageSource === "internal";
 
+  const handleClick = () => {
+    if (repliedToMessageId) {
+      scrollToMessage(repliedToMessageId);
+    }
+  };
+
   return (
     <div
+      onClick={handleClick}
       className={cn(
         "mb-1.5 rounded-md border-l-4 bg-black/10 px-2 py-1 dark:bg-white/10",
         isOutgoing ? "border-primary" : "border-primary/70",
+        repliedToMessageId && "cursor-pointer hover:bg-black/20 dark:hover:bg-white/20 transition-colors",
         className,
       )}
     >

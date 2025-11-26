@@ -150,3 +150,30 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Reply highlight animation */
+.reply-highlight {
+  animation: reply-highlight-pulse 2s ease-out;
+}
+
+@keyframes reply-highlight-pulse {
+  0% {
+    background-color: oklch(0.8 0.1 200 / 0.4);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.dark .reply-highlight {
+  animation: reply-highlight-pulse-dark 2s ease-out;
+}
+
+@keyframes reply-highlight-pulse-dark {
+  0% {
+    background-color: oklch(0.4 0.1 200 / 0.4);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
