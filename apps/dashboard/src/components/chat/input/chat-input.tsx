@@ -12,9 +12,11 @@ import { v7 as uuidv7 } from "uuid";
 import { cn } from "@manylead/ui";
 import { Button } from "@manylead/ui/button";
 
+import type { QuickReplySelection } from "./quick-reply-dropdown";
 import { ChatCommentDialog } from "./chat-comment-dialog";
 import { ChatInputToolbar } from "./chat-input-toolbar";
 import { ChatReplyPreview } from "./chat-reply-preview";
+import { QuickReplyDropdown } from "./quick-reply-dropdown";
 import { useTRPC } from "~/lib/trpc/react";
 import { useMessageDeduplication } from "~/hooks/use-message-deduplication";
 import { useServerSession } from "~/components/providers/session-provider";
@@ -41,6 +43,8 @@ export function ChatInput({
   const [isSending, setIsSending] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
   const [rows, setRows] = useState(1);
+  const [quickReplyOpen, setQuickReplyOpen] = useState(false);
+  const [quickReplySearch, setQuickReplySearch] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const shouldFocusRef = useRef(false);
@@ -380,6 +384,15 @@ export function ChatInput({
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    // Se o dropdown de quick reply está aberto, não enviar com Enter
+    // (a navegação é tratada pelo dropdown)
+    if (quickReplyOpen) {
+      if (e.key === "Enter" || e.key === "ArrowUp" || e.key === "ArrowDown" || e.key === "Escape") {
+        // Deixar o dropdown tratar esses eventos
+        return;
+      }
+    }
+
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       void handleSend();
@@ -388,6 +401,19 @@ export function ChatInput({
 
   const handleContentChange = (value: string) => {
     setContent(value);
+
+    // Detectar "/" para quick reply
+    // Ativar quando: "/" está no início ou após um espaço/quebra de linha
+    const slashRegex = /(?:^|\s)\/([\w]*)$/;
+    const slashMatch = slashRegex.exec(value);
+    if (slashMatch) {
+      const searchTerm = slashMatch[1] ?? "";
+      setQuickReplySearch(searchTerm);
+      setQuickReplyOpen(true);
+    } else {
+      setQuickReplyOpen(false);
+      setQuickReplySearch("");
+    }
 
     // Detectar número de linhas VISUAIS (não apenas \n)
     // Usa requestAnimationFrame para garantir que o textarea já foi renderizado
@@ -423,6 +449,128 @@ export function ChatInput({
       onTypingStop?.();
       setIsTyping(false);
     }
+  };
+
+  const handleQuickReplySelect = async (selection: QuickReplySelection) => {
+    // Limpar o comando "/" do input
+    const newContent = content.replace(/(?:^|\s)\/[\w]*$/, "").trim();
+    setContent(newContent);
+    setQuickReplyOpen(false);
+    setQuickReplySearch("");
+
+    // Filtrar apenas mensagens de texto (por enquanto)
+    const textMessages = selection.messages.filter((m) => m.type === "text");
+
+    if (textMessages.length === 0) {
+      textareaRef.current?.focus();
+      return;
+    }
+
+    // Se tem apenas uma mensagem, colocar no input para o usuário enviar
+    if (textMessages.length === 1) {
+      const firstMessage = textMessages[0];
+      if (firstMessage) {
+        const singleContent = newContent
+          ? `${newContent} ${firstMessage.content}`
+          : firstMessage.content;
+        setContent(singleContent);
+      }
+      textareaRef.current?.focus();
+      return;
+    }
+
+    // Múltiplas mensagens: enviar em sequência
+    setIsSending(true);
+
+    for (const message of textMessages) {
+      const tempId = uuidv7();
+      const userName = session.user.name;
+      const formattedContent = `**${userName}**\n${message.content}`;
+
+      // Optimistic update
+      const tempMessage = {
+        id: tempId,
+        chatId,
+        content: formattedContent,
+        timestamp: new Date(),
+        status: "pending" as const,
+        sender: "agent" as const,
+        senderId: null as string | null,
+        messageType: "text" as const,
+        isOwnMessage: true,
+        _isOptimistic: true,
+      };
+
+      const queries = queryClient.getQueryCache().findAll({
+        queryKey: [["messages", "list"]],
+        exact: false,
+      });
+
+      queries.forEach((query) => {
+        const queryState = query.state.data as {
+          pages: {
+            items: {
+              message: Record<string, unknown>;
+              attachment: Record<string, unknown> | null;
+              isOwnMessage: boolean;
+            }[];
+            nextCursor: string | undefined;
+            hasMore: boolean;
+          }[];
+          pageParams: unknown[];
+        } | undefined;
+
+        if (!queryState?.pages) return;
+
+        const newPages = [...queryState.pages];
+        const firstPage = newPages[0];
+
+        if (firstPage) {
+          newPages[0] = {
+            ...firstPage,
+            items: [
+              ...firstPage.items,
+              {
+                message: tempMessage as unknown as Record<string, unknown>,
+                attachment: null,
+                isOwnMessage: true,
+              },
+            ],
+          };
+
+          queryClient.setQueryData(query.queryKey, {
+            ...queryState,
+            pages: newPages,
+            pageParams: queryState.pageParams,
+          });
+        }
+      });
+
+      register(tempId);
+
+      try {
+        await sendMessageMutation.mutateAsync({
+          chatId,
+          content: message.content,
+          tempId,
+        });
+      } catch (error) {
+        console.error("Failed to send quick reply message:", error);
+      }
+
+      // Pequeno delay entre mensagens para não sobrecarregar
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+
+    setIsSending(false);
+    void queryClient.invalidateQueries({ queryKey: [["chats", "list"]] });
+    textareaRef.current?.focus();
+  };
+
+  const handleQuickReplyClose = () => {
+    setQuickReplyOpen(false);
+    setQuickReplySearch("");
+    textareaRef.current?.focus();
   };
 
   const insertEmoji = (emoji: string) => {
@@ -530,7 +678,15 @@ export function ChatInput({
   }
 
   return (
-    <div className={cn("flex w-full flex-col gap-2", className)} {...props}>
+    <div className={cn("relative flex w-full flex-col gap-2", className)} {...props}>
+      {/* Quick Reply dropdown - aparece acima do input quando digita "/" */}
+      <QuickReplyDropdown
+        searchTerm={quickReplySearch}
+        onSelect={handleQuickReplySelect}
+        onClose={handleQuickReplyClose}
+        isOpen={quickReplyOpen}
+      />
+
       {/* Reply preview - aparece acima do input quando está respondendo */}
       <ChatReplyPreview
         repliedMessage={replyingTo ? {

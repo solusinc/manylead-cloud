@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { Building, SlidersVertical, Tag, User, Users } from "lucide-react";
+import { Building, MessageSquareText, SlidersVertical, Tag, User, Users } from "lucide-react";
 
 /**
  * Settings navigation configuration
@@ -14,6 +14,7 @@ export const SETTINGS_NAV_ITEMS: {
   { value: "account", label: "Conta", icon: User },
   { value: "departments", label: "Departamentos", icon: Building },
   { value: "tags", label: "Etiquetas", icon: Tag },
+  { value: "quick-replies", label: "Respostas rápidas", icon: MessageSquareText },
   { value: "users", label: "Usuários", icon: Users },
   // Temporarily hidden - user creation of organizations disabled
   // { value: "new-organization", label: "Criar Organização", icon: Plus },

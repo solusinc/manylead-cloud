@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Building, SlidersVertical, Tag, User, Users } from "lucide-react";
+import { Building, MessageSquareText, SlidersVertical, Tag, User, Users } from "lucide-react";
 
 import type { Actions, Subjects } from "@manylead/permissions";
 
@@ -62,6 +62,14 @@ const settings = [
       action: "manage" as Actions,
       subject: "Tag" as Subjects,
     },
+  },
+  {
+    title: "Respostas rápidas",
+    description:
+      "Respostas rápidas agilizam interações, simplifica ações e torna o seu atendimento mais eficiente.",
+    href: "/settings/quick-replies",
+    icon: MessageSquareText,
+    permission: null, // Todos podem ver (members criam as próprias)
   },
   {
     title: "Usuários",

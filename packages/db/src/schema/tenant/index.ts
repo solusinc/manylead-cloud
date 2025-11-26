@@ -35,3 +35,6 @@ export * from "./agent-status";
 
 // Tags
 export * from "./tags";
+
+// Quick Replies
+export * from "./quick-replies";

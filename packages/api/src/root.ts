@@ -10,6 +10,7 @@ import { memberRouter } from "./router/member";
 import { messagesRouter } from "./router/messages";
 import { organizationRouter } from "./router/organization";
 import { organizationSettingsRouter } from "./router/organization-settings";
+import { quickRepliesRouter } from "./router/quick-replies";
 import { tagsRouter } from "./router/tags";
 import { createTRPCRouter } from "./trpc";
 
@@ -27,6 +28,7 @@ export const appRouter = createTRPCRouter({
   messages: messagesRouter,
   attachments: attachmentsRouter,
   tags: tagsRouter,
+  quickReplies: quickRepliesRouter,
 });
 
 // export type definition of API

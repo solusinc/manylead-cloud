@@ -55,12 +55,12 @@ function getStableRandomColor(): string {
   const currentSeed = Math.floor(Date.now() / 1000);
 
   // Se o seed mudou (nova navegação), gera nova cor
-  if (lastSeed !== currentSeed) {
+  if (lastSeed !== currentSeed || lastColor === null) {
     lastSeed = currentSeed;
     lastColor = seededRandomColor(currentSeed);
   }
 
-  return lastColor!;
+  return lastColor;
 }
 
 export default function Page() {
