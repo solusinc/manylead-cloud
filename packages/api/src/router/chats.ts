@@ -516,6 +516,57 @@ export const chatsRouter = createTRPCRouter({
     }),
 
   /**
+   * Buscar histórico de atendimentos do mesmo contato
+   */
+  history: memberProcedure
+    .input(
+      z.object({
+        contactId: z.string().uuid(),
+        currentChatId: z.string().uuid(), // Para identificar o chat atual
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      // Buscar todos os chats do mesmo contato, ordenados por data (mais recente primeiro)
+      const chats = await ctx.tenantDb
+        .select({
+          chat,
+          assignedAgent: agent,
+        })
+        .from(chat)
+        .leftJoin(agent, eq(chat.assignedTo, agent.id))
+        .where(eq(chat.contactId, input.contactId))
+        .orderBy(desc(chat.createdAt));
+
+      // Buscar nomes dos usuários (user está no banco principal)
+      const agentUserIds = chats
+        .map((c) => c.assignedAgent?.userId)
+        .filter((id): id is string => id !== null && id !== undefined);
+
+      const users = agentUserIds.length > 0
+        ? await ctx.db
+            .select({ id: user.id, name: user.name })
+            .from(user)
+            .where(inArray(user.id, agentUserIds))
+        : [];
+
+      const userMap = new Map(users.map((u) => [u.id, u.name]));
+
+      return {
+        items: chats.map((item) => ({
+          id: item.chat.id,
+          createdAt: item.chat.createdAt,
+          status: item.chat.status,
+          // Usar updatedAt como proxy para closedAt quando status é closed
+          closedAt: item.chat.status === "closed" ? item.chat.updatedAt : null,
+          assignedAgentName: item.assignedAgent?.userId
+            ? userMap.get(item.assignedAgent.userId) ?? null
+            : null,
+          isCurrent: item.chat.id === input.currentChatId,
+        })),
+      };
+    }),
+
+  /**
    * Criar novo chat (interno ou WhatsApp)
    */
   create: ownerProcedure
@@ -959,6 +1010,76 @@ export const chatsRouter = createTRPCRouter({
         .limit(1);
 
       // Broadcast para o agent que marcou como lido
+      if (organizationId) {
+        await publishChatEvent(
+          {
+            type: "chat:updated",
+            organizationId,
+            chatId: input.id,
+            targetAgentId: currentAgent.id,
+            data: {
+              chat: chatRecord as unknown as Record<string, unknown>,
+            },
+          },
+          env.REDIS_URL,
+        );
+      }
+
+      return chatRecord ?? updated;
+    }),
+
+  /**
+   * Marcar conversa como não lida (definir unreadCount para 1)
+   */
+  markAsUnread: memberProcedure
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        createdAt: z.date(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Buscar o agent atual
+      const [currentAgent] = await ctx.tenantDb
+        .select()
+        .from(agent)
+        .where(eq(agent.userId, ctx.session.user.id))
+        .limit(1);
+
+      if (!currentAgent) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Agent não encontrado",
+        });
+      }
+
+      const now = new Date();
+      const organizationId = ctx.session.session.activeOrganizationId;
+
+      // Atualizar chatParticipant para o agent atual
+      const [updated] = await ctx.tenantDb
+        .update(chatParticipant)
+        .set({
+          unreadCount: 1,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(chatParticipant.chatId, input.id),
+            eq(chatParticipant.chatCreatedAt, input.createdAt),
+            eq(chatParticipant.agentId, currentAgent.id),
+          ),
+        )
+        .returning();
+
+      // Buscar chat para retornar
+      const [chatRecord] = await ctx.tenantDb
+        .select()
+        .from(chat)
+        .where(and(eq(chat.id, input.id), eq(chat.createdAt, input.createdAt)))
+        .limit(1);
+
+      // Broadcast para atualizar a lista
       if (organizationId) {
         await publishChatEvent(
           {

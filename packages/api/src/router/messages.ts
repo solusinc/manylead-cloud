@@ -1,7 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
-import { agent, and, attachment, channel, chat, chatParticipant, contact, desc, eq, lt, message, or, organization, sql } from "@manylead/db";
+import { agent, and, attachment, channel, chat, chatParticipant, contact, desc, eq, ilike, lt, message, or, organization, sql } from "@manylead/db";
 import { EvolutionAPIClient } from "@manylead/evolution-api-client";
 import { publishChatEvent, publishMessageEvent } from "@manylead/shared";
 
@@ -99,6 +99,202 @@ export const messagesRouter = createTRPCRouter({
         items: itemsWithOwnership,
         nextCursor,
         hasMore,
+      };
+    }),
+
+  /**
+   * Pesquisar mensagens dentro de um chat
+   */
+  search: memberProcedure
+    .input(
+      z.object({
+        chatId: z.string().uuid(),
+        query: z.string().min(1).max(200),
+        limit: z.number().min(1).max(50).default(20),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const { chatId, query, limit } = input;
+
+      // Buscar o agent do usuário atual
+      const [currentAgent] = await ctx.tenantDb
+        .select()
+        .from(agent)
+        .where(eq(agent.userId, ctx.session.user.id))
+        .limit(1);
+
+      // Buscar mensagens que contenham o termo de busca
+      const items = await ctx.tenantDb
+        .select({
+          message,
+          attachment,
+        })
+        .from(message)
+        .leftJoin(attachment, eq(message.id, attachment.messageId))
+        .where(
+          and(
+            eq(message.chatId, chatId),
+            eq(message.isDeleted, false),
+            ilike(message.content, `%${query}%`),
+          ),
+        )
+        .limit(limit)
+        .orderBy(desc(message.id));
+
+      // Mapear items para incluir se a mensagem é do usuário atual
+      const itemsWithOwnership = items.map((item) => ({
+        ...item,
+        isOwnMessage: currentAgent ? item.message.senderId === currentAgent.id : false,
+      }));
+
+      return {
+        items: itemsWithOwnership,
+        query,
+      };
+    }),
+
+  /**
+   * Listar mensagens favoritas (starred) de um chat
+   */
+  listStarred: memberProcedure
+    .input(
+      z.object({
+        chatId: z.string().uuid(),
+        limit: z.number().min(1).max(100).default(50),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const { chatId, limit } = input;
+
+      // Buscar o agent do usuário atual
+      const [currentAgent] = await ctx.tenantDb
+        .select()
+        .from(agent)
+        .where(eq(agent.userId, ctx.session.user.id))
+        .limit(1);
+
+      // Buscar mensagens favoritas
+      const items = await ctx.tenantDb
+        .select({
+          message,
+          attachment,
+        })
+        .from(message)
+        .leftJoin(attachment, eq(message.id, attachment.messageId))
+        .where(
+          and(
+            eq(message.chatId, chatId),
+            eq(message.isDeleted, false),
+            eq(message.isStarred, true),
+          ),
+        )
+        .limit(limit)
+        .orderBy(desc(message.id));
+
+      // Mapear items para incluir se a mensagem é do usuário atual
+      const itemsWithOwnership = items.map((item) => ({
+        ...item,
+        isOwnMessage: currentAgent ? item.message.senderId === currentAgent.id : false,
+      }));
+
+      return {
+        items: itemsWithOwnership,
+      };
+    }),
+
+  /**
+   * Buscar mensagens ao redor de uma mensagem específica (para navegação de busca)
+   * Retorna N mensagens antes e N mensagens depois do ID fornecido
+   */
+  getContext: memberProcedure
+    .input(
+      z.object({
+        chatId: z.string().uuid(),
+        messageId: z.string().uuid(),
+        before: z.number().min(0).max(50).default(20),
+        after: z.number().min(0).max(50).default(20),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const { chatId, messageId, before, after } = input;
+
+      // Buscar o agent do usuário atual
+      const [currentAgent] = await ctx.tenantDb
+        .select()
+        .from(agent)
+        .where(eq(agent.userId, ctx.session.user.id))
+        .limit(1);
+
+      // Buscar mensagens ANTES do messageId (mais antigas - IDs menores)
+      const beforeMessages = await ctx.tenantDb
+        .select({
+          message,
+          attachment,
+        })
+        .from(message)
+        .leftJoin(attachment, eq(message.id, attachment.messageId))
+        .where(
+          and(
+            eq(message.chatId, chatId),
+            eq(message.isDeleted, false),
+            lt(message.id, messageId),
+          ),
+        )
+        .limit(before)
+        .orderBy(desc(message.id));
+
+      // Buscar a mensagem alvo
+      const [targetMessage] = await ctx.tenantDb
+        .select({
+          message,
+          attachment,
+        })
+        .from(message)
+        .leftJoin(attachment, eq(message.id, attachment.messageId))
+        .where(
+          and(
+            eq(message.chatId, chatId),
+            eq(message.id, messageId),
+          ),
+        )
+        .limit(1);
+
+      // Buscar mensagens DEPOIS do messageId (mais recentes - IDs maiores)
+      const afterMessages = await ctx.tenantDb
+        .select({
+          message,
+          attachment,
+        })
+        .from(message)
+        .leftJoin(attachment, eq(message.id, attachment.messageId))
+        .where(
+          and(
+            eq(message.chatId, chatId),
+            eq(message.isDeleted, false),
+            sql`${message.id} > ${messageId}`,
+          ),
+        )
+        .limit(after)
+        .orderBy(message.id);
+
+      // Combinar: before (reversed) + target + after
+      const allMessages = [
+        ...beforeMessages.reverse(),
+        ...(targetMessage ? [targetMessage] : []),
+        ...afterMessages,
+      ];
+
+      // Mapear items para incluir se a mensagem é do usuário atual
+      const itemsWithOwnership = allMessages.map((item) => ({
+        ...item,
+        isOwnMessage: currentAgent ? item.message.senderId === currentAgent.id : false,
+      }));
+
+      return {
+        items: itemsWithOwnership,
+        targetMessageId: messageId,
+        hasMoreBefore: beforeMessages.length === before,
+        hasMoreAfter: afterMessages.length === after,
       };
     }),
 

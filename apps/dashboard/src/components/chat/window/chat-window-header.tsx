@@ -3,9 +3,13 @@
 import { useState } from "react";
 import Image from "next/image";
 import {
-  Archive,
   CheckCircle,
+  EyeOff,
+  History,
   MoreVertical,
+  Search,
+  Star,
+  User,
   X,
 } from "lucide-react";
 import { FaUser, FaWhatsapp } from "react-icons/fa";
@@ -25,9 +29,14 @@ import {
   TooltipTrigger,
 } from "@manylead/ui/tooltip";
 
+import { useRouter } from "next/navigation";
+
 import { ContactDetailsSheet } from "../contact";
 import { ChatTransferDropdown } from "./chat-transfer-dropdown";
 import { ChatTagSelector } from "./chat-tag-selector";
+import { ChatSearchSheet } from "./chat-search-sheet";
+import { ChatStarredSheet } from "./chat-starred-sheet";
+import { ChatHistorySheet } from "./chat-history-sheet";
 import { useServerSession } from "~/components/providers/session-provider";
 import { useTRPC } from "~/lib/trpc/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -60,6 +69,11 @@ export function ChatWindowHeader({
   ...props
 }: ChatWindowHeaderProps & React.ComponentProps<"div">) {
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [starredOpen, setStarredOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+
+  const contactDisplayName = chat.contact.customName ?? chat.contact.name;
 
   return (
     <>
@@ -79,6 +93,10 @@ export function ChatWindowHeader({
           chat={chat}
           chatId={chat.id}
           chatCreatedAt={chat.createdAt}
+          onOpenDetails={() => setDetailsOpen(true)}
+          onOpenSearch={() => setSearchOpen(true)}
+          onOpenStarred={() => setStarredOpen(true)}
+          onOpenHistory={() => setHistoryOpen(true)}
         />
       </div>
 
@@ -87,6 +105,26 @@ export function ChatWindowHeader({
         onOpenChange={setDetailsOpen}
         contact={chat.contact}
         source={chat.source}
+      />
+
+      <ChatSearchSheet
+        open={searchOpen}
+        onOpenChange={setSearchOpen}
+        chatId={chat.id}
+        contactName={contactDisplayName}
+      />
+
+      <ChatStarredSheet
+        open={starredOpen}
+        onOpenChange={setStarredOpen}
+        chatId={chat.id}
+      />
+
+      <ChatHistorySheet
+        open={historyOpen}
+        onOpenChange={setHistoryOpen}
+        contactId={chat.contact.id}
+        currentChatId={chat.id}
       />
     </>
   );
@@ -170,6 +208,10 @@ export function ChatWindowHeaderActions({
   chat,
   chatId,
   chatCreatedAt,
+  onOpenDetails,
+  onOpenSearch,
+  onOpenStarred,
+  onOpenHistory,
   className,
 }: {
   chat: {
@@ -179,11 +221,16 @@ export function ChatWindowHeaderActions({
   };
   chatId: string;
   chatCreatedAt: Date;
+  onOpenDetails?: () => void;
+  onOpenSearch?: () => void;
+  onOpenStarred?: () => void;
+  onOpenHistory?: () => void;
   className?: string;
 }) {
   const session = useServerSession();
   const trpc = useTRPC();
   const queryClient = useQueryClient();
+  const router = useRouter();
 
   // Buscar agent atual para verificar se está assigned
   const { data: currentAgent } = useQuery(
@@ -204,6 +251,15 @@ export function ChatWindowHeaderActions({
     }),
   );
 
+  // Mutation para marcar como não lida
+  const markAsUnreadMutation = useMutation(
+    trpc.chats.markAsUnread.mutationOptions({
+      onError: (error) => {
+        toast.error(error.message || "Erro ao marcar como não lida");
+      },
+    }),
+  );
+
   // APENAS quem está assigned pode transferir, adicionar tags ou finalizar
   const isAssigned = chat.assignedTo === currentAgent?.id;
   const isClosed = chat.status === "closed";
@@ -213,6 +269,16 @@ export function ChatWindowHeaderActions({
 
   const handleCloseChat = () => {
     closeMutation.mutate({
+      id: chatId,
+      createdAt: chatCreatedAt,
+    });
+  };
+
+  const handleMarkAsUnread = () => {
+    // Navegar primeiro para desmontar o chat-window (evita que markAsRead seja chamado)
+    router.push("/chats");
+    // Depois chamar a mutation em background
+    markAsUnreadMutation.mutate({
       id: chatId,
       createdAt: chatCreatedAt,
     });
@@ -265,14 +331,25 @@ export function ChatWindowHeaderActions({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem>
-            <Archive className="mr-2 h-4 w-4" />
-            Arquivar
+          <DropdownMenuItem onClick={onOpenDetails}>
+            <User className="mr-2 h-4 w-4" />
+            Informações do lead
           </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem className="text-destructive">
-            <X className="mr-2 h-4 w-4" />
-            Deletar conversa
+          <DropdownMenuItem onClick={handleMarkAsUnread}>
+            <EyeOff className="mr-2 h-4 w-4" />
+            Marcar como não lida
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onOpenSearch}>
+            <Search className="mr-2 h-4 w-4" />
+            Buscar
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onOpenStarred}>
+            <Star className="mr-2 h-4 w-4" />
+            Mensagens favoritas
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={onOpenHistory}>
+            <History className="mr-2 h-4 w-4" />
+            Histórico
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

@@ -10,7 +10,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, ChevronDown } from "lucide-react";
 import { isSameDay } from "date-fns";
 
@@ -20,6 +20,7 @@ import { Skeleton } from "@manylead/ui/skeleton";
 
 import { useChatSocketContext } from "~/components/providers/chat-socket-provider";
 import { useTRPC } from "~/lib/trpc/react";
+import { useMessageFocusStore } from "~/stores/use-message-focus-store";
 import { ChatMessage, ChatMessageSystem, ChatMessageComment } from "./chat-message";
 import { ChatMessageDateDivider } from "./chat-message-date";
 
@@ -69,6 +70,10 @@ export function ChatMessageList({
   const [showScrollButton, setShowScrollButton] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Message focus store (para navegação de busca)
+  const { focusMessageId, focusChatId, clearFocus } = useMessageFocusStore();
+  const shouldFocusMessage = focusChatId === chatId && focusMessageId !== null;
+
   // TanStack Query handles ALL the complexity for us
   const { data, isLoading, isFetchingNextPage, fetchNextPage, hasNextPage } =
     useInfiniteQuery({
@@ -106,6 +111,64 @@ export function ChatMessageList({
     metadata: item.message.metadata as Record<string, unknown> | undefined,
     chatId,
   }));
+
+  // Query para buscar mensagens ao redor de uma mensagem específica (navegação de busca)
+  const { data: contextData, isLoading: isLoadingContext } = useQuery({
+    ...trpc.messages.getContext.queryOptions({
+      chatId,
+      messageId: focusMessageId ?? "",
+      before: 30,
+      after: 30,
+    }),
+    enabled: shouldFocusMessage,
+  });
+
+  // Efeito para processar o foco em uma mensagem
+  useEffect(() => {
+    if (!shouldFocusMessage || !focusMessageId) return;
+
+    // Função para fazer scroll e highlight
+    const scrollAndHighlight = (messageId: string) => {
+      setTimeout(() => {
+        const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
+        if (messageElement) {
+          messageElement.scrollIntoView({ behavior: "instant", block: "center" });
+          messageElement.classList.add("reply-highlight");
+          setTimeout(() => {
+            messageElement.classList.remove("reply-highlight");
+          }, 2000);
+        }
+        clearFocus();
+      }, 100);
+    };
+
+    // Primeiro, verificar se a mensagem já está no DOM
+    const existingElement = document.querySelector(`[data-message-id="${focusMessageId}"]`);
+    if (existingElement) {
+      scrollAndHighlight(focusMessageId);
+      return;
+    }
+
+    // Se não está no DOM e temos dados de contexto, atualizar o cache
+    if (contextData?.items && contextData.items.length > 0) {
+      // Criar uma nova página com as mensagens do contexto
+      const contextPage = {
+        items: contextData.items,
+        nextCursor: contextData.hasMoreBefore ? contextData.items[0]?.message.id : undefined,
+        hasMore: contextData.hasMoreBefore,
+      };
+
+      // Substituir os dados no cache temporariamente
+      const queryKey = trpc.messages.list.infiniteQueryKey({ chatId, firstPageLimit: 50, limit: 30 });
+      queryClient.setQueryData(queryKey, {
+        pages: [contextPage],
+        pageParams: [null],
+      });
+
+      // Após atualizar, fazer scroll
+      scrollAndHighlight(focusMessageId);
+    }
+  }, [shouldFocusMessage, focusMessageId, contextData, clearFocus, queryClient, trpc, chatId]);
 
   // Scroll to bottom on initial load
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
