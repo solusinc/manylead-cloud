@@ -32,3 +32,6 @@ export * from "./attachments";
 
 // Agent Status
 export * from "./agent-status";
+
+// Tags
+export * from "./tags";

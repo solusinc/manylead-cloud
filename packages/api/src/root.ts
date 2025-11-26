@@ -10,6 +10,7 @@ import { memberRouter } from "./router/member";
 import { messagesRouter } from "./router/messages";
 import { organizationRouter } from "./router/organization";
 import { organizationSettingsRouter } from "./router/organization-settings";
+import { tagsRouter } from "./router/tags";
 import { createTRPCRouter } from "./trpc";
 
 export const appRouter = createTRPCRouter({
@@ -25,6 +26,7 @@ export const appRouter = createTRPCRouter({
   chats: chatsRouter,
   messages: messagesRouter,
   attachments: attachmentsRouter,
+  tags: tagsRouter,
 });
 
 // export type definition of API

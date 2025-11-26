@@ -107,6 +107,7 @@ export function ChatSidebarList({
     unreadCount: item.chat.unreadCount,
     status: item.chat.status as "open" | "closed",
     messageSource: item.chat.messageSource as "whatsapp" | "internal",
+    tags: item.tags,
   })) ?? [];
 
   const virtualizer = useVirtualizer({

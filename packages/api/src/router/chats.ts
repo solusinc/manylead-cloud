@@ -7,6 +7,7 @@ import {
   asc,
   chat,
   chatParticipant,
+  chatTag,
   contact,
   count,
   department,
@@ -20,6 +21,7 @@ import {
   or,
   organization,
   sql,
+  tag,
   user,
 } from "@manylead/db";
 import { publishChatEvent, formatTime, formatDateTime, calculateDuration } from "@manylead/shared";
@@ -194,6 +196,37 @@ export const chatsRouter = createTRPCRouter({
           : ctx.tenantDb.select({ count: count() }).from(chat).where(where),
       ]);
 
+      // BATCH OPTIMIZATION: Buscar tags para todos os chats de uma vez
+      const chatIds = items.map((i) => i.chat.id);
+
+      const chatTagsData = chatIds.length > 0
+        ? await ctx.tenantDb
+            .select({
+              chatId: chatTag.chatId,
+              chatCreatedAt: chatTag.chatCreatedAt,
+              tagId: tag.id,
+              tagName: tag.name,
+              tagColor: tag.color,
+            })
+            .from(chatTag)
+            .innerJoin(tag, eq(chatTag.tagId, tag.id))
+            .where(inArray(chatTag.chatId, chatIds))
+        : [];
+
+      // Criar Map de tags por chatId para lookup O(1)
+      const tagsByChat = new Map<string, Array<{ id: string; name: string; color: string }>>();
+      for (const ct of chatTagsData) {
+        const key = ct.chatId;
+        if (!tagsByChat.has(key)) {
+          tagsByChat.set(key, []);
+        }
+        tagsByChat.get(key)!.push({
+          id: ct.tagId,
+          name: ct.tagName,
+          color: ct.tagColor,
+        });
+      }
+
       // BATCH OPTIMIZATION: Resolver "outro participante" para chats internos
       // Coletar IDs únicos de initiators que precisam ser buscados
       const initiatorAgentIds = [
@@ -223,6 +256,7 @@ export const chatsRouter = createTRPCRouter({
             // Chats atribuídos usam unreadCount do participant (0 se não tiver participant)
             unreadCount: item.chat.status === "pending" ? 0 : (item.participant?.unreadCount ?? 0),
           },
+          tags: tagsByChat.get(item.chat.id) ?? [],
         }));
 
         return { items: itemsWithCorrectUnreadCount, total: totalResult[0]?.count ?? 0, limit, offset };
@@ -306,6 +340,7 @@ export const chatsRouter = createTRPCRouter({
           // Chats atribuídos usam unreadCount do participant (0 se não tiver participant)
           unreadCount: item.chat.status === "pending" ? 0 : (item.participant?.unreadCount ?? 0),
         },
+        tags: tagsByChat.get(item.chat.id) ?? [],
       }));
 
       return {

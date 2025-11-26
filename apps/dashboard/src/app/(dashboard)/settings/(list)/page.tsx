@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Building, SlidersVertical, User, Users } from "lucide-react";
+import { Building, SlidersVertical, Tag, User, Users } from "lucide-react";
 
 import type { Actions, Subjects } from "@manylead/permissions";
 
@@ -50,6 +50,17 @@ const settings = [
     permission: {
       action: "manage" as Actions,
       subject: "Department" as Subjects,
+    },
+  },
+  {
+    title: "Etiquetas",
+    description:
+      "Etiquetas organizam informações, simplificam buscas e aprimoram a gestão de seus dados.",
+    href: "/settings/tags",
+    icon: Tag,
+    permission: {
+      action: "manage" as Actions,
+      subject: "Tag" as Subjects,
     },
   },
   {

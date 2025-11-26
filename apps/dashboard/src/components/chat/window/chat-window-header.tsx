@@ -6,7 +6,6 @@ import {
   Archive,
   CheckCircle,
   MoreVertical,
-  Tag,
   X,
 } from "lucide-react";
 import { FaUser, FaWhatsapp } from "react-icons/fa";
@@ -28,6 +27,7 @@ import {
 
 import { ContactDetailsSheet } from "../contact";
 import { ChatTransferDropdown } from "./chat-transfer-dropdown";
+import { ChatTagSelector } from "./chat-tag-selector";
 import { useServerSession } from "~/components/providers/session-provider";
 import { useTRPC } from "~/lib/trpc/react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -233,20 +233,7 @@ export function ChatWindowHeaderActions({
             </TooltipContent>
           </Tooltip>
 
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Etiquetas"
-              >
-                <Tag className="size-5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Etiquetas</p>
-            </TooltipContent>
-          </Tooltip>
+          <ChatTagSelector chatId={chatId} chatCreatedAt={chatCreatedAt} />
 
           <Tooltip>
             <TooltipTrigger asChild>

@@ -7,9 +7,21 @@ import { format, isToday, isYesterday, isThisWeek } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { FaUser, FaWhatsapp } from "react-icons/fa";
 
+import type { Tag } from "@manylead/db";
 import { cn } from "@manylead/ui";
 import { Avatar, AvatarFallback } from "@manylead/ui/avatar";
 import { Badge } from "@manylead/ui/badge";
+
+// Calcula se o texto deve ser branco ou preto baseado na luminosidade do fundo
+function getContrastTextColor(hexColor: string): string {
+  const hex = hexColor.replace("#", "");
+  const r = parseInt(hex.substring(0, 2), 16);
+  const g = parseInt(hex.substring(2, 4), 16);
+  const b = parseInt(hex.substring(4, 6), 16);
+  // Fórmula de luminosidade relativa
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.5 ? "#000000" : "#ffffff";
+}
 
 interface ChatSidebarItemProps {
   chat: {
@@ -23,6 +35,7 @@ interface ChatSidebarItemProps {
     unreadCount: number;
     status: "open" | "closed";
     messageSource?: "whatsapp" | "internal";
+    tags?: Pick<Tag, "id" | "name" | "color">[];
   };
   isActive?: boolean;
   isTyping?: boolean;
@@ -62,6 +75,7 @@ export function ChatSidebarItem({
           timestamp={chat.lastMessageAt}
           unreadCount={chat.unreadCount}
           isTyping={isTyping}
+          tags={chat.tags}
         />
       </div>
     </Link>
@@ -124,6 +138,7 @@ export function ChatSidebarItemContent({
   timestamp,
   unreadCount,
   isTyping = false,
+  tags,
   className,
 }: {
   name: string;
@@ -131,6 +146,7 @@ export function ChatSidebarItemContent({
   timestamp: Date;
   unreadCount: number;
   isTyping?: boolean;
+  tags?: Pick<Tag, "id" | "name" | "color">[];
   className?: string;
 }) {
   return (
@@ -150,6 +166,28 @@ export function ChatSidebarItemContent({
         )}
         {unreadCount > 0 && <ChatSidebarItemBadge count={unreadCount} />}
       </div>
+
+      {tags && tags.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {tags.slice(0, 3).map((tag) => (
+            <Badge
+              key={tag.id}
+              className="h-4 border-0 px-1.5 text-[10px] font-medium"
+              style={{
+                backgroundColor: tag.color,
+                color: getContrastTextColor(tag.color),
+              }}
+            >
+              {tag.name}
+            </Badge>
+          ))}
+          {tags.length > 3 && (
+            <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">
+              +{tags.length - 3}
+            </Badge>
+          )}
+        </div>
+      )}
     </div>
   );
 }
