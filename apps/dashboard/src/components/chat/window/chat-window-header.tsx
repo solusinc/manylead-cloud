@@ -219,7 +219,7 @@ export function ChatWindowHeaderActions({
   };
 
   return (
-    <div className={cn("flex items-center gap-1", className)}>
+    <div className={cn("flex items-center gap-4", className)}>
       {showActions && (
         <>
           <Tooltip>

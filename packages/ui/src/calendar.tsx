@@ -3,6 +3,7 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type * as React from "react";
 import { DayPicker } from "react-day-picker";
+import type { DateRange } from "react-day-picker";
 
 import { buttonVariants } from "@manylead/ui/button";
 import { cn } from ".";
@@ -73,3 +74,4 @@ function Calendar({
 }
 
 export { Calendar };
+export type { DateRange };

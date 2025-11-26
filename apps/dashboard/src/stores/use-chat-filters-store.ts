@@ -3,14 +3,18 @@ import { create } from "zustand";
 export type StatusFilter = "all" | "open" | "closed" | "pending";
 export type MessageSourceFilter = "whatsapp" | "internal";
 
+export interface PeriodFilter {
+  from: Date | undefined;
+  to: Date | undefined;
+}
+
 interface HeaderFilters {
   status: StatusFilter;
   tagIds: string[];
   agentIds: string[];
   departmentIds: string[];
   messageSources: MessageSourceFilter[];
-  // TODO: Adicionar outros filtros futuros
-  // period?: { start: Date; end: Date };
+  period: PeriodFilter;
 }
 
 interface ChatFiltersState {
@@ -33,6 +37,7 @@ interface ChatFiltersState {
   toggleAgentFilter: (agentId: string) => void;
   toggleDepartmentFilter: (departmentId: string) => void;
   toggleMessageSourceFilter: (source: MessageSourceFilter) => void;
+  setPeriodFilter: (period: PeriodFilter) => void;
   clearHeaderFilters: () => void;
   getActiveFilterCount: () => number;
 }
@@ -43,6 +48,7 @@ const defaultHeaderFilters: HeaderFilters = {
   agentIds: [],
   departmentIds: [],
   messageSources: [],
+  period: { from: undefined, to: undefined },
 };
 
 export const useChatFiltersStore = create<ChatFiltersState>((set, get) => ({
@@ -104,6 +110,11 @@ export const useChatFiltersStore = create<ChatFiltersState>((set, get) => ({
       };
     }),
 
+  setPeriodFilter: (period) =>
+    set((state) => ({
+      headerFilters: { ...state.headerFilters, period }
+    })),
+
   clearHeaderFilters: () => set({ headerFilters: defaultHeaderFilters }),
 
   getActiveFilterCount: () => {
@@ -117,7 +128,7 @@ export const useChatFiltersStore = create<ChatFiltersState>((set, get) => ({
     if (headerFilters.agentIds.length > 0) count++;
     if (headerFilters.departmentIds.length > 0) count++;
     if (headerFilters.messageSources.length > 0) count++;
-    // TODO: Adicionar contagem de outros filtros quando implementados
+    if (headerFilters.period.from || headerFilters.period.to) count++;
 
     return count;
   },

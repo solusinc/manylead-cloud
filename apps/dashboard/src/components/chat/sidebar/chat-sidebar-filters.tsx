@@ -131,7 +131,7 @@ export function ChatSidebarFilterButton({
             <Icon className="size-5" />
             {badge !== undefined && (
               <Badge
-                className="absolute -right-5 -top-2 h-4 min-w-4 rounded-full bg-green-500 px-1 text-[10px] leading-none text-black"
+                className="absolute -right-5 -top-2 h-4 min-w-4 rounded-full px-1 text-[10px] leading-none"
               >
                 {badge}
               </Badge>

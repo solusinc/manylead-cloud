@@ -13,9 +13,11 @@ import {
   department,
   desc,
   eq,
+  gte,
   ilike,
   inArray,
   isNull,
+  lte,
   message,
   ne,
   or,
@@ -52,6 +54,8 @@ export const chatsRouter = createTRPCRouter({
         departmentIds: z.array(z.string().uuid()).optional(),
         messageSource: z.enum(["whatsapp", "internal"]).optional(),
         messageSources: z.array(z.enum(["whatsapp", "internal"])).optional(),
+        dateFrom: z.date().optional(),
+        dateTo: z.date().optional(),
         search: z.string().optional(),
         unreadOnly: z.boolean().optional(),
         tagIds: z.array(z.string().uuid()).optional(),
@@ -60,7 +64,7 @@ export const chatsRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const { status, assignedTo, agentIds, departmentId, departmentIds, messageSource, messageSources, search, unreadOnly, tagIds, limit, offset } =
+      const { status, assignedTo, agentIds, departmentId, departmentIds, messageSource, messageSources, dateFrom, dateTo, search, unreadOnly, tagIds, limit, offset } =
         input;
 
       // Buscar o agent do usuário atual
@@ -145,6 +149,14 @@ export const chatsRouter = createTRPCRouter({
       // Filtro por múltiplos provedores (OR - qualquer um dos selecionados)
       if (messageSources && messageSources.length > 0) {
         conditions.push(inArray(chat.messageSource, messageSources));
+      }
+
+      // Filtro por período (data de criação do chat)
+      if (dateFrom) {
+        conditions.push(gte(chat.createdAt, dateFrom));
+      }
+      if (dateTo) {
+        conditions.push(lte(chat.createdAt, dateTo));
       }
 
       // Busca em nome do contato e telefone

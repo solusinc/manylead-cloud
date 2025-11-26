@@ -72,6 +72,8 @@ export function ChatSidebarList({
       agentIds: headerFilters.agentIds.length > 0 ? headerFilters.agentIds : undefined,
       departmentIds: headerFilters.departmentIds.length > 0 ? headerFilters.departmentIds : undefined,
       messageSources: headerFilters.messageSources.length > 0 ? headerFilters.messageSources : undefined,
+      dateFrom: headerFilters.period.from,
+      dateTo: headerFilters.period.to,
       limit: 100,
       offset: 0,
     })
