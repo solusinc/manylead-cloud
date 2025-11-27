@@ -3,14 +3,12 @@
 import { useState } from "react";
 import Image from "next/image";
 import {
-  CheckCircle,
   EyeOff,
   History,
   MoreVertical,
   Search,
   Star,
   User,
-  X,
 } from "lucide-react";
 import { FaUser, FaWhatsapp } from "react-icons/fa";
 import { cn } from "@manylead/ui";
@@ -34,12 +32,13 @@ import { useRouter } from "next/navigation";
 import { ContactDetailsSheet } from "../contact";
 import { ChatTransferDropdown } from "./chat-transfer-dropdown";
 import { ChatTagSelector } from "./chat-tag-selector";
+import { ChatEndingSelector } from "./chat-ending-selector";
 import { ChatSearchSheet } from "./chat-search-sheet";
 import { ChatStarredSheet } from "./chat-starred-sheet";
 import { ChatHistorySheet } from "./chat-history-sheet";
 import { useServerSession } from "~/components/providers/session-provider";
 import { useTRPC } from "~/lib/trpc/react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 interface ChatWindowHeaderProps {
@@ -229,26 +228,11 @@ export function ChatWindowHeaderActions({
 }) {
   const session = useServerSession();
   const trpc = useTRPC();
-  const queryClient = useQueryClient();
   const router = useRouter();
 
   // Buscar agent atual para verificar se está assigned
   const { data: currentAgent } = useQuery(
     trpc.agents.getByUserId.queryOptions({ userId: session.user.id })
-  );
-
-  // Mutation para fechar chat
-  const closeMutation = useMutation(
-    trpc.chats.close.mutationOptions({
-      onSuccess: () => {
-        void queryClient.invalidateQueries({ queryKey: [["chats"]] });
-        void queryClient.invalidateQueries({ queryKey: [["messages"]] });
-        toast.success("Atendimento finalizado com sucesso!");
-      },
-      onError: (error) => {
-        toast.error(error.message || "Erro ao finalizar atendimento");
-      },
-    }),
   );
 
   // Mutation para marcar como não lida
@@ -266,13 +250,6 @@ export function ChatWindowHeaderActions({
 
   // Mostrar ações apenas se assigned E chat aberto
   const showActions = isAssigned && !isClosed;
-
-  const handleCloseChat = () => {
-    closeMutation.mutate({
-      id: chatId,
-      createdAt: chatCreatedAt,
-    });
-  };
 
   const handleMarkAsUnread = () => {
     // Navegar primeiro para desmontar o chat-window (evita que markAsRead seja chamado)
@@ -301,22 +278,7 @@ export function ChatWindowHeaderActions({
 
           <ChatTagSelector chatId={chatId} chatCreatedAt={chatCreatedAt} />
 
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Finalizar"
-                onClick={handleCloseChat}
-                disabled={closeMutation.isPending}
-              >
-                <CheckCircle className="size-5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              <p>Finalizar</p>
-            </TooltipContent>
-          </Tooltip>
+          <ChatEndingSelector chatId={chatId} chatCreatedAt={chatCreatedAt} />
         </>
       )}
 

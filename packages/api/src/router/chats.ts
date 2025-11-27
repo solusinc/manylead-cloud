@@ -12,6 +12,7 @@ import {
   count,
   department,
   desc,
+  ending,
   eq,
   gte,
   ilike,
@@ -59,12 +60,13 @@ export const chatsRouter = createTRPCRouter({
         search: z.string().optional(),
         unreadOnly: z.boolean().optional(),
         tagIds: z.array(z.string().uuid()).optional(),
+        endingIds: z.array(z.string().uuid()).optional(),
         limit: z.number().min(1).max(100).default(50),
         offset: z.number().min(0).default(0),
       }),
     )
     .query(async ({ ctx, input }) => {
-      const { status, assignedTo, agentIds, departmentId, departmentIds, messageSource, messageSources, dateFrom, dateTo, search, unreadOnly, tagIds, limit, offset } =
+      const { status, assignedTo, agentIds, departmentId, departmentIds, messageSource, messageSources, dateFrom, dateTo, search, unreadOnly, tagIds, endingIds, limit, offset } =
         input;
 
       // Buscar o agent do usuário atual
@@ -190,6 +192,11 @@ export const chatsRouter = createTRPCRouter({
           )
         `;
         conditions.push(chatsWithAllTags);
+      }
+
+      // Filtrar por motivos de finalização (OR - qualquer um dos selecionados)
+      if (endingIds && endingIds.length > 0) {
+        conditions.push(inArray(chat.endingId, endingIds));
       }
 
       const where = conditions.length > 0 ? and(...conditions) : undefined;
@@ -1478,6 +1485,7 @@ export const chatsRouter = createTRPCRouter({
       z.object({
         id: z.string().uuid(),
         createdAt: z.date(),
+        endingId: z.string().uuid().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -1542,6 +1550,18 @@ export const chatsRouter = createTRPCRouter({
         departmentName = deptData?.name ?? "";
       }
 
+      // 5.1. Buscar motivo de finalização (se houver)
+      let endingName = "";
+      if (input.endingId) {
+        const [endingData] = await ctx.tenantDb
+          .select()
+          .from(ending)
+          .where(eq(ending.id, input.endingId))
+          .limit(1);
+
+        endingName = endingData?.title ?? "";
+      }
+
       // 6. Buscar primeira mensagem enviada (não de sistema) para pegar "Atendido em"
       const [firstMessage] = await ctx.tenantDb
         .select()
@@ -1561,6 +1581,7 @@ export const chatsRouter = createTRPCRouter({
         .update(chat)
         .set({
           status: "closed",
+          endingId: input.endingId ?? null,
           updatedAt: closedAt,
         })
         .where(and(eq(chat.id, input.id), eq(chat.createdAt, input.createdAt)))
@@ -1580,7 +1601,8 @@ export const chatsRouter = createTRPCRouter({
       // 9. Gerar mensagem de sistema formatada
       const systemMessageContent = `Protocolo: ${currentChat.id}
 Usuário: ${agentName}
-Departamento: ${departmentName}
+Departamento: ${departmentName || "-"}
+Motivo: ${endingName || "-"}
 Iniciado em: ${formatDateTime(currentChat.createdAt)}
 Atendido em: ${formatDateTime(new Date(attendedAt))}
 Finalizado em: ${formatDateTime(closedAt)}
@@ -1601,6 +1623,8 @@ Duração: ${duration}`;
           agentName,
           protocol: currentChat.id,
           departmentName,
+          endingId: input.endingId,
+          endingName,
           startedAt: currentChat.createdAt.toISOString(),
           attendedAt: new Date(attendedAt).toISOString(),
           closedAt: closedAt.toISOString(),

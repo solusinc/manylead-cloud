@@ -38,3 +38,6 @@ export * from "./tags";
 
 // Quick Replies
 export * from "./quick-replies";
+
+// Endings
+export * from "./endings";

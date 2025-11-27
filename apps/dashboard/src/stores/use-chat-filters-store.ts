@@ -13,6 +13,7 @@ interface HeaderFilters {
   tagIds: string[];
   agentIds: string[];
   departmentIds: string[];
+  endingIds: string[];
   messageSources: MessageSourceFilter[];
   period: PeriodFilter;
 }
@@ -36,6 +37,7 @@ interface ChatFiltersState {
   toggleTagFilter: (tagId: string) => void;
   toggleAgentFilter: (agentId: string) => void;
   toggleDepartmentFilter: (departmentId: string) => void;
+  toggleEndingFilter: (endingId: string) => void;
   toggleMessageSourceFilter: (source: MessageSourceFilter) => void;
   setPeriodFilter: (period: PeriodFilter) => void;
   clearHeaderFilters: () => void;
@@ -47,6 +49,7 @@ const defaultHeaderFilters: HeaderFilters = {
   tagIds: [],
   agentIds: [],
   departmentIds: [],
+  endingIds: [],
   messageSources: [],
   period: { from: undefined, to: undefined },
 };
@@ -99,6 +102,17 @@ export const useChatFiltersStore = create<ChatFiltersState>((set, get) => ({
       };
     }),
 
+  toggleEndingFilter: (endingId) =>
+    set((state) => {
+      const currentEndings = state.headerFilters.endingIds;
+      const newEndings = currentEndings.includes(endingId)
+        ? currentEndings.filter((id) => id !== endingId)
+        : [...currentEndings, endingId];
+      return {
+        headerFilters: { ...state.headerFilters, endingIds: newEndings }
+      };
+    }),
+
   toggleMessageSourceFilter: (source) =>
     set((state) => {
       const currentSources = state.headerFilters.messageSources;
@@ -127,6 +141,7 @@ export const useChatFiltersStore = create<ChatFiltersState>((set, get) => ({
     if (headerFilters.tagIds.length > 0) count++;
     if (headerFilters.agentIds.length > 0) count++;
     if (headerFilters.departmentIds.length > 0) count++;
+    if (headerFilters.endingIds.length > 0) count++;
     if (headerFilters.messageSources.length > 0) count++;
     if (headerFilters.period.from || headerFilters.period.to) count++;
 

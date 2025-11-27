@@ -1,6 +1,6 @@
 "use client";
 
-import type { Tag } from "@manylead/db";
+import type { Ending } from "@manylead/db";
 import type { Table } from "@tanstack/react-table";
 import * as React from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -30,11 +30,11 @@ import {
 import { useTRPC } from "~/lib/trpc/react";
 import { usePermissions } from "~/lib/permissions";
 
-interface TagDataTableActionBarProps {
-  table: Table<Tag>;
+interface EndingDataTableActionBarProps {
+  table: Table<Ending>;
 }
 
-export function TagDataTableActionBar({ table }: TagDataTableActionBarProps) {
+export function EndingDataTableActionBar({ table }: EndingDataTableActionBarProps) {
   const [open, setOpen] = React.useState(false);
   const [isPending, startTransition] = React.useTransition();
   const [value, setValue] = React.useState("");
@@ -43,11 +43,11 @@ export function TagDataTableActionBar({ table }: TagDataTableActionBarProps) {
   const queryClient = useQueryClient();
   const { can } = usePermissions();
 
-  const deleteTagsMutation = useMutation(
-    trpc.tags.deleteTags.mutationOptions({
+  const deleteEndingMutation = useMutation(
+    trpc.endings.delete.mutationOptions({
       onSuccess: () => {
         void queryClient.invalidateQueries({
-          queryKey: trpc.tags.list.queryKey(),
+          queryKey: trpc.endings.list.queryKey(),
         });
         table.toggleAllRowsSelected(false);
       },
@@ -55,21 +55,22 @@ export function TagDataTableActionBar({ table }: TagDataTableActionBarProps) {
   );
 
   const confirmationValue = React.useMemo(
-    () => `deletar etiqueta${rows.length === 1 ? "" : "s"}`,
+    () => `deletar motivo${rows.length === 1 ? "" : "s"}`,
     [rows.length],
   );
 
   // Não mostrar action bar se não tiver permissão
-  if (!can("manage", "Tag")) {
+  if (!can("manage", "Ending")) {
     return null;
   }
 
   const handleDelete = () => {
     try {
       startTransition(async () => {
-        const promise = deleteTagsMutation.mutateAsync({
-          ids: rows.map((row) => row.original.id),
-        });
+        const promises = rows.map((row) =>
+          deleteEndingMutation.mutateAsync({ id: row.original.id }),
+        );
+        const promise = Promise.all(promises);
         toast.promise(promise, {
           loading: "Deletando...",
           success: "Deletado",
@@ -100,8 +101,8 @@ export function TagDataTableActionBar({ table }: TagDataTableActionBarProps) {
           <AlertDialogTrigger asChild>
             <DataTableActionBarAction
               size="icon"
-              tooltip="Deletar etiquetas"
-              isPending={isPending || deleteTagsMutation.isPending}
+              tooltip="Deletar motivos"
+              isPending={isPending || deleteEndingMutation.isPending}
             >
               <Trash2 />
             </DataTableActionBarAction>
@@ -114,12 +115,12 @@ export function TagDataTableActionBar({ table }: TagDataTableActionBarProps) {
           >
             <AlertDialogHeader>
               <AlertDialogTitle>
-                Deletar {rows.length} etiqueta{rows.length > 1 ? "s" : ""}?
+                Deletar {rows.length} motivo{rows.length > 1 ? "s" : ""}?
               </AlertDialogTitle>
               <AlertDialogDescription>
-                Esta ação não pode ser desfeita. Isso removerá permanentemente a
-                {rows.length > 1 ? "s" : ""} etiqueta
-                {rows.length > 1 ? "s" : ""} selecionada
+                Esta ação não pode ser desfeita. Isso removerá permanentemente o
+                {rows.length > 1 ? "s" : ""} motivo
+                {rows.length > 1 ? "s" : ""} selecionado
                 {rows.length > 1 ? "s" : ""} do banco de dados.
               </AlertDialogDescription>
             </AlertDialogHeader>

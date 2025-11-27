@@ -1,3 +1,4 @@
+import { Readable } from "node:stream";
 import {
   DeleteObjectCommand,
   GetObjectCommand,
@@ -6,7 +7,6 @@ import {
   S3Client,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { Readable } from "node:stream";
 
 import type {
   StorageProvider,
@@ -70,7 +70,7 @@ export class R2StorageProvider implements StorageProvider {
       key: params.key,
       url: this.getPublicUrl(params.key),
       size,
-      etag: response.ETag || "",
+      etag: response.ETag ?? "",
     };
   }
 
@@ -114,7 +114,10 @@ export class R2StorageProvider implements StorageProvider {
       await this.client.send(command);
       return true;
     } catch (error: unknown) {
-      const err = error as { name?: string; $metadata?: { httpStatusCode?: number } };
+      const err = error as {
+        name?: string;
+        $metadata?: { httpStatusCode?: number };
+      };
 
       if (err.name === "NotFound" || err.$metadata?.httpStatusCode === 404) {
         return false;
@@ -127,10 +130,7 @@ export class R2StorageProvider implements StorageProvider {
     return `${this.publicUrl}/${key}`;
   }
 
-  async getSignedUploadUrl(
-    key: string,
-    expiresIn: number = 3600,
-  ): Promise<string> {
+  async getSignedUploadUrl(key: string, expiresIn = 3600): Promise<string> {
     const command = new PutObjectCommand({
       Bucket: this.bucketName,
       Key: key,
@@ -139,10 +139,7 @@ export class R2StorageProvider implements StorageProvider {
     return getSignedUrl(this.client, command, { expiresIn });
   }
 
-  async getSignedDownloadUrl(
-    key: string,
-    expiresIn: number = 3600,
-  ): Promise<string> {
+  async getSignedDownloadUrl(key: string, expiresIn = 3600): Promise<string> {
     const command = new GetObjectCommand({
       Bucket: this.bucketName,
       Key: key,

@@ -46,6 +46,9 @@ export function defineAbilitiesFor(
       // Supervisores podem gerenciar tags
       can('manage', 'Tag');
 
+      // Supervisores podem gerenciar motivos de finalização
+      can('manage', 'Ending');
+
       // Supervisores NÃO podem gerenciar organização, usuários ou departamentos
       // Supervisores NÃO têm acesso ao billing
       break;

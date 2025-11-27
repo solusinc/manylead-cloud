@@ -87,6 +87,10 @@ export const chat = pgTable(
     snoozedUntil: timestamp("snoozed_until"),
     // Quando status=snoozed, data/hora para reativar automaticamente
 
+    // Motivo de finalização
+    endingId: uuid("ending_id"),
+    // Referência ao ending.id (sem FK para simplicidade)
+
     // Timestamps
     createdAt: timestamp("created_at").notNull().defaultNow(),
     // Partitioning key (mensal)

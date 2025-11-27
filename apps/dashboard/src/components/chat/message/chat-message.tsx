@@ -579,6 +579,12 @@ export function ChatMessageSystem({
                   <span className="font-semibold">{fields.Departamento || "-"}</span>
                 </div>
               )}
+              {fields.Motivo !== undefined && (
+                <div>
+                  <span className="text-muted-foreground">Motivo:</span>{" "}
+                  <span className="font-semibold">{fields.Motivo || "-"}</span>
+                </div>
+              )}
             </div>
 
             {/* Coluna 2 */}

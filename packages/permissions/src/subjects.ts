@@ -10,6 +10,7 @@ export type Subjects =
   | 'Contact'      // Contatos da organização
   | 'QuickReply'   // Respostas rápidas
   | 'Tag'          // Tags para organização
+  | 'Ending'       // Motivos de finalização
   | 'Billing'      // Faturamento
   | 'all';
 

@@ -5,6 +5,7 @@ import { channelsRouter } from "./router/channels";
 import { chatsRouter } from "./router/chats";
 import { contactsRouter } from "./router/contacts";
 import { departmentsRouter } from "./router/departments";
+import { endingsRouter } from "./router/endings";
 import { invitationRouter } from "./router/invitation";
 import { memberRouter } from "./router/member";
 import { messagesRouter } from "./router/messages";
@@ -29,6 +30,7 @@ export const appRouter = createTRPCRouter({
   attachments: attachmentsRouter,
   tags: tagsRouter,
   quickReplies: quickRepliesRouter,
+  endings: endingsRouter,
 });
 
 // export type definition of API

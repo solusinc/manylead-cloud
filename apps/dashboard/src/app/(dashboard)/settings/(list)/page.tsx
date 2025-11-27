@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Building, MessageSquareText, SlidersVertical, Tag, User, Users } from "lucide-react";
+import { Building, CheckCircle, MessageSquareText, SlidersVertical, Tag, User, Users } from "lucide-react";
 
 import type { Actions, Subjects } from "@manylead/permissions";
 
@@ -61,6 +61,17 @@ const settings = [
     permission: {
       action: "manage" as Actions,
       subject: "Tag" as Subjects,
+    },
+  },
+  {
+    title: "Motivos de finalização",
+    description:
+      "Motivos de finalização permitem organizar e categorizar sessões finalizadas de forma eficiente.",
+    href: "/settings/endings",
+    icon: CheckCircle,
+    permission: {
+      action: "manage" as Actions,
+      subject: "Ending" as Subjects,
     },
   },
   {

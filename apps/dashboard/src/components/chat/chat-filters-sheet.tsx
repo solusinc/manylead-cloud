@@ -12,6 +12,7 @@ import {
   PeriodFilterSection,
   AgentsFilterSection,
   DepartmentsFilterSection,
+  EndingsFilterSection,
   TagsFilterSection,
   ProvidersFilterSection,
 } from "./filters";
@@ -25,6 +26,7 @@ export function ChatFiltersSheet() {
     toggleTagFilter,
     toggleAgentFilter,
     toggleDepartmentFilter,
+    toggleEndingFilter,
     toggleMessageSourceFilter,
     setPeriodFilter,
     clearHeaderFilters,
@@ -97,8 +99,11 @@ export function ChatFiltersSheet() {
             onToggleAgent={toggleAgentFilter}
           />
 
-          {/* TODO: Finalizações */}
-          <FilterAccordion title="Finalizações" disabled />
+          {/* Finalizações */}
+          <EndingsFilterSection
+            selectedEndingIds={headerFilters.endingIds}
+            onToggleEnding={toggleEndingFilter}
+          />
 
           {/* Departamentos */}
           <DepartmentsFilterSection
