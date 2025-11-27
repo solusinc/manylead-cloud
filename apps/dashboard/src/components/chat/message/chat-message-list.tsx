@@ -70,6 +70,11 @@ export function ChatMessageList({
   const [showScrollButton, setShowScrollButton] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Buscar permissões do agent atual uma vez
+  const { data: currentAgent } = useQuery(trpc.agents.getCurrent.queryOptions());
+  const canEditMessages = currentAgent?.permissions.messages.canEdit ?? false;
+  const canDeleteMessages = currentAgent?.permissions.messages.canDelete ?? false;
+
   // Message focus store (para navegação de busca)
   const { focusMessageId, focusChatId, clearFocus } = useMessageFocusStore();
   const shouldFocusMessage = focusChatId === chatId && focusMessageId !== null;
@@ -107,6 +112,10 @@ export function ChatMessageList({
       | undefined,
     messageType: item.message.messageType as string | undefined,
     isStarred: item.message.isStarred,
+    isDeleted: item.message.isDeleted,
+    isEdited: item.message.isEdited,
+    editedAt: item.message.editedAt as Date | null | undefined,
+    readAt: item.message.readAt as Date | null | undefined,
     repliedToMessageId: item.message.repliedToMessageId as string | null | undefined,
     metadata: item.message.metadata as Record<string, unknown> | undefined,
     chatId,
@@ -320,6 +329,10 @@ export function ChatMessageList({
                       status: updatedMessage.status,
                       isStarred: updatedMessage.isStarred,
                       readAt: updatedMessage.readAt,
+                      content: updatedMessage.content,
+                      isEdited: updatedMessage.isEdited,
+                      editedAt: updatedMessage.editedAt,
+                      isDeleted: updatedMessage.isDeleted,
                     } as Record<string, unknown>,
                   }
                 : item
@@ -587,6 +600,8 @@ export function ChatMessageList({
                 <ChatMessage
                   message={message}
                   showAvatar={showAvatar}
+                  canEditMessages={canEditMessages}
+                  canDeleteMessages={canDeleteMessages}
                 />
               )}
             </Fragment>

@@ -69,6 +69,7 @@ export const message = pgTable(
     sentAt: timestamp("sent_at"),
     deliveredAt: timestamp("delivered_at"),
     readAt: timestamp("read_at"),
+    editedAt: timestamp("edited_at"),
 
     // Flags
     isDeleted: boolean("is_deleted").notNull().default(false),

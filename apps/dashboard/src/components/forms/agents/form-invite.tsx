@@ -36,6 +36,8 @@ const formSchema = z.object({
   isActive: z.boolean(),
   restrictDepartments: z.boolean(),
   departmentIds: z.array(z.string()),
+  canManageMessages: z.boolean(),
+  accessFinishedChats: z.boolean(),
 }).refine(
   (data) => {
     // Se restrictDepartments for true, departmentIds deve ter pelo menos 1 item
@@ -91,6 +93,8 @@ export function FormInviteAgent({
       isActive: true,
       restrictDepartments: false,
       departmentIds: [] as string[],
+      canManageMessages: false,
+      accessFinishedChats: false,
     },
     onSubmit: ({ value }) => {
       if (isPending) return;
@@ -289,6 +293,38 @@ export function FormInviteAgent({
                     }
                   </form.Subscribe>
                 </>
+              )}
+            </form.Field>
+
+            <form.Field name="canManageMessages">
+              {(field) => (
+                <div className="flex items-center gap-2">
+                  <Switch
+                    id={field.name}
+                    checked={field.state.value}
+                    onCheckedChange={field.handleChange}
+                    disabled={locked ?? isPending}
+                  />
+                  <Label htmlFor={field.name} className="cursor-pointer font-normal">
+                    Permitir apagar e editar mensagens
+                  </Label>
+                </div>
+              )}
+            </form.Field>
+
+            <form.Field name="accessFinishedChats">
+              {(field) => (
+                <div className="flex items-center gap-2">
+                  <Switch
+                    id={field.name}
+                    checked={field.state.value}
+                    onCheckedChange={field.handleChange}
+                    disabled={locked ?? isPending}
+                  />
+                  <Label htmlFor={field.name} className="cursor-pointer font-normal">
+                    Permitir acesso a atendimentos finalizados
+                  </Label>
+                </div>
               )}
             </form.Field>
           </FormCardContent>

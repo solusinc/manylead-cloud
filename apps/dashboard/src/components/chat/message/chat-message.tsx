@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import {
@@ -10,6 +10,7 @@ import {
   ChevronDown,
   Clock,
   MessageCircle,
+  Pencil,
   Star,
   Trash2,
 } from "lucide-react";
@@ -18,11 +19,20 @@ import { toast } from "sonner";
 import { cn } from "@manylead/ui";
 import { Button } from "@manylead/ui/button";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@manylead/ui/dialog";
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@manylead/ui/dropdown-menu";
+import { Textarea } from "@manylead/ui/textarea";
 
 import { useTRPC } from "~/lib/trpc/react";
 import { useChatReply } from "../providers/chat-reply-provider";
@@ -35,6 +45,10 @@ interface Message {
   status?: "pending" | "sent" | "delivered" | "read";
   messageType?: string;
   isStarred?: boolean;
+  isDeleted?: boolean;
+  isEdited?: boolean;
+  editedAt?: Date | null;
+  readAt?: Date | null;
   repliedToMessageId?: string | null;
   metadata?: Record<string, unknown>;
   chatId?: string;
@@ -43,11 +57,15 @@ interface Message {
 export function ChatMessage({
   message,
   showAvatar: _showAvatar = true,
+  canEditMessages = false,
+  canDeleteMessages = false,
   className,
   ...props
 }: {
   message: Message;
   showAvatar?: boolean;
+  canEditMessages?: boolean;
+  canDeleteMessages?: boolean;
 } & React.ComponentProps<"div">) {
   const isOutgoing = message.sender === "agent";
   const [isHovered, setIsHovered] = useState(false);
@@ -70,6 +88,8 @@ export function ChatMessage({
         isOutgoing={isOutgoing}
         showActions={isHovered || isMenuOpen}
         onMenuOpenChange={setIsMenuOpen}
+        canEditMessages={canEditMessages}
+        canDeleteMessages={canDeleteMessages}
       />
     </div>
   );
@@ -80,12 +100,16 @@ export function ChatMessageBubble({
   isOutgoing,
   showActions = false,
   onMenuOpenChange,
+  canEditMessages = false,
+  canDeleteMessages = false,
   className,
 }: {
   message: Message;
   isOutgoing: boolean;
   showActions?: boolean;
   onMenuOpenChange?: (open: boolean) => void;
+  canEditMessages?: boolean;
+  canDeleteMessages?: boolean;
   className?: string;
 }) {
   // Extrair dados da mensagem respondida do metadata
@@ -121,6 +145,8 @@ export function ChatMessageBubble({
             message={message}
             isOutgoing={isOutgoing}
             onOpenChange={onMenuOpenChange}
+            canEditMessages={canEditMessages}
+            canDeleteMessages={canDeleteMessages}
           />
         </div>
       )}
@@ -135,12 +161,17 @@ export function ChatMessageBubble({
         />
       )}
 
-      <ChatMessageContent content={message.content} isOutgoing={isOutgoing} />
+      <ChatMessageContent
+        content={message.content}
+        isOutgoing={isOutgoing}
+        isDeleted={message.isDeleted}
+      />
       <ChatMessageFooter
         timestamp={message.timestamp}
         status={message.status}
         isOutgoing={isOutgoing}
         isStarred={message.isStarred}
+        isEdited={message.isEdited}
       />
     </div>
   );
@@ -275,11 +306,28 @@ export function ChatMessageContent({
   content,
   className,
   isOutgoing,
+  isDeleted,
 }: {
   content: string;
   className?: string;
   isOutgoing?: boolean;
+  isDeleted?: boolean;
 }) {
+  // Se a mensagem foi deletada, exibir mensagem padrão
+  if (isDeleted) {
+    return (
+      <p
+        className={cn(
+          "text-sm italic opacity-60",
+          isOutgoing && "dark:text-white/60",
+          className,
+        )}
+      >
+        Esta mensagem foi apagada
+      </p>
+    );
+  }
+
   // Renderizar markdown simples: **texto** -> <strong>texto</strong>
   const renderContent = (text: string) => {
     const parts = text.split(/(\*\*.*?\*\*)/g);
@@ -311,17 +359,22 @@ export function ChatMessageFooter({
   status,
   isOutgoing,
   isStarred = false,
+  isEdited = false,
   className,
 }: {
   timestamp: Date;
   status?: "pending" | "sent" | "delivered" | "read";
   isOutgoing: boolean;
   isStarred?: boolean;
+  isEdited?: boolean;
   className?: string;
 }) {
   return (
     <div className={cn("mt-1 flex items-center justify-end gap-1", className)}>
       {isStarred && <Star className="h-3 w-3 fill-current opacity-70" />}
+      {isEdited && (
+        <span className="text-[10px] opacity-60">editado</span>
+      )}
       <ChatMessageTime timestamp={timestamp} />
       {isOutgoing && status && <ChatMessageStatus status={status} />}
     </div>
@@ -369,14 +422,20 @@ export function ChatMessageActions({
   message,
   isOutgoing,
   onOpenChange,
+  canEditMessages = false,
+  canDeleteMessages = false,
   className,
 }: {
   message: Message;
   isOutgoing: boolean;
   onOpenChange?: (open: boolean) => void;
+  canEditMessages?: boolean;
+  canDeleteMessages?: boolean;
   className?: string;
 }) {
   const { setReplyingTo, contactName } = useChatReply();
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const handleReply = () => {
     // Extrair nome do sender do conteúdo (formato: **Nome**\nConteúdo)
@@ -391,37 +450,77 @@ export function ChatMessageActions({
     });
   };
 
+  // Não pode editar/deletar se a mensagem já foi lida
+  const canEdit = canEditMessages && isOutgoing && !message.readAt && !message.isDeleted;
+  const canDelete = canDeleteMessages && isOutgoing && !message.readAt && !message.isDeleted;
+
   return (
-    <DropdownMenu onOpenChange={onOpenChange}>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className={cn(
-            "h-6 w-6 rounded-sm hover:bg-transparent! hover:text-current! focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=open]:bg-transparent!",
-            isOutgoing
-              ? "text-foreground/60 dark:text-white/70"
-              : "text-muted-foreground",
-            className,
+    <>
+      <DropdownMenu onOpenChange={onOpenChange}>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn(
+              "h-6 w-6 rounded-sm hover:bg-transparent! hover:text-current! focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=open]:bg-transparent!",
+              isOutgoing
+                ? "text-foreground/60 dark:text-white/70"
+                : "text-muted-foreground",
+              className,
+            )}
+          >
+            <ChevronDown className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent
+          align="end"
+          className="bg-background/95 w-48 backdrop-blur-sm"
+        >
+          <DropdownMenuItem
+            className="cursor-pointer gap-3"
+            onClick={handleReply}
+          >
+            <MessageCircle className="h-4 w-4" />
+            <span>Responder</span>
+          </DropdownMenuItem>
+          <ChatMessageActionStar message={message} />
+          {canEdit && (
+            <DropdownMenuItem
+              className="cursor-pointer gap-3"
+              onSelect={() => setEditDialogOpen(true)}
+            >
+              <Pencil className="h-4 w-4" />
+              <span>Editar</span>
+            </DropdownMenuItem>
           )}
-        >
-          <ChevronDown className="h-4 w-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="end"
-        className="bg-background/95 w-48 backdrop-blur-sm"
-      >
-        <DropdownMenuItem
-          className="cursor-pointer gap-3"
-          onClick={handleReply}
-        >
-          <MessageCircle className="h-4 w-4" />
-          <span>Responder</span>
-        </DropdownMenuItem>
-        <ChatMessageActionStar message={message} />
-      </DropdownMenuContent>
-    </DropdownMenu>
+          {canDelete && (
+            <DropdownMenuItem
+              className="text-destructive focus:text-destructive cursor-pointer gap-3"
+              onSelect={() => setDeleteDialogOpen(true)}
+            >
+              <Trash2 className="h-4 w-4" />
+              <span>Deletar</span>
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {/* Dialogs renderizados FORA do DropdownMenu */}
+      {canEdit && (
+        <EditMessageDialog
+          message={message}
+          open={editDialogOpen}
+          onOpenChange={setEditDialogOpen}
+        />
+      )}
+      {canDelete && (
+        <DeleteMessageDialog
+          message={message}
+          open={deleteDialogOpen}
+          onOpenChange={setDeleteDialogOpen}
+        />
+      )}
+    </>
   );
 }
 
@@ -457,6 +556,154 @@ export function ChatMessageActionStar({ message }: { message: Message }) {
       <Star className={cn("h-4 w-4", message.isStarred && "fill-current")} />
       <span>{message.isStarred ? "Desfavoritar" : "Favoritar"}</span>
     </DropdownMenuItem>
+  );
+}
+
+function EditMessageDialog({
+  message,
+  open,
+  onOpenChange,
+}: {
+  message: Message;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
+  const [editContent, setEditContent] = useState("");
+
+  // Inicializar conteúdo quando abre o dialog
+  useEffect(() => {
+    if (open) {
+      const contentWithoutSignature = message.content.replace(/^\*\*.*?\*\*\n/, "");
+      setEditContent(contentWithoutSignature);
+    }
+  }, [open, message.content]);
+
+  const editMutation = useMutation(
+    trpc.messages.edit.mutationOptions({
+      onSuccess: () => {
+        void queryClient.invalidateQueries({ queryKey: [["messages"]] });
+        onOpenChange(false);
+        toast.success("Mensagem editada");
+      },
+      onError: (error) => {
+        toast.error(error.message || "Erro ao editar mensagem");
+      },
+    }),
+  );
+
+  const handleSave = () => {
+    if (!editContent.trim() || !message.chatId) return;
+
+    editMutation.mutate({
+      id: message.id,
+      timestamp: message.timestamp,
+      chatId: message.chatId,
+      content: editContent.trim(),
+    });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[500px]">
+        <DialogHeader>
+          <DialogTitle>Editar mensagem</DialogTitle>
+          <DialogDescription>
+            Edite o conteúdo da sua mensagem
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 py-4">
+          <Textarea
+            value={editContent}
+            onChange={(e) => setEditContent(e.target.value)}
+            rows={4}
+            className="resize-none"
+            placeholder="Digite sua mensagem..."
+          />
+        </div>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={editMutation.isPending}
+          >
+            Cancelar
+          </Button>
+          <Button
+            onClick={handleSave}
+            disabled={editMutation.isPending || !editContent.trim()}
+          >
+            {editMutation.isPending ? "Salvando..." : "Salvar"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DeleteMessageDialog({
+  message,
+  open,
+  onOpenChange,
+}: {
+  message: Message;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
+
+  const deleteMutation = useMutation(
+    trpc.messages.delete.mutationOptions({
+      onSuccess: () => {
+        void queryClient.invalidateQueries({ queryKey: [["messages"]] });
+        onOpenChange(false);
+        toast.success("Mensagem deletada");
+      },
+      onError: (error) => {
+        toast.error(error.message || "Erro ao deletar mensagem");
+      },
+    }),
+  );
+
+  const handleDelete = () => {
+    if (!message.chatId) return;
+
+    deleteMutation.mutate({
+      id: message.id,
+      timestamp: message.timestamp,
+      chatId: message.chatId,
+    });
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>Deletar mensagem</DialogTitle>
+          <DialogDescription>
+            Tem certeza que deseja deletar esta mensagem? Esta ação não pode ser desfeita.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={deleteMutation.isPending}
+          >
+            Cancelar
+          </Button>
+          <Button
+            variant="destructive"
+            onClick={handleDelete}
+            disabled={deleteMutation.isPending}
+          >
+            {deleteMutation.isPending ? "Deletando..." : "Deletar"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

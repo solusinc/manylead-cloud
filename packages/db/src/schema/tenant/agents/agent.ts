@@ -40,10 +40,17 @@ export const agent = pgTable(
           type: "all" | "specific";
           ids?: string[];
         };
+        messages: {
+          canEdit: boolean;
+          canDelete: boolean;
+        };
+        accessFinishedChats: boolean;
       }>()
       .default({
         departments: { type: "all" },
         channels: { type: "all" },
+        messages: { canEdit: false, canDelete: false },
+        accessFinishedChats: false,
       })
       .notNull(),
 

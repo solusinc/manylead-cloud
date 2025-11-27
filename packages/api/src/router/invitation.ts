@@ -128,17 +128,21 @@ export const invitationRouter = createTRPCRouter({
         .limit(1);
 
       if (!existingAgent) {
-        // Pegar department access do metadata da invitation
+        // Pegar permissões do metadata da invitation
         const metadata = inv[0].metadata as
           | {
               departmentAccess?: "all" | "specific";
               departmentIds?: string[];
+              canManageMessages?: boolean;
+              accessFinishedChats?: boolean;
             }
           | null
           | undefined;
 
         const departmentAccess = metadata?.departmentAccess ?? "all";
         const departmentIds = metadata?.departmentIds ?? [];
+        const canManageMessages = metadata?.canManageMessages ?? false;
+        const accessFinishedChats = metadata?.accessFinishedChats ?? false;
 
         await tenantDb.insert(agent).values({
           userId: ctx.session.user.id,
@@ -149,6 +153,11 @@ export const invitationRouter = createTRPCRouter({
                 ? { type: "specific", ids: departmentIds }
                 : { type: "all" },
             channels: { type: "all" },
+            messages: {
+              canEdit: canManageMessages,
+              canDelete: canManageMessages,
+            },
+            accessFinishedChats,
           },
           isActive: true,
         });
@@ -185,6 +194,8 @@ export const invitationRouter = createTRPCRouter({
         role: z.enum(["owner", "admin", "member"]).default("member"),
         departmentAccess: z.enum(["all", "specific"]).default("all"),
         departmentIds: z.array(z.string()).optional(),
+        canManageMessages: z.boolean().default(false),
+        accessFinishedChats: z.boolean().default(false),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -239,13 +250,15 @@ export const invitationRouter = createTRPCRouter({
         });
       }
 
-      // Atualizar invitation com metadata de department access
+      // Atualizar invitation com metadata de department access e permissões
       await ctx.db
         .update(invitation)
         .set({
           metadata: {
             departmentAccess: input.departmentAccess,
             departmentIds: input.departmentIds ?? [],
+            canManageMessages: input.canManageMessages,
+            accessFinishedChats: input.accessFinishedChats,
           },
         })
         .where(eq(invitation.id, newInvitation.id));

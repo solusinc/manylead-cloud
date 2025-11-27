@@ -43,6 +43,8 @@ export default function Page() {
               role: values.role,
               departmentAccess,
               departmentIds: values.restrictDepartments ? values.departmentIds : [],
+              canManageMessages: values.canManageMessages,
+              accessFinishedChats: values.accessFinishedChats,
             });
           }}
           onSuccessAction={() => {

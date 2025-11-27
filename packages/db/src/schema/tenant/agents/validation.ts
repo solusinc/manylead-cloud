@@ -23,9 +23,16 @@ const channelsPermissionSchema = z.object({
   ids: z.array(z.uuid()).optional(),
 });
 
+const messagesPermissionSchema = z.object({
+  canEdit: z.boolean().default(false),
+  canDelete: z.boolean().default(false),
+});
+
 const permissionsSchema = z.object({
   departments: departmentsPermissionSchema,
   channels: channelsPermissionSchema,
+  messages: messagesPermissionSchema.default({ canEdit: false, canDelete: false }),
+  accessFinishedChats: z.boolean().default(false),
 });
 
 /**
@@ -45,6 +52,8 @@ export const insertAgentSchema = createInsertSchema(agent, {
   permissions: permissionsSchema.default({
     departments: { type: "all" },
     channels: { type: "all" },
+    messages: { canEdit: false, canDelete: false },
+    accessFinishedChats: false,
   }),
 });
 

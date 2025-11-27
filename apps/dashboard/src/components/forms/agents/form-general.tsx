@@ -34,6 +34,8 @@ interface FormValues {
   isActive: boolean;
   restrictDepartments: boolean;
   departmentIds: string[];
+  canManageMessages: boolean;
+  accessFinishedChats: boolean;
 }
 
 const roleLabels = {
@@ -79,6 +81,8 @@ export function FormGeneral({
       isActive: defaultValues.isActive,
       restrictDepartments: defaultValues.restrictDepartments,
       departmentIds: defaultValues.departmentIds,
+      canManageMessages: defaultValues.canManageMessages,
+      accessFinishedChats: defaultValues.accessFinishedChats,
     },
     onSubmit: ({ value }) => {
       if (disabled) return;
@@ -251,6 +255,38 @@ export function FormGeneral({
                     }
                   </form.Subscribe>
                 </>
+              )}
+            </form.Field>
+
+            <form.Field name="canManageMessages">
+              {(field) => (
+                <div className="flex items-center gap-2">
+                  <Switch
+                    id={field.name}
+                    checked={field.state.value}
+                    onCheckedChange={field.handleChange}
+                    disabled={disabled}
+                  />
+                  <Label htmlFor={field.name} className="cursor-pointer font-normal">
+                    Permitir apagar e editar mensagens
+                  </Label>
+                </div>
+              )}
+            </form.Field>
+
+            <form.Field name="accessFinishedChats">
+              {(field) => (
+                <div className="flex items-center gap-2">
+                  <Switch
+                    id={field.name}
+                    checked={field.state.value}
+                    onCheckedChange={field.handleChange}
+                    disabled={disabled}
+                  />
+                  <Label htmlFor={field.name} className="cursor-pointer font-normal">
+                    Permitir acesso a atendimentos finalizados
+                  </Label>
+                </div>
               )}
             </form.Field>
           </FormCardContent>

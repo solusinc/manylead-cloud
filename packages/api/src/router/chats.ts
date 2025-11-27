@@ -330,9 +330,11 @@ export const chatsRouter = createTRPCRouter({
           ...item,
           chat: {
             ...item.chat,
-            // Pending chats não têm unreadCount (ninguém foi atribuído ainda)
-            // Chats atribuídos usam unreadCount do participant (0 se não tiver participant)
-            unreadCount: item.chat.status === "pending" ? 0 : (item.participant?.unreadCount ?? 0),
+            // Pending chats usam unreadCount do chat (ainda não tem participant)
+            // Chats atribuídos usam unreadCount do participant
+            unreadCount: item.chat.status === "pending"
+              ? item.chat.unreadCount
+              : (item.participant?.unreadCount ?? 0),
           },
           tags: tagsByChat.get(item.chat.id) ?? [],
           assignedAgentName: item.assignedAgent?.userId

@@ -33,6 +33,7 @@ export function ChatWindow({
   const queryClient = useQueryClient();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const hasMarkedAsReadRef = useRef(false);
+  const isMountedRef = useRef(true);
   const { showAccessDeniedModal } = useAccessDeniedModal();
 
   // Buscar chat da API
@@ -75,6 +76,14 @@ export function ChatWindow({
     hasMarkedAsReadRef.current = false;
   }, [chatId]);
 
+  // Controlar estado de montagem do componente
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   // Mutation para marcar todas as mensagens como lidas
   const markAllMessagesAsReadMutation = useMutation(
     trpc.messages.markAllAsRead.mutationOptions(),
@@ -103,7 +112,15 @@ export function ChatWindow({
     if (!socket.isConnected || !chatItem) return;
 
     const unsubscribe = socket.onMessageNew((event) => {
-      // Se a mensagem é para este chat, marcar como lido automaticamente
+      // Verificar se componente ainda está montado
+      if (!isMountedRef.current) return;
+
+      // Verificar em tempo real se ainda está no chat (não depender de params que pode estar desatualizado)
+      const currentPath = window.location.pathname;
+      const isInThisChat = currentPath.includes(`/chats/${chatId}`);
+
+      if (!isInThisChat) return;
+
       const messageChatId = event.message.chatId as string;
       if (messageChatId === chatId) {
         // Marcar o chat como lido (zera unreadCount)
@@ -120,7 +137,7 @@ export function ChatWindow({
     });
 
     return unsubscribe;
-  }, [socket, socket.isConnected, chatId, chatItem, markAsReadMutation, markAllMessagesAsReadMutation]);
+  }, [socket.isConnected, chatId, chatItem, markAsReadMutation, markAllMessagesAsReadMutation]);
 
   // Detectar quando o chat é atribuído para outro agent (APENAS para members)
   useEffect(() => {

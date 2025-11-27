@@ -377,6 +377,35 @@ export const messagesRouter = createTRPCRouter({
       // Extrair repliedToMessageId do metadata (se existir)
       const repliedToMessageId = input.metadata?.repliedToMessageId as string | undefined;
 
+      // ANTES de criar a mensagem, verificar se é a primeira mensagem TEXT
+      // (para depois criar o chat espelhado na org target)
+      const existingTextMessages = await ctx.tenantDb
+        .select()
+        .from(message)
+        .where(
+          and(
+            eq(message.chatId, input.chatId),
+            eq(message.messageType, "text"),
+          ),
+        )
+        .limit(1);
+
+      const isFirstTextMessage = existingTextMessages.length === 0;
+
+      // Buscar chat para verificar se é interno (também antes de criar a mensagem)
+      const [chatRecord] = await ctx.tenantDb
+        .select()
+        .from(chat)
+        .where(eq(chat.id, input.chatId))
+        .limit(1);
+
+      if (!chatRecord) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Chat não encontrado",
+        });
+      }
+
       // Criar mensagem (drizzle gera ID automaticamente)
       const [newMessage] = await ctx.tenantDb
         .insert(message)
@@ -405,22 +434,8 @@ export const messagesRouter = createTRPCRouter({
         });
       }
 
-      // Buscar chat para verificar se é interno
-      const [chatRecord] = await ctx.tenantDb
-        .select()
-        .from(chat)
-        .where(eq(chat.id, input.chatId))
-        .limit(1);
-
-      if (!chatRecord) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Chat não encontrado",
-        });
-      }
-
-      // Se for a PRIMEIRA MENSAGEM de um chat cross-org, criar chat espelhado na org target
-      if (chatRecord.messageSource === "internal" && chatRecord.totalMessages === 0) {
+      // Se for a PRIMEIRA MENSAGEM TEXT de um chat cross-org, criar chat espelhado na org target
+      if (chatRecord.messageSource === "internal" && isFirstTextMessage) {
         // Buscar contact para pegar targetOrganizationId
         const [contactRecord] = await ctx.tenantDb
           .select()
@@ -545,7 +560,8 @@ export const messagesRouter = createTRPCRouter({
         .where(eq(chat.id, input.chatId));
 
       // Se for mensagem SUBSEQUENTE de um chat cross-org, espelhar na org target
-      if (chatRecord.messageSource === "internal" && chatRecord.totalMessages >= 1) {
+      // (Não espelhar se já espelhamos na primeira mensagem TEXT acima)
+      if (chatRecord.messageSource === "internal" && !isFirstTextMessage) {
         // Buscar contact para pegar targetOrganizationId
         const [contactRecord] = await ctx.tenantDb
           .select()
@@ -903,7 +919,7 @@ export const messagesRouter = createTRPCRouter({
             .limit(1);
 
           if (targetContact) {
-            // Buscar chat espelhado na org remetente
+            // Buscar chat espelhado na org remetente (apenas chats ativos)
             const [targetChat] = await targetTenantDb
               .select()
               .from(chat)
@@ -911,6 +927,7 @@ export const messagesRouter = createTRPCRouter({
                 and(
                   eq(chat.contactId, targetContact.id),
                   eq(chat.messageSource, "internal"),
+                  or(eq(chat.status, "open"), eq(chat.status, "pending")),
                 ),
               )
               .limit(1);
@@ -1030,20 +1047,321 @@ export const messagesRouter = createTRPCRouter({
     }),
 
   /**
-   * Deletar mensagem (soft delete)
+   * Editar mensagem
+   * Apenas mensagens do próprio agent podem ser editadas
+   * Não pode editar se a mensagem já foi lida pelo destinatário
    */
-  delete: ownerProcedure
+  edit: memberProcedure
     .input(
       z.object({
         id: z.string().uuid(),
         timestamp: z.date(),
+        chatId: z.string().uuid(),
+        content: z.string().min(1).max(4000),
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      const organizationId = ctx.session.session.activeOrganizationId;
+      if (!organizationId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Nenhuma organização ativa",
+        });
+      }
+
+      const userId = ctx.session.user.id;
+
+      // Buscar agent do usuário logado
+      const [currentAgent] = await ctx.tenantDb
+        .select()
+        .from(agent)
+        .where(eq(agent.userId, userId))
+        .limit(1);
+
+      if (!currentAgent) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Agent não encontrado",
+        });
+      }
+
+      // Verificar se o agent tem permissão para editar mensagens
+      if (!currentAgent.permissions.messages.canEdit) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Você não tem permissão para editar mensagens",
+        });
+      }
+
+      // Buscar mensagem
+      const [existingMessage] = await ctx.tenantDb
+        .select()
+        .from(message)
+        .where(
+          and(eq(message.id, input.id), eq(message.timestamp, input.timestamp)),
+        )
+        .limit(1);
+
+      if (!existingMessage) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Mensagem não encontrada",
+        });
+      }
+
+      // Verificar se a mensagem pertence ao agent logado
+      if (existingMessage.senderId !== currentAgent.id) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Você só pode editar suas próprias mensagens",
+        });
+      }
+
+      // Verificar se a mensagem já foi lida
+      if (existingMessage.readAt) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Não é possível editar mensagens que já foram lidas",
+        });
+      }
+
+      // Verificar se a mensagem já foi deletada
+      if (existingMessage.isDeleted) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Não é possível editar mensagens deletadas",
+        });
+      }
+
+      const now = new Date();
+
+      // Atualizar mensagem
+      const [updated] = await ctx.tenantDb
+        .update(message)
+        .set({
+          content: input.content,
+          isEdited: true,
+          editedAt: now,
+        })
+        .where(
+          and(eq(message.id, input.id), eq(message.timestamp, input.timestamp)),
+        )
+        .returning();
+
+      if (!updated) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Erro ao editar mensagem",
+        });
+      }
+
+      // Emitir evento socket para atualizar UI na organização atual
+      await publishMessageEvent(
+        {
+          type: "message:updated",
+          organizationId,
+          chatId: input.chatId,
+          messageId: updated.id,
+          data: {
+            message: updated as unknown as Record<string, unknown>,
+          },
+        },
+        env.REDIS_URL,
+      );
+
+      // Se for mensagem interna, espelhar edição na org de destino
+      if (updated.messageSource === "internal") {
+        // Buscar chat para verificar se é cross-org
+        const [chatRecord] = await ctx.tenantDb
+          .select()
+          .from(chat)
+          .where(eq(chat.id, input.chatId))
+          .limit(1);
+
+        if (chatRecord) {
+          // Buscar contact para pegar targetOrganizationId
+          const [contactRecord] = await ctx.tenantDb
+            .select()
+            .from(contact)
+            .where(eq(contact.id, chatRecord.contactId))
+            .limit(1);
+
+          if (contactRecord?.metadata?.targetOrganizationId) {
+            const targetOrgId = contactRecord.metadata.targetOrganizationId;
+
+            const { tenantManager } = await import("../trpc");
+            const targetTenantDb = await tenantManager.getConnection(targetOrgId);
+
+            // Buscar contact na org target que representa a org source
+            const targetContacts = await targetTenantDb
+              .select()
+              .from(contact)
+              .where(eq(contact.organizationId, targetOrgId));
+
+            const sourceContact = targetContacts.find(
+              (c) =>
+                c.metadata?.source === "internal" &&
+                c.metadata.targetOrganizationId === organizationId,
+            );
+
+            if (sourceContact) {
+              // Buscar chat espelhado na org target
+              const mirroredChats = await targetTenantDb
+                .select()
+                .from(chat)
+                .where(
+                  and(
+                    eq(chat.messageSource, "internal"),
+                    eq(chat.contactId, sourceContact.id),
+                    or(eq(chat.status, "pending"), eq(chat.status, "open")),
+                  ),
+                )
+                .limit(1);
+
+              const mirroredChat = mirroredChats[0];
+
+              if (mirroredChat) {
+                // Buscar mensagem espelhada pelo timestamp (mensagens têm mesmo timestamp)
+                const [mirroredMessage] = await targetTenantDb
+                  .select()
+                  .from(message)
+                  .where(
+                    and(
+                      eq(message.chatId, mirroredChat.id),
+                      eq(message.timestamp, updated.timestamp),
+                    ),
+                  )
+                  .limit(1);
+
+                if (mirroredMessage) {
+                  // Atualizar mensagem espelhada
+                  const [updatedMirrored] = await targetTenantDb
+                    .update(message)
+                    .set({
+                      content: input.content,
+                      isEdited: true,
+                      editedAt: now,
+                    })
+                    .where(eq(message.id, mirroredMessage.id))
+                    .returning();
+
+                  // Emitir evento na org target
+                  if (updatedMirrored) {
+                    await publishMessageEvent(
+                      {
+                        type: "message:updated",
+                        organizationId: targetOrgId,
+                        chatId: mirroredChat.id,
+                        messageId: updatedMirrored.id,
+                        data: {
+                          message: updatedMirrored as unknown as Record<string, unknown>,
+                        },
+                      },
+                      env.REDIS_URL,
+                    );
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      return updated;
+    }),
+
+  /**
+   * Deletar mensagem (soft delete)
+   * Apenas mensagens do próprio agent podem ser deletadas
+   * Não pode deletar se a mensagem já foi lida pelo destinatário
+   */
+  delete: memberProcedure
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        timestamp: z.date(),
+        chatId: z.string().uuid(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const organizationId = ctx.session.session.activeOrganizationId;
+      if (!organizationId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Nenhuma organização ativa",
+        });
+      }
+
+      const userId = ctx.session.user.id;
+
+      // Buscar agent do usuário logado
+      const [currentAgent] = await ctx.tenantDb
+        .select()
+        .from(agent)
+        .where(eq(agent.userId, userId))
+        .limit(1);
+
+      if (!currentAgent) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Agent não encontrado",
+        });
+      }
+
+      // Verificar se o agent tem permissão para deletar mensagens
+      if (!currentAgent.permissions.messages.canDelete) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Você não tem permissão para deletar mensagens",
+        });
+      }
+
+      // Buscar mensagem
+      const [existingMessage] = await ctx.tenantDb
+        .select()
+        .from(message)
+        .where(
+          and(eq(message.id, input.id), eq(message.timestamp, input.timestamp)),
+        )
+        .limit(1);
+
+      if (!existingMessage) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Mensagem não encontrada",
+        });
+      }
+
+      // Verificar se a mensagem pertence ao agent logado
+      if (existingMessage.senderId !== currentAgent.id) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Você só pode deletar suas próprias mensagens",
+        });
+      }
+
+      // Verificar se a mensagem já foi lida
+      if (existingMessage.readAt) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Não é possível deletar mensagens que já foram lidas",
+        });
+      }
+
+      // Verificar se a mensagem já foi deletada
+      if (existingMessage.isDeleted) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Esta mensagem já foi deletada",
+        });
+      }
+
+      // Soft delete
       const [deleted] = await ctx.tenantDb
         .update(message)
         .set({
           isDeleted: true,
+          content: "", // Limpar conteúdo
         })
         .where(
           and(eq(message.id, input.id), eq(message.timestamp, input.timestamp)),
@@ -1052,9 +1370,120 @@ export const messagesRouter = createTRPCRouter({
 
       if (!deleted) {
         throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Mensagem não encontrada",
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Erro ao deletar mensagem",
         });
+      }
+
+      // Emitir evento socket para atualizar UI na organização atual
+      await publishMessageEvent(
+        {
+          type: "message:updated",
+          organizationId,
+          chatId: input.chatId,
+          messageId: deleted.id,
+          data: {
+            message: deleted as unknown as Record<string, unknown>,
+          },
+        },
+        env.REDIS_URL,
+      );
+
+      // Se for mensagem interna, espelhar exclusão na org de destino
+      if (deleted.messageSource === "internal") {
+        // Buscar chat para verificar se é cross-org
+        const [chatRecord] = await ctx.tenantDb
+          .select()
+          .from(chat)
+          .where(eq(chat.id, input.chatId))
+          .limit(1);
+
+        if (chatRecord) {
+          // Buscar contact para pegar targetOrganizationId
+          const [contactRecord] = await ctx.tenantDb
+            .select()
+            .from(contact)
+            .where(eq(contact.id, chatRecord.contactId))
+            .limit(1);
+
+          if (contactRecord?.metadata?.targetOrganizationId) {
+            const targetOrgId = contactRecord.metadata.targetOrganizationId;
+
+            const { tenantManager } = await import("../trpc");
+            const targetTenantDb = await tenantManager.getConnection(targetOrgId);
+
+            // Buscar contact na org target que representa a org source
+            const targetContacts = await targetTenantDb
+              .select()
+              .from(contact)
+              .where(eq(contact.organizationId, targetOrgId));
+
+            const sourceContact = targetContacts.find(
+              (c) =>
+                c.metadata?.source === "internal" &&
+                c.metadata.targetOrganizationId === organizationId,
+            );
+
+            if (sourceContact) {
+              // Buscar chat espelhado na org target
+              const mirroredChats = await targetTenantDb
+                .select()
+                .from(chat)
+                .where(
+                  and(
+                    eq(chat.messageSource, "internal"),
+                    eq(chat.contactId, sourceContact.id),
+                    or(eq(chat.status, "pending"), eq(chat.status, "open")),
+                  ),
+                )
+                .limit(1);
+
+              const mirroredChat = mirroredChats[0];
+
+              if (mirroredChat) {
+                // Buscar mensagem espelhada pelo timestamp
+                const [mirroredMessage] = await targetTenantDb
+                  .select()
+                  .from(message)
+                  .where(
+                    and(
+                      eq(message.chatId, mirroredChat.id),
+                      eq(message.timestamp, deleted.timestamp),
+                    ),
+                  )
+                  .limit(1);
+
+                if (mirroredMessage) {
+                  // Deletar mensagem espelhada
+                  const [deletedMirrored] = await targetTenantDb
+                    .update(message)
+                    .set({
+                      isDeleted: true,
+                      content: "",
+                    })
+                    .where(eq(message.id, mirroredMessage.id))
+                    .returning();
+
+                  // Emitir evento na org target
+                  if (deletedMirrored) {
+                    await publishMessageEvent(
+                      {
+                        type: "message:updated",
+                        organizationId: targetOrgId,
+                        chatId: mirroredChat.id,
+                        messageId: deletedMirrored.id,
+                        data: {
+                          message: deletedMirrored as unknown as Record<string, unknown>,
+                        },
+                      },
+                      env.REDIS_URL,
+                    );
+                  }
+                }
+              }
+            }
+          }
+        }
       }
 
       return { success: true };

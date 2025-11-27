@@ -46,6 +46,8 @@ export function FormAgentUpdate() {
           agent.permissions.departments.type === "specific"
             ? agent.permissions.departments.ids ?? []
             : [],
+        canManageMessages: agent.permissions.messages.canEdit,
+        accessFinishedChats: agent.permissions.accessFinishedChats,
       }}
       onSubmit={async (values) => {
         const departmentAccess = values.restrictDepartments ? "specific" : "all";
@@ -61,6 +63,11 @@ export function FormAgentUpdate() {
                 departmentAccess === "specific"
                   ? { type: "specific", ids: values.departmentIds }
                   : { type: "all" },
+              messages: {
+                canEdit: values.canManageMessages,
+                canDelete: values.canManageMessages,
+              },
+              accessFinishedChats: values.accessFinishedChats,
             },
           },
         });

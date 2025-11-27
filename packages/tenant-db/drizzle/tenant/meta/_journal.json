@@ -57,6 +57,13 @@
       "when": 1764203756683,
       "tag": "0007_nostalgic_frightful_four",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1764262110483,
+      "tag": "0008_amused_gorilla_man",
+      "breakpoints": true
     }
   ]
 }

@@ -1,0 +1,2 @@
+ALTER TABLE "agent" ALTER COLUMN "permissions" SET DEFAULT '{"departments":{"type":"all"},"channels":{"type":"all"},"messages":{"canEdit":false,"canDelete":false},"accessFinishedChats":false}'::jsonb;--> statement-breakpoint
+ALTER TABLE "message" ADD COLUMN "edited_at" timestamp;
