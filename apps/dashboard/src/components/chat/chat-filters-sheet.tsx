@@ -4,17 +4,16 @@ import { Button } from "@manylead/ui/button";
 import { Label } from "@manylead/ui/label";
 import { RadioGroup, RadioGroupItem } from "@manylead/ui/radio-group";
 
-import { useChatFiltersStore } from "~/stores/use-chat-filters-store";
-
 import type { StatusFilter } from "~/stores/use-chat-filters-store";
+import { useChatFiltersStore } from "~/stores/use-chat-filters-store";
 import {
-  FilterAccordion,
-  PeriodFilterSection,
   AgentsFilterSection,
   DepartmentsFilterSection,
   EndingsFilterSection,
-  TagsFilterSection,
+  FilterAccordion,
+  PeriodFilterSection,
   ProvidersFilterSection,
+  TagsFilterSection,
 } from "./filters";
 
 export function ChatFiltersSheet() {
@@ -46,41 +45,55 @@ export function ChatFiltersSheet() {
     <>
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-background/80 backdrop-blur-sm z-40"
+        className="bg-background/80 absolute inset-0 z-40 backdrop-blur-sm"
         onClick={close}
       />
 
       {/* Sheet */}
-      <div className="absolute inset-0 z-50 bg-background flex flex-col">
+      <div className="bg-background absolute inset-0 z-50 flex flex-col">
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-2 pb-24">
+        <div className="flex-1 space-y-2 overflow-y-auto px-6 pb-24">
           {/* Situação */}
           <FilterAccordion title="Situação" defaultOpen>
             <RadioGroup
               value={headerFilters.status}
-              onValueChange={(v) => setHeaderFilter("status", v as StatusFilter)}
+              onValueChange={(v) =>
+                setHeaderFilter("status", v as StatusFilter)
+              }
             >
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="all" id="status-all" />
-                <Label htmlFor="status-all" className="font-normal cursor-pointer">
+                <Label
+                  htmlFor="status-all"
+                  className="cursor-pointer font-normal"
+                >
                   Todas
                 </Label>
               </div>
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="open" id="status-open" />
-                <Label htmlFor="status-open" className="font-normal cursor-pointer">
+                <Label
+                  htmlFor="status-open"
+                  className="cursor-pointer font-normal"
+                >
                   Em atendimento
                 </Label>
               </div>
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="closed" id="status-closed" />
-                <Label htmlFor="status-closed" className="font-normal cursor-pointer">
+                <Label
+                  htmlFor="status-closed"
+                  className="cursor-pointer font-normal"
+                >
                   Finalizadas
                 </Label>
               </div>
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="pending" id="status-pending" />
-                <Label htmlFor="status-pending" className="font-normal cursor-pointer">
+                <Label
+                  htmlFor="status-pending"
+                  className="cursor-pointer font-normal"
+                >
                   Aguardando atendimento
                 </Label>
               </div>
@@ -125,12 +138,16 @@ export function ChatFiltersSheet() {
         </div>
 
         {/* Footer com botões */}
-        <div className="border-t bg-background h-14 flex items-center px-4">
-          <div className="flex gap-3 w-full">
+        <div className="bg-background flex h-14 items-center border-t px-4">
+          <div className="flex w-full gap-3">
             <Button onClick={handleApply} className="flex-1">
               Aplicar
             </Button>
-            <Button onClick={handleClearFilters} variant="ghost" className="text-muted-foreground">
+            <Button
+              onClick={handleClearFilters}
+              variant="ghost"
+              className="text-muted-foreground"
+            >
               Remover filtros
             </Button>
           </div>

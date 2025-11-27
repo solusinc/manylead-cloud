@@ -1,6 +1,8 @@
 "use client";
 
 import type { LucideIcon } from "lucide-react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 import {
   SidebarGroup,
@@ -9,8 +11,6 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@manylead/ui/sidebar";
-import Link from "next/link";
-import { usePathname } from "next/navigation";
 
 export function NavOverview({
   items,

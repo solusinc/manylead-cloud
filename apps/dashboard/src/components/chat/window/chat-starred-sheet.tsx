@@ -108,7 +108,8 @@ function StarredMessageItem({
 }: StarredMessageItemProps) {
   // Extrair nome do agente do conteúdo formatado **Nome**\nConteúdo
   const extractNameAndContent = (content: string) => {
-    const match = content.match(/^\*\*(.+?)\*\*\n([\s\S]*)$/);
+    const regex = /^\*\*(.+?)\*\*\n([\s\S]*)$/;
+    const match = regex.exec(content);
     if (match) {
       return {
         name: match[1],

@@ -76,7 +76,7 @@ export function ChatHistorySheet({
             <div className="divide-y">
               {historyData?.items.map((item) => (
                 <HistoryItem
-                  key={`${item.id}-${item.createdAt}`}
+                  key={`${item.id}-${item.createdAt.toISOString()}`}
                   item={item}
                   onClick={() => handleItemClick(item.id)}
                 />

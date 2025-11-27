@@ -16,6 +16,7 @@ import { publishChatEvent } from "@manylead/shared";
 
 import { env } from "../env";
 import {
+  adminProcedure,
   createTRPCRouter,
   memberProcedure,
   protectedProcedure,
@@ -366,5 +367,123 @@ export const contactsRouter = createTRPCRouter({
       }
 
       return { success: true };
+    }),
+
+  /**
+   * Importar contatos em massa
+   * Somente admins e owners podem importar
+   *
+   * Regras:
+   * - Telefone obrigatório no formato +5511988884444
+   * - Nome obrigatório
+   * - Colunas extras viram customFields (JSONB)
+   * - Limite: 2.000 contatos por vez
+   * - overwrite: se true, atualiza contatos existentes
+   */
+  importContacts: adminProcedure
+    .input(
+      z.object({
+        contacts: z
+          .array(
+            z.object({
+              phoneNumber: z
+                .string()
+                .regex(
+                  /^\+\d{10,15}$/,
+                  "Formato inválido. Use +5511988884444",
+                ),
+              name: z.string().min(1, "Nome é obrigatório"),
+              customFields: z.record(z.string(), z.string()).optional(),
+            }),
+          )
+          .min(1, "Pelo menos um contato é necessário")
+          .max(2000, "Limite de 2.000 contatos por importação"),
+        overwrite: z.boolean().default(false),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const organizationId = ctx.session.session.activeOrganizationId;
+      if (!organizationId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Nenhuma organização ativa",
+        });
+      }
+
+      // Buscar contatos existentes para verificar duplicados
+      const existingContacts = await ctx.tenantDb
+        .select({ id: contact.id, phoneNumber: contact.phoneNumber })
+        .from(contact)
+        .where(eq(contact.organizationId, organizationId));
+
+      const existingPhoneMap = new Map(
+        existingContacts
+          .filter((c) => c.phoneNumber)
+          .map((c) => [c.phoneNumber, c.id]),
+      );
+
+      // Separar contatos novos e existentes
+      const contactsToInsert: typeof input.contacts = [];
+      const contactsToUpdate: (typeof input.contacts[0] & { id: string })[] =
+        [];
+      const seenPhones = new Set<string>();
+
+      for (const c of input.contacts) {
+        // Ignorar duplicados dentro do próprio input
+        if (seenPhones.has(c.phoneNumber)) {
+          continue;
+        }
+        seenPhones.add(c.phoneNumber);
+
+        const existingId = existingPhoneMap.get(c.phoneNumber);
+        if (existingId) {
+          if (input.overwrite) {
+            contactsToUpdate.push({ ...c, id: existingId });
+          }
+          // Se não for overwrite, simplesmente ignora
+        } else {
+          contactsToInsert.push(c);
+        }
+      }
+
+      // Inserir novos contatos
+      if (contactsToInsert.length > 0) {
+        const values = contactsToInsert.map((c) => ({
+          organizationId,
+          phoneNumber: c.phoneNumber,
+          name: c.name,
+          customFields: c.customFields ?? null,
+          metadata: {
+            source: "manual" as const,
+            firstMessageAt: new Date(),
+          },
+        }));
+
+        await ctx.tenantDb.insert(contact).values(values);
+      }
+
+      // Atualizar contatos existentes (se overwrite = true)
+      if (contactsToUpdate.length > 0) {
+        for (const c of contactsToUpdate) {
+          await ctx.tenantDb
+            .update(contact)
+            .set({
+              name: c.name,
+              customFields: c.customFields ?? null,
+              updatedAt: new Date(),
+            })
+            .where(eq(contact.id, c.id));
+        }
+      }
+
+      return {
+        imported: contactsToInsert.length,
+        updated: contactsToUpdate.length,
+        skipped:
+          input.contacts.length -
+          contactsToInsert.length -
+          contactsToUpdate.length,
+        total: input.contacts.length,
+      };
     }),
 });

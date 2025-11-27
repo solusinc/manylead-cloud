@@ -1,0 +1,23 @@
+import { HydrateClient, getQueryClient, trpc } from "~/lib/trpc/server";
+import type { SearchParams } from "nuqs";
+import { Client } from "./client";
+import { searchParamsCache } from "./search-params";
+
+export default async function Page({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
+  const queryClient = getQueryClient();
+
+  await searchParamsCache.parse(searchParams);
+  await queryClient.prefetchQuery(
+    trpc.contacts.list.queryOptions({ limit: 50, offset: 0 }),
+  );
+
+  return (
+    <HydrateClient>
+      <Client />
+    </HydrateClient>
+  );
+}

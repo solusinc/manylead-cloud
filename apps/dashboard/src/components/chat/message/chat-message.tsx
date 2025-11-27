@@ -1,9 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { format } from "date-fns";
-import { Check, CheckCheck, Clock, MessageCircle, Star, ChevronDown, ArrowRightLeft, Trash2 } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { format } from "date-fns";
+import {
+  ArrowRightLeft,
+  Check,
+  CheckCheck,
+  ChevronDown,
+  Clock,
+  MessageCircle,
+  Star,
+  Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { cn } from "@manylead/ui";
@@ -14,6 +23,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@manylead/ui/dropdown-menu";
+
 import { useTRPC } from "~/lib/trpc/react";
 import { useChatReply } from "../providers/chat-reply-provider";
 
@@ -47,7 +57,7 @@ export function ChatMessage({
     <div
       data-message-id={message.id}
       className={cn(
-        "mb-2 flex gap-2 group relative scroll-mt-20",
+        "group relative mb-2 flex scroll-mt-20 gap-2",
         isOutgoing ? "justify-end" : "justify-start",
         className,
       )}
@@ -79,15 +89,18 @@ export function ChatMessageBubble({
   className?: string;
 }) {
   // Extrair dados da mensagem respondida do metadata
-  const repliedMessage = message.metadata && message.repliedToMessageId ? {
-    content: message.metadata.repliedToContent as string,
-    senderName: message.metadata.repliedToSender as string,
-  } : null;
+  const repliedMessage =
+    message.metadata && message.repliedToMessageId
+      ? {
+          content: message.metadata.repliedToContent as string,
+          senderName: message.metadata.repliedToSender as string,
+        }
+      : null;
 
   return (
     <div
       className={cn(
-        "max-w-[280px] sm:max-w-md md:max-w-lg lg:max-w-xl rounded-2xl relative overflow-hidden",
+        "relative max-w-[280px] overflow-hidden rounded-2xl sm:max-w-md md:max-w-lg lg:max-w-xl",
         repliedMessage ? "px-2 py-1.5" : "px-4 py-2",
         isOutgoing
           ? "bg-msg-outgoing rounded-br-sm"
@@ -100,11 +113,15 @@ export function ChatMessageBubble({
           className="absolute top-1 right-1 rounded-full p-0.5 transition-all duration-200"
           style={{
             backgroundImage: isOutgoing
-              ? 'radial-gradient(circle at 66% 25%, var(--msg-outgoing) 0%, var(--msg-outgoing) 55%, transparent 70%)'
-              : 'radial-gradient(circle at 66% 25%, var(--msg-incoming) 0%, var(--msg-incoming) 55%, transparent 70%)'
+              ? "radial-gradient(circle at 66% 25%, var(--msg-outgoing) 0%, var(--msg-outgoing) 55%, transparent 70%)"
+              : "radial-gradient(circle at 66% 25%, var(--msg-incoming) 0%, var(--msg-incoming) 55%, transparent 70%)",
           }}
         >
-          <ChatMessageActions message={message} isOutgoing={isOutgoing} onOpenChange={onMenuOpenChange} />
+          <ChatMessageActions
+            message={message}
+            isOutgoing={isOutgoing}
+            onOpenChange={onMenuOpenChange}
+          />
         </div>
       )}
 
@@ -133,7 +150,9 @@ export function ChatMessageBubble({
  * Scroll para uma mensagem específica e destacá-la
  */
 function scrollToMessage(messageId: string) {
-  const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
+  const messageElement = document.querySelector(
+    `[data-message-id="${messageId}"]`,
+  );
   if (messageElement) {
     messageElement.scrollIntoView({ behavior: "smooth", block: "center" });
 
@@ -167,9 +186,10 @@ export function ChatMessageReplyPreview({
   const cleanContent = content.replace(/^\*\*.*?\*\*\n/, "");
 
   // Truncar conteúdo se for muito longo
-  const truncatedContent = cleanContent.length > 50
-    ? `${cleanContent.substring(0, 50)}...`
-    : cleanContent;
+  const truncatedContent =
+    cleanContent.length > 50
+      ? `${cleanContent.substring(0, 50)}...`
+      : cleanContent;
 
   // Se for internal, mostrar: OrgName + instanceCode / AgentName / Content
   // Se for WhatsApp, mostrar: ContactName / Content
@@ -187,51 +207,64 @@ export function ChatMessageReplyPreview({
       className={cn(
         "mb-1.5 rounded-md border-l-4 bg-black/10 px-2 py-1 dark:bg-white/10",
         isOutgoing ? "border-primary" : "border-primary/70",
-        repliedToMessageId && "cursor-pointer hover:bg-black/20 dark:hover:bg-white/20 transition-colors",
+        repliedToMessageId &&
+          "cursor-pointer transition-colors hover:bg-black/20 dark:hover:bg-white/20",
         className,
       )}
     >
       {isInternal ? (
         <>
           {/* Linha 1: Nome da Org + instanceCode */}
-          <div className="flex items-center gap-1.5 mb-1">
-            <p className={cn(
-              "text-xs font-semibold",
-              isOutgoing ? "text-primary dark:text-primary" : "text-primary/90"
-            )}>
+          <div className="mb-1 flex items-center gap-1.5">
+            <p
+              className={cn(
+                "text-xs font-semibold",
+                isOutgoing
+                  ? "text-primary dark:text-primary"
+                  : "text-primary/90",
+              )}
+            >
               {organizationName}
             </p>
             {instanceCode && (
-              <span className={cn(
-                "text-[10px] opacity-60",
-                isOutgoing && "dark:text-white/60"
-              )}>
+              <span
+                className={cn(
+                  "text-[10px] opacity-60",
+                  isOutgoing && "dark:text-white/60",
+                )}
+              >
                 {instanceCode}
               </span>
             )}
           </div>
           {/* Linha 2: Nome do agente */}
-          <p className={cn(
-            "text-[11px] opacity-70",
-            isOutgoing && "dark:text-white/70"
-          )}>
+          <p
+            className={cn(
+              "text-[11px] opacity-70",
+              isOutgoing && "dark:text-white/70",
+            )}
+          >
             {senderName}
           </p>
         </>
       ) : (
         /* WhatsApp: apenas nome do contato */
-        <p className={cn(
-          "text-xs font-semibold",
-          isOutgoing ? "text-primary dark:text-primary" : "text-primary/90"
-        )}>
+        <p
+          className={cn(
+            "text-xs font-semibold",
+            isOutgoing ? "text-primary dark:text-primary" : "text-primary/90",
+          )}
+        >
           {senderName}
         </p>
       )}
       {/* Linha 3 (ou 2 se WhatsApp): Conteúdo */}
-      <p className={cn(
-        "text-xs opacity-80 truncate",
-        isOutgoing && "dark:text-white/80"
-      )}>
+      <p
+        className={cn(
+          "truncate text-xs opacity-80",
+          isOutgoing && "dark:text-white/80",
+        )}
+      >
         {truncatedContent}
       </p>
     </div>
@@ -263,9 +296,9 @@ export function ChatMessageContent({
   return (
     <p
       className={cn(
-        "break-words text-sm whitespace-pre-wrap overflow-wrap-anywhere",
+        "overflow-wrap-anywhere text-sm break-words whitespace-pre-wrap",
         isOutgoing && "dark:text-white",
-        className
+        className,
       )}
     >
       {renderContent(content)}
@@ -365,16 +398,24 @@ export function ChatMessageActions({
           variant="ghost"
           size="icon"
           className={cn(
-            "h-6 w-6 rounded-sm hover:!bg-transparent hover:!text-current focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=open]:!bg-transparent",
-            isOutgoing ? "text-foreground/60 dark:text-white/70" : "text-muted-foreground",
-            className
+            "h-6 w-6 rounded-sm hover:bg-transparent! hover:text-current! focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=open]:bg-transparent!",
+            isOutgoing
+              ? "text-foreground/60 dark:text-white/70"
+              : "text-muted-foreground",
+            className,
           )}
         >
           <ChevronDown className="h-4 w-4" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-48 bg-background/95 backdrop-blur-sm">
-        <DropdownMenuItem className="gap-3 cursor-pointer" onClick={handleReply}>
+      <DropdownMenuContent
+        align="end"
+        className="bg-background/95 w-48 backdrop-blur-sm"
+      >
+        <DropdownMenuItem
+          className="cursor-pointer gap-3"
+          onClick={handleReply}
+        >
           <MessageCircle className="h-4 w-4" />
           <span>Responder</span>
         </DropdownMenuItem>
@@ -409,7 +450,7 @@ export function ChatMessageActionStar({ message }: { message: Message }) {
 
   return (
     <DropdownMenuItem
-      className="gap-3 cursor-pointer"
+      className="cursor-pointer gap-3"
       onClick={handleToggleStar}
       disabled={toggleStarMutation.isPending}
     >
@@ -435,24 +476,27 @@ export function ChatMessageComment({
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   return (
-    <div className={cn("mb-4 flex justify-center group", className)}>
+    <div className={cn("group mb-4 flex justify-center", className)}>
       <div
-        className="flex items-start gap-2 rounded-lg bg-emerald-50 dark:bg-emerald-950/30 px-4 py-3 text-sm shadow-sm max-w-2xl relative"
+        className="relative flex max-w-2xl items-start gap-2 rounded-lg bg-emerald-50 px-4 py-3 text-sm shadow-sm dark:bg-emerald-950/30"
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
-        <MessageCircle className="h-4 w-4 mt-0.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+        <MessageCircle className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
         <div className="flex-1 space-y-1">
           <p className="font-semibold text-emerald-700 dark:text-emerald-300">
             {agentName ?? "Agente"}
           </p>
-          <p className="text-foreground whitespace-pre-wrap">{message.content}</p>
+          <p className="text-foreground whitespace-pre-wrap">
+            {message.content}
+          </p>
         </div>
         {(isHovered || isMenuOpen) && (
-          <div
-            className="absolute top-1 right-1 rounded-full p-0.5 transition-all duration-200 bg-emerald-50/50 dark:bg-emerald-950/50"
-          >
-            <ChatCommentActions message={message} onOpenChange={setIsMenuOpen} />
+          <div className="absolute top-1 right-1 rounded-full bg-emerald-50/50 p-0.5 transition-all duration-200 dark:bg-emerald-950/50">
+            <ChatCommentActions
+              message={message}
+              onOpenChange={setIsMenuOpen}
+            />
           </div>
         )}
       </div>
@@ -506,17 +550,21 @@ export function ChatCommentActions({
           variant="ghost"
           size="icon"
           className={cn(
-            "h-6 w-6 rounded-sm hover:!bg-transparent hover:!text-current text-emerald-600 dark:text-emerald-400",
-            "focus-visible:ring-0 focus-visible:ring-offset-0 data-[state=open]:!bg-transparent",
-            className
+            "h-6 w-6 rounded-sm text-emerald-600 hover:bg-transparent! hover:text-current! dark:text-emerald-400",
+            "data-[state=open]:bg-transparent1 focus-visible:ring-0 focus-visible:ring-offset-0",
+            className,
           )}
         >
           <ChevronDown className="h-4 w-4" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" side="top" className="w-48 bg-background/95 backdrop-blur-sm">
+      <DropdownMenuContent
+        align="end"
+        side="top"
+        className="bg-background/95 w-48 backdrop-blur-sm"
+      >
         <DropdownMenuItem
-          className="gap-3 cursor-pointer text-destructive focus:text-destructive"
+          className="text-destructive focus:text-destructive cursor-pointer gap-3"
           onClick={handleDelete}
           disabled={deleteCommentMutation.isPending}
         >
@@ -546,25 +594,30 @@ export function ChatMessageSystem({
   // Se for mensagem de fechamento, parsear os campos
   if (isClosedMessage) {
     const lines = message.content.split("\n");
-    const fields = lines.reduce((acc, line) => {
-      const [key, ...valueParts] = line.split(": ");
-      if (key && valueParts.length > 0) {
-        acc[key.trim()] = valueParts.join(": ").trim();
-      }
-      return acc;
-    }, {} as Record<string, string>);
+    const fields = lines.reduce(
+      (acc, line) => {
+        const [key, ...valueParts] = line.split(": ");
+        if (key && valueParts.length > 0) {
+          acc[key.trim()] = valueParts.join(": ").trim();
+        }
+        return acc;
+      },
+      {} as Record<string, string>,
+    );
 
     return (
       <div className={cn("mb-4 flex justify-center", className)}>
-        <div className="rounded-lg bg-white dark:bg-muted/50 px-4 py-3 text-sm shadow-sm max-w-2xl w-full">
+        <div className="dark:bg-muted/50 w-full max-w-4xl rounded-lg bg-white px-4 py-3 text-sm shadow-sm">
           {/* Layout em 2 colunas em md/lg */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
+          <div className="grid grid-cols-1 gap-x-6 gap-y-2 md:grid-cols-2">
             {/* Coluna 1 */}
             <div className="space-y-2">
               {fields.Protocolo && (
                 <div>
                   <span className="text-muted-foreground">Protocolo:</span>{" "}
-                  <span className="font-semibold break-all">{fields.Protocolo}</span>
+                  <span className="font-semibold break-all">
+                    {fields.Protocolo}
+                  </span>
                 </div>
               )}
               {fields.Usuário && (
@@ -576,7 +629,9 @@ export function ChatMessageSystem({
               {fields.Departamento !== undefined && (
                 <div>
                   <span className="text-muted-foreground">Departamento:</span>{" "}
-                  <span className="font-semibold">{fields.Departamento || "-"}</span>
+                  <span className="font-semibold">
+                    {fields.Departamento || "-"}
+                  </span>
                 </div>
               )}
               {fields.Motivo !== undefined && (
@@ -604,7 +659,9 @@ export function ChatMessageSystem({
               {fields["Finalizado em"] && (
                 <div>
                   <span className="text-muted-foreground">Finalizado em:</span>{" "}
-                  <span className="font-semibold">{fields["Finalizado em"]}</span>
+                  <span className="font-semibold">
+                    {fields["Finalizado em"]}
+                  </span>
                 </div>
               )}
               {fields.Duração && (
@@ -623,7 +680,7 @@ export function ChatMessageSystem({
   // Mensagens simples (Sessão criada, Transferida, etc.)
   return (
     <div className={cn("mb-4 flex justify-center", className)}>
-      <div className="flex items-center gap-2 rounded-lg bg-white dark:bg-muted/50 px-3 py-1.5 text-sm font-semibold shadow-sm">
+      <div className="dark:bg-muted/50 flex items-center gap-2 rounded-lg bg-white px-3 py-1.5 text-sm font-semibold shadow-sm">
         <ArrowRightLeft className="h-3.5 w-3.5" />
         <span>{message.content}</span>
       </div>

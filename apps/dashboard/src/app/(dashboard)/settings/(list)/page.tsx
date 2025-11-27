@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Building, CheckCircle, MessageSquareText, SlidersVertical, Tag, User, Users } from "lucide-react";
+import { BookUser, Building, CheckCircle, MessageSquareText, SlidersVertical, Tag, User, Users } from "lucide-react";
 
 import type { Actions, Subjects } from "@manylead/permissions";
 
@@ -89,6 +89,14 @@ const settings = [
     href: "/settings/users",
     icon: Users,
     permission: { action: "manage" as Actions, subject: "Agent" as Subjects },
+  },
+  {
+    title: "Contatos",
+    description:
+      "Gerencie seus contatos na Manylead. No momento, está disponível a Importação de contatos.",
+    href: "/settings/contacts",
+    icon: BookUser,
+    permission: { action: "manage" as Actions, subject: "Contact" as Subjects },
   },
   // Temporarily hidden - user creation of organizations disabled
   // {

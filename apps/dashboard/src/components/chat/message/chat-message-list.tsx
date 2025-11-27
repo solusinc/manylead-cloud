@@ -113,7 +113,7 @@ export function ChatMessageList({
   }));
 
   // Query para buscar mensagens ao redor de uma mensagem específica (navegação de busca)
-  const { data: contextData, isLoading: isLoadingContext } = useQuery({
+  const { data: contextData, isLoading: _isLoadingContext } = useQuery({
     ...trpc.messages.getContext.queryOptions({
       chatId,
       messageId: focusMessageId ?? "",

@@ -42,6 +42,7 @@
     "nuqs": "catalog:",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
+    "react-dropzone": "^14.3.8",
     "react-icons": "^5.5.0",
     "react-qr-code": "^2.0.18",
     "react-textarea-autosize": "^8.5.9",
@@ -50,6 +51,7 @@
     "superjson": "2.2.3",
     "use-debounce": "^10.0.6",
     "uuid": "catalog:",
+    "xlsx": "^0.18.5",
     "zod": "catalog:",
     "zustand": "^5.0.8"
   },
