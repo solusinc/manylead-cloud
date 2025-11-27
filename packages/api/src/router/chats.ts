@@ -267,17 +267,23 @@ export const chatsRouter = createTRPCRouter({
         : [];
 
       // Criar Map de tags por chatId para lookup O(1)
-      const tagsByChat = new Map<string, Array<{ id: string; name: string; color: string }>>();
+      const tagsByChat = new Map<string, { id: string; name: string; color: string }[]>();
       for (const ct of chatTagsData) {
         const key = ct.chatId;
-        if (!tagsByChat.has(key)) {
-          tagsByChat.set(key, []);
+        const existing = tagsByChat.get(key);
+        if (existing) {
+          existing.push({
+            id: ct.tagId,
+            name: ct.tagName,
+            color: ct.tagColor,
+          });
+        } else {
+          tagsByChat.set(key, [{
+            id: ct.tagId,
+            name: ct.tagName,
+            color: ct.tagColor,
+          }]);
         }
-        tagsByChat.get(key)!.push({
-          id: ct.tagId,
-          name: ct.tagName,
-          color: ct.tagColor,
-        });
       }
 
       // BATCH OPTIMIZATION: Buscar nomes dos agents atribuídos
@@ -285,7 +291,7 @@ export const chatsRouter = createTRPCRouter({
         ...new Set(
           items
             .map((i) => i.assignedAgent?.userId)
-            .filter((id): id is string => id !== null && id !== undefined),
+            .filter((id): id is string => !!id),
         ),
       ];
 
@@ -547,7 +553,7 @@ export const chatsRouter = createTRPCRouter({
       // Buscar nomes dos usuários (user está no banco principal)
       const agentUserIds = chats
         .map((c) => c.assignedAgent?.userId)
-        .filter((id): id is string => id !== null && id !== undefined);
+        .filter((id): id is string => !!id);
 
       const users = agentUserIds.length > 0
         ? await ctx.db

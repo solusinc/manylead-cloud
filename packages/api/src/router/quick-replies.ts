@@ -12,8 +12,8 @@ import {
   selectQuickReplySchema,
   sql,
   updateQuickReplySchema,
-  type QuickReplyMessage,
 } from "@manylead/db";
+import type { QuickReplyMessage } from "@manylead/db";
 
 /**
  * Extrai o conteúdo de preview da primeira mensagem de texto
@@ -186,7 +186,7 @@ export const quickRepliesRouter = createTRPCRouter({
           ...input,
           organizationId,
           createdBy: userId,
-          content: getContentPreview(input.messages ?? []),
+          content: getContentPreview(input.messages),
         })
         .returning();
 
