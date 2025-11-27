@@ -13,10 +13,12 @@ import { organizationRouter } from "./router/organization";
 import { organizationSettingsRouter } from "./router/organization-settings";
 import { quickRepliesRouter } from "./router/quick-replies";
 import { tagsRouter } from "./router/tags";
+import { userRouter } from "./router/user";
 import { createTRPCRouter } from "./trpc";
 
 export const appRouter = createTRPCRouter({
   auth: authRouter,
+  user: userRouter,
   organization: organizationRouter,
   organizationSettings: organizationSettingsRouter,
   invitation: invitationRouter,

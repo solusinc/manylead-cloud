@@ -35,6 +35,7 @@ export class R2StorageProvider implements StorageProvider {
         accessKeyId: config.accessKeyId,
         secretAccessKey: config.secretAccessKey,
       },
+      forcePathStyle: true, // R2 requer path-style URLs
     });
     this.bucketName = config.bucketName;
     this.publicUrl = config.publicUrl;
@@ -88,7 +89,7 @@ export class R2StorageProvider implements StorageProvider {
 
     // Convert stream to buffer
     const chunks: Uint8Array[] = [];
-    for await (const chunk of response.Body as Readable) {
+    for await (const chunk of response.Body as AsyncIterable<Uint8Array>) {
       chunks.push(chunk);
     }
 

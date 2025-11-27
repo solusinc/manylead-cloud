@@ -40,15 +40,14 @@ import {
 } from "@manylead/ui/sidebar";
 import { useTheme } from "@manylead/ui/theme";
 
-import { useServerSession } from "~/components/providers/session-provider";
-import { authClient } from "~/lib/auth/client";
+import { authClient, useSession } from "~/lib/auth/client";
 import { usePermissions } from "~/lib/permissions";
 import { useTRPC } from "~/lib/trpc/react";
 
 export function NavUser() {
   const { isMobile, setOpenMobile } = useSidebar();
   const { themeMode, setTheme } = useTheme();
-  const session = useServerSession();
+  const { data: session, isPending: isLoadingSession } = useSession();
   const router = useRouter();
   const trpc = useTRPC();
   const { can } = usePermissions();
@@ -64,11 +63,11 @@ export function NavUser() {
   // Se não há organização ativa mas há organizações disponíveis, use a primeira
   const activeOrg = organization ?? organizations?.[0];
 
-  if (isLoadingOrg || isLoadingOrgs) {
+  if (isLoadingOrg || isLoadingOrgs || isLoadingSession) {
     return null;
   }
 
-  if (!activeOrg) {
+  if (!activeOrg || !session?.user) {
     return null;
   }
 

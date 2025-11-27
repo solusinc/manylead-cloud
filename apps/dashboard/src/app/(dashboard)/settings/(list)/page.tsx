@@ -35,8 +35,8 @@ const settings = [
     },
   },
   {
-    title: "Conta",
-    description: "Gerencie suas informações pessoais e preferências.",
+    title: "Meus dados",
+    description: "Modifique suas informações pessoais e senha de acesso.",
     href: "/settings/account",
     icon: User,
     permission: null, // Todos podem ver

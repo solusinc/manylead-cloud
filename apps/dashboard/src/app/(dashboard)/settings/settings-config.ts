@@ -11,7 +11,7 @@ export const SETTINGS_NAV_ITEMS: {
   icon: LucideIcon;
 }[] = [
   { value: "general", label: "Ajustes gerais", icon: SlidersVertical },
-  { value: "account", label: "Conta", icon: User },
+  { value: "account", label: "Meus dados", icon: User },
   { value: "departments", label: "Departamentos", icon: Building },
   { value: "tags", label: "Etiquetas", icon: Tag },
   { value: "endings", label: "Motivos de finalização", icon: CheckCircle },
