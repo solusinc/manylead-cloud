@@ -69,11 +69,19 @@ export function ChatMessageList({
   const [isTyping, setIsTyping] = useState(false);
   const [showScrollButton, setShowScrollButton] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const [isMounted, setIsMounted] = useState(false);
 
   // Buscar permissões do agent atual uma vez
   const { data: currentAgent } = useQuery(trpc.agents.getCurrent.queryOptions());
-  const canEditMessages = currentAgent?.permissions.messages.canEdit ?? false;
-  const canDeleteMessages = currentAgent?.permissions.messages.canDelete ?? false;
+
+  // Garantir consistência entre server e client para evitar hydration errors
+  const canEditMessages = isMounted ? (currentAgent?.permissions.messages.canEdit ?? false) : false;
+  const canDeleteMessages = isMounted ? (currentAgent?.permissions.messages.canDelete ?? false) : false;
+
+  // Marcar como mounted após hidratação
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   // Message focus store (para navegação de busca)
   const { focusMessageId, focusChatId, clearFocus } = useMessageFocusStore();

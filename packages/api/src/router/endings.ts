@@ -10,7 +10,7 @@ import {
   updateEndingSchema,
 } from "@manylead/db";
 
-import { createTRPCRouter, adminProcedure, ownerProcedure, tenantManager } from "../trpc";
+import { createTRPCRouter, adminProcedure, memberProcedure, ownerProcedure, tenantManager } from "../trpc";
 
 /**
  * Endings Router
@@ -21,7 +21,7 @@ export const endingsRouter = createTRPCRouter({
   /**
    * List all endings for the active organization
    */
-  list: adminProcedure.query(async ({ ctx }) => {
+  list: memberProcedure.query(async ({ ctx }) => {
     const organizationId = ctx.session.session.activeOrganizationId;
 
     if (!organizationId) {

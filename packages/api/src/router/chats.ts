@@ -122,6 +122,17 @@ export const chatsRouter = createTRPCRouter({
         // Se for "all", não adiciona filtro (vê todos)
       }
 
+      // Filtro de chats finalizados baseado em permissão (apenas para members)
+      if (currentAgent) {
+        const role = currentAgent.role as "owner" | "admin" | "member";
+
+        // Members sem permissão não veem chats finalizados
+        // Owners e admins sempre veem tudo
+        if (role === "member" && !currentAgent.permissions.accessFinishedChats) {
+          conditions.push(ne(chat.status, "closed"));
+        }
+      }
+
       if (status) {
         conditions.push(eq(chat.status, status));
       }

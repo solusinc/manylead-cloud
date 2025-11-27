@@ -1,11 +1,13 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
-import { agent, and, attachment, channel, chat, chatParticipant, contact, desc, eq, ilike, lt, message, or, organization, sql } from "@manylead/db";
+import { agent, and, attachment, channel, chat, chatParticipant, contact, desc, eq, ilike, lt, message, sql } from "@manylead/db";
 import { EvolutionAPIClient } from "@manylead/evolution-api-client";
-import { publishChatEvent, publishMessageEvent } from "@manylead/shared";
+import { publishMessageEvent } from "@manylead/shared";
 
 import { env } from "../env";
+import { getMessageService } from "../services";
+import type { MessageContext } from "../services";
 import { createTRPCRouter, memberProcedure, ownerProcedure } from "../trpc";
 
 /**
@@ -26,7 +28,7 @@ export const messagesRouter = createTRPCRouter({
         limit: z.number().min(1).max(100).default(50), // Para páginas subsequentes
         firstPageLimit: z.number().min(1).max(100).optional(), // Para primeira página (opcional)
         cursor: z.string().uuid().optional(), // UUIDv7 da mensagem mais antiga carregada
-        includeDeleted: z.boolean().default(false),
+        includeDeleted: z.boolean().default(true), // Incluir deletadas por padrão para mostrar "Esta mensagem foi excluída"
       }),
     )
     .query(async ({ ctx, input }) => {
@@ -333,14 +335,14 @@ export const messagesRouter = createTRPCRouter({
     }),
 
   /**
-   * Enviar mensagem de texto
+   * Enviar mensagem de texto (REFATORADO com MessageService)
    */
   sendText: memberProcedure
     .input(
       z.object({
         chatId: z.string().uuid(),
         content: z.string().min(1),
-        tempId: z.string().uuid(), // Client-generated UUID for deduplication
+        tempId: z.string().uuid(),
         metadata: z.record(z.string(), z.unknown()).optional(),
       }),
     )
@@ -355,9 +357,8 @@ export const messagesRouter = createTRPCRouter({
 
       const userId = ctx.session.user.id;
       const userName = ctx.session.user.name;
-      const now = new Date();
 
-      // Buscar o agent do usuário logado
+      // Buscar agent do usuário
       const [currentAgent] = await ctx.tenantDb
         .select()
         .from(agent)
@@ -367,374 +368,43 @@ export const messagesRouter = createTRPCRouter({
       if (!currentAgent) {
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "Agent não encontrado para o usuário",
+          message: "Agent não encontrado",
         });
       }
 
-      // Formatar mensagem com assinatura: **Nome**\nConteúdo
-      const formattedContent = `**${userName}**\n${input.content}`;
+      // Inicializar MessageService
+      const { tenantManager } = await import("../trpc");
+      const messageService = getMessageService({
+        redisUrl: env.REDIS_URL,
+        getTenantConnection: tenantManager.getConnection.bind(tenantManager),
+        getCatalogDb: () => ctx.db,
+      });
 
-      // Extrair repliedToMessageId do metadata (se existir)
-      const repliedToMessageId = input.metadata?.repliedToMessageId as string | undefined;
+      // Criar MessageContext
+      const messageContext: MessageContext = {
+        organizationId,
+        tenantDb: ctx.tenantDb,
+        agentId: currentAgent.id,
+        agentName: userName,
+      };
 
-      // ANTES de criar a mensagem, verificar se é a primeira mensagem TEXT
-      // (para depois criar o chat espelhado na org target)
-      const existingTextMessages = await ctx.tenantDb
-        .select()
-        .from(message)
-        .where(
-          and(
-            eq(message.chatId, input.chatId),
-            eq(message.messageType, "text"),
-          ),
-        )
-        .limit(1);
+      // Criar mensagem usando MessageService (cria local + espelha cross-org + emite eventos)
+      const result = await messageService.createTextMessage(messageContext, {
+        chatId: input.chatId,
+        content: input.content,
+        agentId: currentAgent.id,
+        agentName: userName,
+        metadata: input.metadata,
+        repliedToMessageId: input.metadata?.repliedToMessageId as string | undefined,
+        tempId: input.tempId,
+      });
 
-      const isFirstTextMessage = existingTextMessages.length === 0;
+      const { message: newMessage, chat: chatRecord } = result;
 
-      // Buscar chat para verificar se é interno (também antes de criar a mensagem)
-      const [chatRecord] = await ctx.tenantDb
-        .select()
-        .from(chat)
-        .where(eq(chat.id, input.chatId))
-        .limit(1);
-
-      if (!chatRecord) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Chat não encontrado",
-        });
-      }
-
-      // Criar mensagem (drizzle gera ID automaticamente)
-      const [newMessage] = await ctx.tenantDb
-        .insert(message)
-        .values({
-          chatId: input.chatId,
-          messageSource: "internal",
-          sender: "agent",
-          senderId: currentAgent.id,
-          messageType: "text",
-          content: formattedContent,
-          repliedToMessageId: repliedToMessageId ?? null,
-          metadata: {
-            ...input.metadata,
-            tempId: input.tempId, // Save client tempId for deduplication
-          },
-          status: "sent",
-          timestamp: now,
-          sentAt: now,
-        })
-        .returning();
-
-      if (!newMessage) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Falha ao criar mensagem",
-        });
-      }
-
-      // Se for a PRIMEIRA MENSAGEM TEXT de um chat cross-org, criar chat espelhado na org target
-      if (chatRecord.messageSource === "internal" && isFirstTextMessage) {
-        // Buscar contact para pegar targetOrganizationId
-        const [contactRecord] = await ctx.tenantDb
-          .select()
-          .from(contact)
-          .where(eq(contact.id, chatRecord.contactId))
-          .limit(1);
-
-        if (contactRecord?.metadata?.targetOrganizationId) {
-          const targetOrgId = contactRecord.metadata.targetOrganizationId;
-
-          // Buscar dados da org source para criar contact na target
-          const [sourceOrg] = await ctx.db
-            .select()
-            .from(organization)
-            .where(eq(organization.id, organizationId))
-            .limit(1);
-
-          if (sourceOrg) {
-            const { tenantManager } = await import("../trpc");
-            const targetTenantDb = await tenantManager.getConnection(targetOrgId);
-
-            // Criar/buscar contact representando a org source no banco da target
-            const existingContacts = await targetTenantDb
-              .select()
-              .from(contact)
-              .where(eq(contact.organizationId, targetOrgId));
-
-            let sourceContact = existingContacts.find(
-              (c) =>
-                c.metadata?.source === "internal" &&
-                c.metadata.targetOrganizationId === organizationId,
-            );
-
-            if (!sourceContact) {
-              const [newContact] = await targetTenantDb
-                .insert(contact)
-                .values({
-                  organizationId: targetOrgId,
-                  phoneNumber: null,
-                  name: sourceOrg.name,
-                  avatar: sourceOrg.logo ?? undefined,
-                  metadata: {
-                    source: "internal",
-                    targetOrganizationId: organizationId,
-                    targetOrganizationName: sourceOrg.name,
-                    targetOrganizationInstanceCode: sourceOrg.instanceCode,
-                    firstMessageAt: now,
-                  },
-                })
-                .returning();
-
-              sourceContact = newContact;
-            }
-
-            if (sourceContact) {
-              // Criar chat espelhado na org target com status pending
-              const [mirroredChat] = await targetTenantDb
-                .insert(chat)
-                .values({
-                  organizationId: targetOrgId,
-                  contactId: sourceContact.id,
-                  channelId: null,
-                  messageSource: "internal",
-                  initiatorAgentId: null,
-                  assignedTo: null,
-                  status: "pending",
-                  createdAt: now,
-                  updatedAt: now,
-                  lastMessageAt: now,
-                  lastMessageContent: input.content,
-                  lastMessageSender: "agent",
-                  totalMessages: 1,
-                  unreadCount: 1,
-                })
-                .returning();
-
-              if (mirroredChat) {
-                // Criar mensagem espelhada na org target
-                await targetTenantDb.insert(message).values({
-                  chatId: mirroredChat.id,
-                  messageSource: "internal",
-                  sender: "agent",
-                  senderId: null, // Null porque é de outra org
-                  messageType: "text",
-                  content: formattedContent,
-                  metadata: input.metadata,
-                  status: "sent",
-                  timestamp: now,
-                  sentAt: now,
-                });
-
-                // Broadcast para TODA a org target
-                await publishChatEvent(
-                  {
-                    type: "chat:created",
-                    organizationId: targetOrgId,
-                    chatId: mirroredChat.id,
-                    targetAgentId: undefined, // Broadcast para todos
-                    data: {
-                      chat: mirroredChat as unknown as Record<string, unknown>,
-                      contact: sourceContact as unknown as Record<string, unknown>,
-                    },
-                  },
-                  env.REDIS_URL,
-                );
-              }
-            }
-          }
-        }
-      }
-
-      // Atualizar chat (lastMessage, totalMessages)
-      await ctx.tenantDb
-        .update(chat)
-        .set({
-          lastMessageAt: now,
-          lastMessageContent: input.content,
-          lastMessageSender: "agent",
-          totalMessages: sql`${chat.totalMessages} + 1`,
-          updatedAt: now,
-        })
-        .where(eq(chat.id, input.chatId));
-
-      // Se for mensagem SUBSEQUENTE de um chat cross-org, espelhar na org target
-      // (Não espelhar se já espelhamos na primeira mensagem TEXT acima)
-      if (chatRecord.messageSource === "internal" && !isFirstTextMessage) {
-        // Buscar contact para pegar targetOrganizationId
-        const [contactRecord] = await ctx.tenantDb
-          .select()
-          .from(contact)
-          .where(eq(contact.id, chatRecord.contactId))
-          .limit(1);
-
-        if (contactRecord?.metadata?.targetOrganizationId) {
-          const targetOrgId = contactRecord.metadata.targetOrganizationId;
-
-          const { tenantManager } = await import("../trpc");
-          const targetTenantDb = await tenantManager.getConnection(targetOrgId);
-
-          // Buscar contact na org target que representa a org source
-          const targetContacts = await targetTenantDb
-            .select()
-            .from(contact)
-            .where(eq(contact.organizationId, targetOrgId));
-
-          const sourceContact = targetContacts.find(
-            (c) =>
-              c.metadata?.source === "internal" &&
-              c.metadata.targetOrganizationId === organizationId,
-          );
-
-          if (sourceContact) {
-            // Buscar chat espelhado na org target que esteja ATIVO (pending ou open)
-            // Se o chat estiver fechado, criar uma nova sessão
-            let mirroredChat = await targetTenantDb
-              .select()
-              .from(chat)
-              .where(
-                and(
-                  eq(chat.messageSource, "internal"),
-                  eq(chat.contactId, sourceContact.id),
-                  or(eq(chat.status, "pending"), eq(chat.status, "open")),
-                ),
-              )
-              .limit(1)
-              .then((rows) => rows[0]);
-
-            // Se não encontrar chat ativo, criar uma nova sessão
-            if (!mirroredChat) {
-              const now = new Date();
-
-              // Criar novo chat na org target
-              const [newChat] = await targetTenantDb
-                .insert(chat)
-                .values({
-                  organizationId: targetOrgId,
-                  contactId: sourceContact.id,
-                  messageSource: "internal",
-                  status: "pending",
-                  assignedTo: null,
-                  unreadCount: 0,
-                  totalMessages: 0,
-                  createdAt: now,
-                  updatedAt: now,
-                })
-                .returning();
-
-              if (!newChat) {
-                throw new TRPCError({
-                  code: "INTERNAL_SERVER_ERROR",
-                  message: "Failed to create mirrored chat in target organization",
-                });
-              }
-
-              mirroredChat = newChat;
-
-              // Broadcast chat:created para a org target
-              await publishChatEvent(
-                {
-                  type: "chat:created",
-                  organizationId: targetOrgId,
-                  chatId: newChat.id,
-                  targetAgentId: undefined,
-                  data: {
-                    chat: newChat as unknown as Record<string, unknown>,
-                    contact: sourceContact as unknown as Record<string, unknown>,
-                  },
-                },
-                env.REDIS_URL,
-              );
-
-              console.log(
-                `[messages.create] Nova sessão criada na org target ${targetOrgId}: chat ${newChat.id}`,
-              );
-            }
-
-            // Criar mensagem espelhada na org target
-            const [mirroredMessage] = await targetTenantDb
-              .insert(message)
-              .values({
-                chatId: mirroredChat.id,
-                messageSource: "internal",
-                sender: "agent",
-                senderId: null,
-                messageType: "text",
-                content: formattedContent,
-                metadata: input.metadata,
-                status: "sent",
-                timestamp: now,
-                sentAt: now,
-              })
-              .returning();
-
-            // Atualizar lastMessage do chat espelhado
-            if (mirroredChat.assignedTo) {
-              // Chat ASSIGNED: NÃO incrementar chat.unreadCount, apenas incrementar participants
-              await targetTenantDb
-                .update(chat)
-                .set({
-                  lastMessageAt: now,
-                  lastMessageContent: input.content,
-                  lastMessageSender: "agent",
-                  totalMessages: sql`${chat.totalMessages} + 1`,
-                  // NÃO incrementar unreadCount
-                  updatedAt: now,
-                })
-                .where(eq(chat.id, mirroredChat.id));
-
-              // Incrementar unreadCount de TODOS os participants
-              await targetTenantDb
-                .update(chatParticipant)
-                .set({
-                  unreadCount: sql`COALESCE(${chatParticipant.unreadCount}, 0) + 1`,
-                  updatedAt: now,
-                })
-                .where(
-                  and(
-                    eq(chatParticipant.chatId, mirroredChat.id),
-                    eq(chatParticipant.chatCreatedAt, mirroredChat.createdAt),
-                  ),
-                );
-            } else {
-              // Chat PENDING: incrementar chat.unreadCount
-              await targetTenantDb
-                .update(chat)
-                .set({
-                  lastMessageAt: now,
-                  lastMessageContent: input.content,
-                  lastMessageSender: "agent",
-                  totalMessages: sql`${chat.totalMessages} + 1`,
-                  unreadCount: sql`${chat.unreadCount} + 1`,
-                  updatedAt: now,
-                })
-                .where(eq(chat.id, mirroredChat.id));
-            }
-
-            // Broadcast mensagem para a org target com o ID correto
-            if (mirroredMessage) {
-              await publishMessageEvent(
-                {
-                  type: "message:new",
-                  organizationId: targetOrgId,
-                  chatId: mirroredChat.id,
-                  messageId: mirroredMessage.id,
-                  senderId: undefined,
-                  data: {
-                    message: mirroredMessage as unknown as Record<string, unknown>,
-                  },
-                },
-                env.REDIS_URL,
-              );
-            }
-          }
-        }
-      }
-
-      // Se for chat interno, enviar evento personalizado para cada participante
+      // Lógica adicional para chats intra-org (com initiatorAgentId)
       if (chatRecord.messageSource === "internal" && chatRecord.initiatorAgentId) {
         const isInitiator = currentAgent.id === chatRecord.initiatorAgentId;
+        const now = new Date();
 
         // Buscar o outro participante (destinatário)
         const targetAgentId = isInitiator
@@ -749,7 +419,7 @@ export const messagesRouter = createTRPCRouter({
               }))
           : chatRecord.initiatorAgentId;
 
-        // Incrementar unreadCount APENAS do destinatário (não do sender)
+        // Incrementar unreadCount APENAS do destinatário
         if (targetAgentId) {
           await ctx.tenantDb
             .update(chatParticipant)
@@ -765,42 +435,7 @@ export const messagesRouter = createTRPCRouter({
               ),
             );
         }
-
-        if (targetAgentId) {
-          // Enviar evento APENAS para o outro participante
-          await publishMessageEvent(
-            {
-              type: "message:new",
-              organizationId,
-              chatId: input.chatId,
-              messageId: newMessage.id,
-              senderId: currentAgent.id,
-              targetAgentId, // Evento privado
-              data: {
-                message: newMessage as unknown as Record<string, unknown>,
-              },
-            },
-            env.REDIS_URL,
-          );
-        }
-      } else {
-        // Chat WhatsApp - broadcast para toda a org
-        await publishMessageEvent(
-          {
-            type: "message:new",
-            organizationId,
-            chatId: input.chatId,
-            messageId: newMessage.id,
-            senderId: currentAgent.id,
-            data: {
-              message: newMessage as unknown as Record<string, unknown>,
-            },
-          },
-          env.REDIS_URL,
-        );
       }
-
-      // TODO: Se for WhatsApp, enfileirar job para enviar via Evolution API
 
       return newMessage;
     }),
@@ -825,7 +460,6 @@ export const messagesRouter = createTRPCRouter({
       }
 
       const userId = ctx.session.user.id;
-      const now = new Date();
 
       // Buscar o agent do usuário logado
       const [currentAgent] = await ctx.tenantDb
@@ -841,155 +475,23 @@ export const messagesRouter = createTRPCRouter({
         });
       }
 
-      // Atualizar TODAS as mensagens não lidas que NÃO são do agent atual
-      // Para WhatsApp: sender = "contact"
-      // Para Internal: senderId IS NULL ou senderId != currentAgent.id
-      // Performance: uma única query UPDATE ao invés de múltiplas
-      const updatedMessages = await ctx.tenantDb
-        .update(message)
-        .set({
-          status: "read",
-          readAt: now,
-        })
-        .where(
-          and(
-            eq(message.chatId, input.chatId),
-            sql`${message.status} != 'read'`, // Apenas não lidas
-            or(
-              eq(message.sender, "contact"), // Mensagens WhatsApp do contato
-              sql`${message.senderId} IS NULL`, // Mensagens internas de outra org
-              sql`${message.senderId} != ${currentAgent.id}`, // Mensagens de outro agent
-            ),
-          ),
-        )
-        .returning();
+      const { tenantManager } = await import("../trpc");
+      const messageService = getMessageService({
+        redisUrl: env.REDIS_URL,
+        getTenantConnection: tenantManager.getConnection.bind(tenantManager),
+        getCatalogDb: () => ctx.db,
+      });
 
-      // Emitir eventos socket para cada mensagem atualizada na org atual
-      // Isso permite que a UI local atualize em tempo real
-      if (updatedMessages.length > 0) {
-        await Promise.all(
-          updatedMessages.map((msg) =>
-            publishMessageEvent(
-              {
-                type: "message:updated",
-                organizationId,
-                chatId: msg.chatId,
-                messageId: msg.id,
-                data: {
-                  message: msg as unknown as Record<string, unknown>,
-                },
-              },
-              env.REDIS_URL,
-            ),
-          ),
-        );
-      }
-
-      // Para mensagens internas, também atualizar na org do remetente
-      // Isso faz os ticks mudarem em tempo real no lado do remetente
-      // IMPORTANTE: Fazer isso SEMPRE, mesmo se não atualizou nada localmente,
-      // porque mensagens antigas podem já estar marcadas como 'read' aqui mas não na outra org
-      const [chatRecord] = await ctx.tenantDb
-        .select()
-        .from(chat)
-        .where(eq(chat.id, input.chatId))
-        .limit(1);
-
-      if (chatRecord?.messageSource === "internal") {
-        // Buscar contact para pegar targetOrganizationId
-        const [contactRecord] = await ctx.tenantDb
-          .select()
-          .from(contact)
-          .where(eq(contact.id, chatRecord.contactId))
-          .limit(1);
-
-        const metadata = contactRecord?.metadata as Record<string, unknown> | undefined;
-        const targetOrgId = metadata?.targetOrganizationId as string | undefined;
-
-        if (targetOrgId) {
-          // Conectar ao banco da org remetente
-          const { tenantManager } = await import("../trpc");
-          const targetTenantDb = await tenantManager.getConnection(targetOrgId);
-
-          // Buscar contact na org remetente que representa a nossa org
-          const [targetContact] = await targetTenantDb
-            .select()
-            .from(contact)
-            .where(sql`${contact.metadata} @> jsonb_build_object('targetOrganizationId', ${organizationId}::text)`)
-            .limit(1);
-
-          if (targetContact) {
-            // Buscar chat espelhado na org remetente (apenas chats ativos)
-            const [targetChat] = await targetTenantDb
-              .select()
-              .from(chat)
-              .where(
-                and(
-                  eq(chat.contactId, targetContact.id),
-                  eq(chat.messageSource, "internal"),
-                  or(eq(chat.status, "open"), eq(chat.status, "pending")),
-                ),
-              )
-              .limit(1);
-
-            if (targetChat) {
-              // Buscar TODAS as mensagens do chat que foram enviadas pela outra org
-              // (não apenas as que foram atualizadas agora)
-              const allTargetMessages = await targetTenantDb
-                .select()
-                .from(message)
-                .where(
-                  and(
-                    eq(message.chatId, targetChat.id),
-                    sql`${message.senderId} IS NOT NULL`, // Apenas mensagens enviadas (não recebidas)
-                    sql`${message.status} != 'read'`, // Apenas não lidas
-                  ),
-                );
-
-              // Atualizar todas de uma vez
-              if (allTargetMessages.length > 0) {
-                const updatedTargetMessages = await targetTenantDb
-                  .update(message)
-                  .set({
-                    status: "read",
-                    readAt: now,
-                  })
-                  .where(
-                    and(
-                      eq(message.chatId, targetChat.id),
-                      sql`${message.senderId} IS NOT NULL`,
-                      sql`${message.status} != 'read'`,
-                    ),
-                  )
-                  .returning();
-
-                // Emitir eventos na org remetente para atualizar ticks em tempo real
-                await Promise.all(
-                  updatedTargetMessages.map((msg) =>
-                    publishMessageEvent(
-                      {
-                        type: "message:updated",
-                        organizationId: targetOrgId,
-                        chatId: targetChat.id,
-                        messageId: msg.id,
-                        data: {
-                          message: msg as unknown as Record<string, unknown>,
-                        },
-                      },
-                      env.REDIS_URL,
-                    ),
-                  ),
-                );
-              }
-            }
-          }
-        }
-      }
-
-      return {
-        updatedCount: updatedMessages.length,
-        messages: updatedMessages,
+      const messageContext: MessageContext = {
+        organizationId,
+        tenantDb: ctx.tenantDb,
+        agentId: currentAgent.id,
+        agentName: ctx.session.user.name,
       };
+
+      await messageService.markAllAsRead(messageContext, input.chatId);
+
+      return { success: true };
     }),
 
   /**
@@ -1133,139 +635,27 @@ export const messagesRouter = createTRPCRouter({
         });
       }
 
-      const now = new Date();
+      const { tenantManager } = await import("../trpc");
+      const messageService = getMessageService({
+        redisUrl: env.REDIS_URL,
+        getTenantConnection: tenantManager.getConnection.bind(tenantManager),
+        getCatalogDb: () => ctx.db,
+      });
 
-      // Atualizar mensagem
-      const [updated] = await ctx.tenantDb
-        .update(message)
-        .set({
-          content: input.content,
-          isEdited: true,
-          editedAt: now,
-        })
-        .where(
-          and(eq(message.id, input.id), eq(message.timestamp, input.timestamp)),
-        )
-        .returning();
+      const messageContext: MessageContext = {
+        organizationId,
+        tenantDb: ctx.tenantDb,
+        agentId: currentAgent.id,
+        agentName: ctx.session.user.name,
+      };
 
-      if (!updated) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Erro ao editar mensagem",
-        });
-      }
-
-      // Emitir evento socket para atualizar UI na organização atual
-      await publishMessageEvent(
-        {
-          type: "message:updated",
-          organizationId,
-          chatId: input.chatId,
-          messageId: updated.id,
-          data: {
-            message: updated as unknown as Record<string, unknown>,
-          },
-        },
-        env.REDIS_URL,
+      const updated = await messageService.editMessage(
+        messageContext,
+        input.id,
+        input.timestamp,
+        input.chatId,
+        { content: input.content },
       );
-
-      // Se for mensagem interna, espelhar edição na org de destino
-      if (updated.messageSource === "internal") {
-        // Buscar chat para verificar se é cross-org
-        const [chatRecord] = await ctx.tenantDb
-          .select()
-          .from(chat)
-          .where(eq(chat.id, input.chatId))
-          .limit(1);
-
-        if (chatRecord) {
-          // Buscar contact para pegar targetOrganizationId
-          const [contactRecord] = await ctx.tenantDb
-            .select()
-            .from(contact)
-            .where(eq(contact.id, chatRecord.contactId))
-            .limit(1);
-
-          if (contactRecord?.metadata?.targetOrganizationId) {
-            const targetOrgId = contactRecord.metadata.targetOrganizationId;
-
-            const { tenantManager } = await import("../trpc");
-            const targetTenantDb = await tenantManager.getConnection(targetOrgId);
-
-            // Buscar contact na org target que representa a org source
-            const targetContacts = await targetTenantDb
-              .select()
-              .from(contact)
-              .where(eq(contact.organizationId, targetOrgId));
-
-            const sourceContact = targetContacts.find(
-              (c) =>
-                c.metadata?.source === "internal" &&
-                c.metadata.targetOrganizationId === organizationId,
-            );
-
-            if (sourceContact) {
-              // Buscar chat espelhado na org target
-              const mirroredChats = await targetTenantDb
-                .select()
-                .from(chat)
-                .where(
-                  and(
-                    eq(chat.messageSource, "internal"),
-                    eq(chat.contactId, sourceContact.id),
-                    or(eq(chat.status, "pending"), eq(chat.status, "open")),
-                  ),
-                )
-                .limit(1);
-
-              const mirroredChat = mirroredChats[0];
-
-              if (mirroredChat) {
-                // Buscar mensagem espelhada pelo timestamp (mensagens têm mesmo timestamp)
-                const [mirroredMessage] = await targetTenantDb
-                  .select()
-                  .from(message)
-                  .where(
-                    and(
-                      eq(message.chatId, mirroredChat.id),
-                      eq(message.timestamp, updated.timestamp),
-                    ),
-                  )
-                  .limit(1);
-
-                if (mirroredMessage) {
-                  // Atualizar mensagem espelhada
-                  const [updatedMirrored] = await targetTenantDb
-                    .update(message)
-                    .set({
-                      content: input.content,
-                      isEdited: true,
-                      editedAt: now,
-                    })
-                    .where(eq(message.id, mirroredMessage.id))
-                    .returning();
-
-                  // Emitir evento na org target
-                  if (updatedMirrored) {
-                    await publishMessageEvent(
-                      {
-                        type: "message:updated",
-                        organizationId: targetOrgId,
-                        chatId: mirroredChat.id,
-                        messageId: updatedMirrored.id,
-                        data: {
-                          message: updatedMirrored as unknown as Record<string, unknown>,
-                        },
-                      },
-                      env.REDIS_URL,
-                    );
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
 
       return updated;
     }),
@@ -1356,135 +746,26 @@ export const messagesRouter = createTRPCRouter({
         });
       }
 
-      // Soft delete
-      const [deleted] = await ctx.tenantDb
-        .update(message)
-        .set({
-          isDeleted: true,
-          content: "", // Limpar conteúdo
-        })
-        .where(
-          and(eq(message.id, input.id), eq(message.timestamp, input.timestamp)),
-        )
-        .returning();
+      const { tenantManager } = await import("../trpc");
+      const messageService = getMessageService({
+        redisUrl: env.REDIS_URL,
+        getTenantConnection: tenantManager.getConnection.bind(tenantManager),
+        getCatalogDb: () => ctx.db,
+      });
 
-      if (!deleted) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Erro ao deletar mensagem",
-        });
-      }
+      const messageContext: MessageContext = {
+        organizationId,
+        tenantDb: ctx.tenantDb,
+        agentId: currentAgent.id,
+        agentName: ctx.session.user.name,
+      };
 
-      // Emitir evento socket para atualizar UI na organização atual
-      await publishMessageEvent(
-        {
-          type: "message:updated",
-          organizationId,
-          chatId: input.chatId,
-          messageId: deleted.id,
-          data: {
-            message: deleted as unknown as Record<string, unknown>,
-          },
-        },
-        env.REDIS_URL,
+      await messageService.deleteMessage(
+        messageContext,
+        input.id,
+        input.timestamp,
+        input.chatId,
       );
-
-      // Se for mensagem interna, espelhar exclusão na org de destino
-      if (deleted.messageSource === "internal") {
-        // Buscar chat para verificar se é cross-org
-        const [chatRecord] = await ctx.tenantDb
-          .select()
-          .from(chat)
-          .where(eq(chat.id, input.chatId))
-          .limit(1);
-
-        if (chatRecord) {
-          // Buscar contact para pegar targetOrganizationId
-          const [contactRecord] = await ctx.tenantDb
-            .select()
-            .from(contact)
-            .where(eq(contact.id, chatRecord.contactId))
-            .limit(1);
-
-          if (contactRecord?.metadata?.targetOrganizationId) {
-            const targetOrgId = contactRecord.metadata.targetOrganizationId;
-
-            const { tenantManager } = await import("../trpc");
-            const targetTenantDb = await tenantManager.getConnection(targetOrgId);
-
-            // Buscar contact na org target que representa a org source
-            const targetContacts = await targetTenantDb
-              .select()
-              .from(contact)
-              .where(eq(contact.organizationId, targetOrgId));
-
-            const sourceContact = targetContacts.find(
-              (c) =>
-                c.metadata?.source === "internal" &&
-                c.metadata.targetOrganizationId === organizationId,
-            );
-
-            if (sourceContact) {
-              // Buscar chat espelhado na org target
-              const mirroredChats = await targetTenantDb
-                .select()
-                .from(chat)
-                .where(
-                  and(
-                    eq(chat.messageSource, "internal"),
-                    eq(chat.contactId, sourceContact.id),
-                    or(eq(chat.status, "pending"), eq(chat.status, "open")),
-                  ),
-                )
-                .limit(1);
-
-              const mirroredChat = mirroredChats[0];
-
-              if (mirroredChat) {
-                // Buscar mensagem espelhada pelo timestamp
-                const [mirroredMessage] = await targetTenantDb
-                  .select()
-                  .from(message)
-                  .where(
-                    and(
-                      eq(message.chatId, mirroredChat.id),
-                      eq(message.timestamp, deleted.timestamp),
-                    ),
-                  )
-                  .limit(1);
-
-                if (mirroredMessage) {
-                  // Deletar mensagem espelhada
-                  const [deletedMirrored] = await targetTenantDb
-                    .update(message)
-                    .set({
-                      isDeleted: true,
-                      content: "",
-                    })
-                    .where(eq(message.id, mirroredMessage.id))
-                    .returning();
-
-                  // Emitir evento na org target
-                  if (deletedMirrored) {
-                    await publishMessageEvent(
-                      {
-                        type: "message:updated",
-                        organizationId: targetOrgId,
-                        chatId: mirroredChat.id,
-                        messageId: deletedMirrored.id,
-                        data: {
-                          message: deletedMirrored as unknown as Record<string, unknown>,
-                        },
-                      },
-                      env.REDIS_URL,
-                    );
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
 
       return { success: true };
     }),

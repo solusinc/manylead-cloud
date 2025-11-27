@@ -172,6 +172,7 @@ export function ChatMessageBubble({
         isOutgoing={isOutgoing}
         isStarred={message.isStarred}
         isEdited={message.isEdited}
+        isDeleted={message.isDeleted}
       />
     </div>
   );
@@ -318,12 +319,13 @@ export function ChatMessageContent({
     return (
       <p
         className={cn(
-          "text-sm italic opacity-60",
+          "text-sm italic opacity-60 flex items-center gap-1.5",
           isOutgoing && "dark:text-white/60",
           className,
         )}
       >
-        Esta mensagem foi apagada
+        <Trash2 className="size-3.5" />
+        Esta mensagem foi excluída
       </p>
     );
   }
@@ -360,6 +362,7 @@ export function ChatMessageFooter({
   isOutgoing,
   isStarred = false,
   isEdited = false,
+  isDeleted = false,
   className,
 }: {
   timestamp: Date;
@@ -367,16 +370,17 @@ export function ChatMessageFooter({
   isOutgoing: boolean;
   isStarred?: boolean;
   isEdited?: boolean;
+  isDeleted?: boolean;
   className?: string;
 }) {
   return (
     <div className={cn("mt-1 flex items-center justify-end gap-1", className)}>
       {isStarred && <Star className="h-3 w-3 fill-current opacity-70" />}
-      {isEdited && (
+      {isEdited && !isDeleted && (
         <span className="text-[10px] opacity-60">editado</span>
       )}
       <ChatMessageTime timestamp={timestamp} />
-      {isOutgoing && status && <ChatMessageStatus status={status} />}
+      {isOutgoing && status && !isDeleted && <ChatMessageStatus status={status} />}
     </div>
   );
 }
@@ -433,6 +437,11 @@ export function ChatMessageActions({
   canDeleteMessages?: boolean;
   className?: string;
 }) {
+  // Não mostrar menu de ações para mensagens deletadas
+  if (message.isDeleted) {
+    return null;
+  }
+
   const { setReplyingTo, contactName } = useChatReply();
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -506,20 +515,16 @@ export function ChatMessageActions({
       </DropdownMenu>
 
       {/* Dialogs renderizados FORA do DropdownMenu */}
-      {canEdit && (
-        <EditMessageDialog
-          message={message}
-          open={editDialogOpen}
-          onOpenChange={setEditDialogOpen}
-        />
-      )}
-      {canDelete && (
-        <DeleteMessageDialog
-          message={message}
-          open={deleteDialogOpen}
-          onOpenChange={setDeleteDialogOpen}
-        />
-      )}
+      <EditMessageDialog
+        message={message}
+        open={editDialogOpen && canEdit}
+        onOpenChange={setEditDialogOpen}
+      />
+      <DeleteMessageDialog
+        message={message}
+        open={deleteDialogOpen && canDelete}
+        onOpenChange={setDeleteDialogOpen}
+      />
     </>
   );
 }

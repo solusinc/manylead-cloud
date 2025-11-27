@@ -6,7 +6,7 @@ import Redis from "ioredis";
 import postgres from "postgres";
 
 import type { Tenant } from "@manylead/db";
-import * as catalogSchema from "@manylead/db";
+import * as schema from "@manylead/db";
 import { databaseHost, organization, tenant } from "@manylead/db";
 
 import type {
@@ -59,7 +59,7 @@ export class TenantDatabaseManager {
       prepare: false, // Required for PgBouncer transaction mode
     });
 
-    this.catalogDb = drizzle(this.catalogClient, { schema: catalogSchema });
+    this.catalogDb = drizzle(this.catalogClient, { schema });
     // ActivityLogger should also use PgBouncer
     this.activityLogger = new ActivityLogger(connString);
 
@@ -311,7 +311,11 @@ export class TenantDatabaseManager {
       await tenantClient.unsafe("CREATE EXTENSION IF NOT EXISTS dblink");
 
       // Rodar migrations do tenant
-      const tenantDb = drizzle(tenantClient);
+      const tenantDb = drizzle({
+        client: tenantClient,
+        schema,
+        casing: "snake_case",
+      });
       await migrate(tenantDb, { migrationsFolder: TENANT_MIGRATIONS_PATH });
 
       // Configurar TimescaleDB hypertables (particionamento automático + compression + retention)
@@ -404,7 +408,11 @@ export class TenantDatabaseManager {
       this.clientCache.set(tenantRecord.connectionString, client);
     }
 
-    return drizzle(client);
+    return drizzle({
+      client,
+      schema,
+      casing: "snake_case",
+    });
   }
 
   async getTenantBySlug(slug: string): Promise<Tenant | null> {
@@ -444,7 +452,11 @@ export class TenantDatabaseManager {
         prepare: false,
       });
 
-      const db = drizzle(client);
+      const db = drizzle({
+        client,
+        schema,
+        casing: "snake_case",
+      });
       await migrate(db, { migrationsFolder: TENANT_MIGRATIONS_PATH });
       await client.end();
 
