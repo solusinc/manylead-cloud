@@ -137,7 +137,7 @@ export function ChatWindow({
     });
 
     return unsubscribe;
-  }, [socket.isConnected, chatId, chatItem, markAsReadMutation, markAllMessagesAsReadMutation]);
+  }, [socket, socket.isConnected, chatId, chatItem, markAsReadMutation, markAllMessagesAsReadMutation]);
 
   // Detectar quando o chat é atribuído para outro agent (APENAS para members)
   useEffect(() => {

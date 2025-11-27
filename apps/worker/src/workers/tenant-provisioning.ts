@@ -161,6 +161,8 @@ export async function processTenantProvisioning(
       permissions: {
         departments: { type: "all" },
         channels: { type: "all" },
+        messages: { canEdit: false, canDelete: false },
+        accessFinishedChats: false,
       },
       isActive: true,
     });

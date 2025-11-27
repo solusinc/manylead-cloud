@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import {
@@ -437,14 +437,15 @@ export function ChatMessageActions({
   canDeleteMessages?: boolean;
   className?: string;
 }) {
+  // Hooks devem vir ANTES de qualquer return condicional
+  const { setReplyingTo, contactName } = useChatReply();
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+
   // Não mostrar menu de ações para mensagens deletadas
   if (message.isDeleted) {
     return null;
   }
-
-  const { setReplyingTo, contactName } = useChatReply();
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const handleReply = () => {
     // Extrair nome do sender do conteúdo (formato: **Nome**\nConteúdo)
@@ -575,15 +576,14 @@ function EditMessageDialog({
 }) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-  const [editContent, setEditContent] = useState("");
 
-  // Inicializar conteúdo quando abre o dialog
-  useEffect(() => {
-    if (open) {
-      const contentWithoutSignature = message.content.replace(/^\*\*.*?\*\*\n/, "");
-      setEditContent(contentWithoutSignature);
-    }
-  }, [open, message.content]);
+  // Extrair conteúdo sem assinatura
+  const contentWithoutSignature = React.useMemo(
+    () => message.content.replace(/^\*\*.*?\*\*\n/, ""),
+    [message.content]
+  );
+
+  const [editContent, setEditContent] = useState(contentWithoutSignature);
 
   const editMutation = useMutation(
     trpc.messages.edit.mutationOptions({
@@ -611,7 +611,7 @@ function EditMessageDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[500px]" key={`edit-${message.id}-${open ? 'open' : 'closed'}`}>
         <DialogHeader>
           <DialogTitle>Editar mensagem</DialogTitle>
           <DialogDescription>
