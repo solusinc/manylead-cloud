@@ -2,6 +2,9 @@ import type { Socket } from "socket.io";
 import { and, db, eq, gt, member, session as sessionSchema } from "@manylead/db";
 
 import type { SocketData } from "../types";
+import { createLogger } from "~/libs/utils/logger";
+
+const log = createLogger("SocketAuthMiddleware");
 
 /**
  * Socket.io authentication middleware
@@ -60,7 +63,7 @@ export async function authMiddleware(
 
     next();
   } catch (error) {
-    console.error("[Socket.io] Authentication error:", error);
+    log.error({ err: error }, "Authentication failed");
     next(new Error("Authentication failed"));
   }
 }

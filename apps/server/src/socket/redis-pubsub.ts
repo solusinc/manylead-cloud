@@ -9,6 +9,9 @@ import {
   handleMessageEvent,
   handleTypingEvent,
 } from "./handlers";
+import { createLogger } from "../libs/utils/logger";
+
+const log = createLogger("RedisPubSub");
 
 /**
  * Redis Pub/Sub Manager for Socket.io events
@@ -23,6 +26,8 @@ export class RedisPubSubManager {
   constructor(io: SocketIOServer) {
     this.io = io;
 
+    log.info({ redisUrl: env.REDIS_URL.replace(/:[^:]*@/, ':***@') }, "Initializing Redis subscriber...");
+
     // Initialize Redis subscriber with optimized settings
     this.subscriber = new Redis(env.REDIS_URL, {
       lazyConnect: false,
@@ -31,7 +36,7 @@ export class RedisPubSubManager {
       connectTimeout: 10000,
       retryStrategy: (times) => {
         const delay = Math.min(times * 50, 2000);
-        console.log(`[Redis PubSub] Retrying connection in ${delay}ms...`);
+        log.info({ times, delay }, "Retrying connection...");
         return delay;
       },
     });
@@ -51,20 +56,20 @@ export class RedisPubSubManager {
 
     // Handle reconnection
     this.subscriber.on("ready", () => {
-      console.log("[Redis PubSub] Connection ready/reconnected");
+      log.info("Connection ready/reconnected");
       void this.resubscribe();
     });
 
     this.subscriber.on("reconnecting", () => {
-      console.log("[Redis PubSub] Reconnecting...");
+      log.info("Reconnecting...");
     });
 
     this.subscriber.on("error", (error) => {
-      console.error("[Redis PubSub] Error:", error);
+      log.error({ err: error }, "Redis error");
     });
 
     this.subscriber.on("close", () => {
-      console.log("[Redis PubSub] Connection closed");
+      log.info("Connection closed");
     });
   }
 
@@ -84,13 +89,9 @@ export class RedisPubSubManager {
       const channels = Object.values(REDIS_CHANNELS);
       await this.subscriber.subscribe(...channels);
 
-      console.log(
-        `[Redis PubSub] ✅ Subscribed to channels:`,
-        channels
-      );
-      console.log(`[Redis PubSub] Status: ${this.subscriber.status}`);
+      log.info({ channels, status: this.subscriber.status }, "✅ Subscribed to channels");
     } catch (error) {
-      console.error("[Redis PubSub] Failed to setup subscriptions:", error);
+      log.error({ err: error }, "Failed to setup subscriptions");
       throw error;
     }
   }
@@ -102,9 +103,9 @@ export class RedisPubSubManager {
     try {
       const channels = Object.values(REDIS_CHANNELS);
       await this.subscriber.subscribe(...channels);
-      console.log("[Redis PubSub] ✅ Resubscribed after reconnection");
+      log.info({ channels }, "✅ Resubscribed after reconnection");
     } catch (error) {
-      console.error("[Redis PubSub] Failed to resubscribe:", error);
+      log.error({ err: error }, "Failed to resubscribe");
     }
   }
 
@@ -112,7 +113,7 @@ export class RedisPubSubManager {
    * Route messages to appropriate handlers based on channel
    */
   private routeMessage(channel: string, message: string): void {
-    console.log(`[Redis PubSub] Message received on channel: ${channel}`);
+    log.debug({ channel }, "Message received");
 
     switch (channel) {
       case REDIS_CHANNELS.PROVISIONING:
@@ -136,7 +137,7 @@ export class RedisPubSubManager {
         break;
 
       default:
-        console.warn(`[Redis PubSub] Unknown channel: ${channel}`);
+        log.warn({ channel }, "Unknown channel");
     }
   }
 
@@ -144,8 +145,8 @@ export class RedisPubSubManager {
    * Cleanup on shutdown
    */
   public async close(): Promise<void> {
-    console.log("[Redis PubSub] Closing connection...");
+    log.info("Closing connection...");
     await this.subscriber.quit();
-    console.log("[Redis PubSub] ✅ Connection closed");
+    log.info("✅ Connection closed");
   }
 }

@@ -17,6 +17,9 @@ import type {
   SendMessageData,
 } from "./types";
 import { validateEventData, validateWebhookPayload } from "./validation";
+import { createLogger } from "~/libs/utils/logger";
+
+const log = createLogger("EvolutionWebhook");
 
 export const evolutionWebhook = new Hono();
 
@@ -33,21 +36,21 @@ evolutionWebhook.post("/", async (c: Context) => {
 
     const { event, instance, data } = payload;
 
-    console.log(`[Evolution Webhook] ${event} from ${instance}`);
+    log.info({ event, instance }, "Webhook received");
 
     // Roteamento de eventos para handlers específicos
     await routeEvent(event, instance, data);
 
     return c.json({ success: true }, 200);
   } catch (error) {
-    console.error("[Evolution Webhook] Erro ao processar:", error);
+    log.error({ err: error }, "Error processing webhook");
 
     // Retornar 200 mesmo com erro para evitar retries da Evolution
     // mas logar o erro para debug
     return c.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Erro desconhecido",
+        error: error instanceof Error ? error.message : "Unknown error",
       },
       200,
     );
@@ -102,10 +105,10 @@ async function routeEvent(event: string, instance: string, data: unknown) {
     case "group-participants.update":
     case "labels.edit":
     case "labels.association":
-      console.log(`[Evolution Webhook] Evento não implementado: ${event}`);
+      log.info({ event }, "Event not implemented");
       break;
 
     default:
-      console.warn(`[Evolution Webhook] Evento desconhecido: ${event}`);
+      log.warn({ event }, "Unknown event");
   }
 }

@@ -6,6 +6,9 @@ import {
   TenantNotFoundError,
   TenantProvisioningError,
 } from "./tenant";
+import { createLogger } from "~/libs/utils/logger";
+
+const log = createLogger("ErrorHandler");
 
 export * from "./tenant";
 
@@ -13,7 +16,7 @@ export * from "./tenant";
  * Global error handler for Hono
  */
 export function handleError(err: Error, c: Context) {
-  console.error("Error:", err);
+  log.error({ err }, "Request error");
 
   // Zod validation errors
   if (err instanceof ZodError) {

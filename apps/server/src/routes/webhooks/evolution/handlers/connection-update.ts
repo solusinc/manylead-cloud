@@ -21,7 +21,7 @@ export async function handleConnectionUpdate(
   // Buscar canal
   const ch = await findChannelByInstanceName(instanceName);
   if (!ch) {
-    logger.warn("Canal não encontrado");
+    logger.warn("Channel not found");
     return;
   }
 

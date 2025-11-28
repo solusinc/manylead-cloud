@@ -1,5 +1,8 @@
 import type { Server as SocketIOServer } from "socket.io";
 import type { ChatEvent, MessageEvent, TypingEvent } from "../types";
+import { createLogger } from "~/libs/utils/logger";
+
+const log = createLogger("ChatHandler");
 
 /**
  * Handle chat events (created, updated, deleted)
@@ -14,16 +17,16 @@ export function handleChatEvent(
     // Se tem targetAgentId, enviar APENAS para aquele agent
     if (event.targetAgentId) {
       const agentRoom = `agent:${event.targetAgentId}`;
-      console.log(`[Chat] Sending ${event.type} to room: ${agentRoom}`);
+      log.info({ room: agentRoom, eventType: event.type }, "Sending to agent room");
       io.to(agentRoom).emit(event.type, event.data);
     } else {
       // Sem targetAgentId, broadcast para TODA a organização
       const room = `org:${event.organizationId}`;
-      console.log(`[Chat] Broadcasting ${event.type} to room: ${room}`);
+      log.info({ room, eventType: event.type }, "Broadcasting to organization");
       io.to(room).emit(event.type, event.data);
     }
   } catch (error) {
-    console.error("[Chat] Failed to parse event:", error);
+    log.error({ err: error }, "Failed to parse chat event");
   }
 }
 
@@ -40,16 +43,16 @@ export function handleMessageEvent(
     // Se tem targetAgentId, enviar APENAS para aquele agent (chat interno)
     if (event.targetAgentId) {
       const agentRoom = `agent:${event.targetAgentId}`;
-      console.log(`[Message] Sending ${event.type} to room: ${agentRoom} (private)`);
+      log.info({ room: agentRoom, eventType: event.type }, "Sending to agent (private)");
       io.to(agentRoom).emit(event.type, event.data);
     } else {
       // Sem targetAgentId, broadcast para TODA a organização (chat WhatsApp)
       const room = `org:${event.organizationId}`;
-      console.log(`[Message] Broadcasting ${event.type} to room: ${room}`);
+      log.info({ room, eventType: event.type }, "Broadcasting message to organization");
       io.to(room).emit(event.type, event.data);
     }
   } catch (error) {
-    console.error("[Message] Failed to parse event:", error);
+    log.error({ err: error }, "Failed to parse message event");
   }
 }
 
@@ -64,11 +67,11 @@ export function handleTypingEvent(
     const event = JSON.parse(message) as TypingEvent;
     const room = `chat:${event.chatId}`;
 
-    console.log(`[Typing] Broadcasting ${event.type} to room: ${room}`);
+    log.info({ room, eventType: event.type }, "Broadcasting typing indicator");
 
     // Broadcast to all clients in the chat room (except sender)
     io.to(room).emit(event.type, event.data);
   } catch (error) {
-    console.error("[Typing] Failed to parse event:", error);
+    log.error({ err: error }, "Failed to parse typing event");
   }
 }

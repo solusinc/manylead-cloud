@@ -17,7 +17,7 @@ export async function handleSendMessage(
 ) {
   const logger = new WebhookLogger("send.message", instanceName);
 
-  logger.info("Mensagem enviada confirmada", {
+  logger.info("Message sent confirmed", {
     to: data.key.remoteJid,
     id: data.key.id,
     status: data.status,
@@ -26,7 +26,7 @@ export async function handleSendMessage(
   // Buscar canal
   const ch = await findChannelByInstanceName(instanceName);
   if (!ch) {
-    logger.warn("Canal não encontrado");
+    logger.warn("Channel not found");
     return;
   }
 
@@ -42,7 +42,7 @@ export async function handleSendMessage(
       .limit(1);
 
     if (!existingMessage) {
-      logger.warn("Mensagem não encontrada no DB", { id: data.key.id });
+      logger.warn("Message not found in DB", { id: data.key.id });
       return;
     }
 
@@ -60,7 +60,7 @@ export async function handleSendMessage(
         ),
       );
 
-    logger.info("Status atualizado para 'sent'", {
+    logger.info("Status updated to 'sent'", {
       messageId: existingMessage.id,
     });
 
@@ -71,6 +71,6 @@ export async function handleSendMessage(
       status: "sent",
     });
   } catch (error) {
-    logger.error("Erro ao processar confirmação de envio", error);
+    logger.error("Error processing send confirmation", error);
   }
 }

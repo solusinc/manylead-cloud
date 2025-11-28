@@ -1,5 +1,8 @@
 import type { Server as SocketIOServer } from "socket.io";
 import type { ChannelSyncEvent } from "../types";
+import { createLogger } from "~/libs/utils/logger";
+
+const log = createLogger("ChannelSyncHandler");
 
 /**
  * Handle channel sync events
@@ -12,9 +15,7 @@ export function handleChannelSyncEvent(
     const event = JSON.parse(message) as ChannelSyncEvent;
     const room = `org:${event.organizationId}`;
 
-    console.log(
-      `[Channel Sync] Broadcasting ${event.type} to room: ${room}`
-    );
+    log.info({ room, eventType: event.type, channelId: event.channelId }, "Broadcasting channel sync event");
 
     // Broadcast to all clients in the organization's room
     io.to(room).emit(event.type, {
@@ -22,6 +23,6 @@ export function handleChannelSyncEvent(
       ...event.data,
     });
   } catch (error) {
-    console.error("[Channel Sync] Failed to parse event:", error);
+    log.error({ err: error }, "Failed to parse channel sync event");
   }
 }

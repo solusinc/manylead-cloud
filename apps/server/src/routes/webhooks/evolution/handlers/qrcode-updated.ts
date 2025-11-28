@@ -16,18 +16,18 @@ export async function handleQRCodeUpdated(
 
   // Validar dados
   if (!data.qrcode.base64) {
-    logger.warn("QR code vazio no payload");
+    logger.warn("Empty QR code in payload");
     return;
   }
 
   // Buscar canal
   const ch = await findChannelByInstanceName(instanceName);
   if (!ch) {
-    logger.warn("Canal não encontrado");
+    logger.warn("Channel not found");
     return;
   }
 
-  logger.info("QR Code recebido", {
+  logger.info("QR Code received", {
     channelId: ch.id,
     organizationId: ch.organizationId,
   });
@@ -39,5 +39,5 @@ export async function handleQRCodeUpdated(
     qrCode: data.qrcode.base64,
   });
 
-  logger.info("QR Code emitido via Socket.io");
+  logger.info("QR Code emitted via Socket.io");
 }

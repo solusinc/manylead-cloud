@@ -18,3 +18,17 @@ export const logger = pino({
         }
       : undefined,
 });
+
+/**
+ * Create a child logger with component context
+ *
+ * Usage:
+ * ```ts
+ * const log = createLogger("SocketManager");
+ * log.info("Server started");
+ * log.error({ err }, "Failed to connect");
+ * ```
+ */
+export function createLogger(component: string) {
+  return logger.child({ component });
+}

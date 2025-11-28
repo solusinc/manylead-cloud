@@ -2,6 +2,7 @@ import { and, eq, message } from "@manylead/db";
 
 import { getSocketManager } from "~/socket";
 import { tenantManager } from "~/libs/tenant-manager";
+import { MessageStatusService } from "~/libs/whatsapp/message-status.service";
 
 import type { MessageData } from "../types";
 import { findChannelByInstanceName, WebhookLogger } from "../utils";
@@ -28,18 +29,19 @@ export async function handleMessagesUpdate(
   // Buscar canal
   const ch = await findChannelByInstanceName(instanceName);
   if (!ch) {
-    logger.warn("Canal não encontrado");
+    logger.warn("Channel not found");
     return;
   }
 
-  logger.info(`${data.messages.length} mensagens atualizadas`);
+  logger.info(`${data.messages.length} messages updated`);
 
   const tenantDb = await tenantManager.getConnection(ch.organizationId);
   const socketManager = getSocketManager();
+  const statusService = new MessageStatusService();
 
   for (const msg of data.messages) {
     try {
-      logger.info("Processando atualização", {
+      logger.info("Processing update", {
         id: msg.key.id,
         fromMe: msg.key.fromMe,
       });
@@ -52,70 +54,37 @@ export async function handleMessagesUpdate(
         .limit(1);
 
       if (!existingMessage) {
-        logger.warn("Mensagem não encontrada no DB", { id: msg.key.id });
+        logger.warn("Message not found in DB", { id: msg.key.id });
         continue;
       }
 
-      // Extrair status da mensagem (formato Evolution API)
-      // O status pode vir em msg.status ou em msg.message?.status
-      let newStatus = existingMessage.status;
-
-      // Tentar extrair status do payload
-      if (msg.message) {
-        const msgObj = msg.message;
-        if (msgObj.status) {
-          const statusCode = Number(msgObj.status);
-
-          // Evolution API status codes:
-          // 1 = PENDING
-          // 2 = SERVER_ACK (sent)
-          // 3 = DELIVERY_ACK (delivered)
-          // 4 = READ (read)
-          // 5 = PLAYED (audio/video played)
-          switch (statusCode) {
-            case 2:
-              newStatus = "sent";
-              break;
-            case 3:
-              newStatus = "delivered";
-              break;
-            case 4:
-              newStatus = "read";
-              break;
-            default:
-              logger.warn("Status code desconhecido", { statusCode });
-          }
-        }
+      // Extract and map status using service
+      const statusCode = statusService.extractStatusCode(msg.message);
+      if (!statusCode) {
+        logger.info("No status code found in message");
+        continue;
       }
 
-      // Só atualizar se o status mudou
+      const newStatus = statusService.mapStatusCode(statusCode);
+      if (!newStatus) {
+        logger.warn("Could not map status code", { statusCode });
+        continue;
+      }
+
+      // Only update if status changed
       if (newStatus === existingMessage.status) {
-        logger.info("Status não mudou, ignorando");
+        logger.info("Status unchanged, skipping");
         continue;
       }
 
-      logger.info("Atualizando status", {
+      logger.info("Updating status", {
         messageId: existingMessage.id,
         oldStatus: existingMessage.status,
         newStatus,
       });
 
-      // Atualizar mensagem
-      const updateData: {
-        status: typeof newStatus;
-        deliveredAt?: Date;
-        readAt?: Date;
-      } = {
-        status: newStatus,
-      };
-
-      if (newStatus === "delivered") {
-        updateData.deliveredAt = new Date();
-      }
-
-      if (newStatus === "read") {
-        updateData.readAt = new Date();
-      }
+      // Create update data with timestamps
+      const updateData = statusService.createStatusUpdateData(newStatus);
 
       await tenantDb
         .update(message)
@@ -134,9 +103,9 @@ export async function handleMessagesUpdate(
         status: newStatus,
       });
 
-      logger.info("Status atualizado com sucesso", { id: msg.key.id });
+      logger.info("Status updated successfully", { id: msg.key.id });
     } catch (error) {
-      logger.error("Erro ao processar atualização", error);
+      logger.error("Error processing update", error);
     }
   }
 }

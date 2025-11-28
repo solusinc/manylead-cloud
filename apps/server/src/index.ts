@@ -11,6 +11,9 @@ import { handleError } from "~/libs/errors";
 import { v1 } from "~/routes/v1";
 import { webhooks } from "~/routes/webhooks";
 import { SocketManager, setSocketManager } from "~/socket";
+import { createLogger } from "~/libs/utils/logger";
+
+const log = createLogger("Server");
 
 /**
  * Create Hono app
@@ -85,7 +88,7 @@ if (isDev) {
   showRoutes(app, { verbose: true, colorize: true });
 }
 
-console.log(`🚀 Starting server on port ${port}`);
+log.info({ port }, "🚀 Starting server");
 
 /**
  * Start Bun server with Socket.io support
@@ -108,33 +111,33 @@ setSocketManager(socketManager); // Set singleton instance
 // Start HTTP server for Socket.io on the same port + 1
 const socketPort = port + 1;
 httpServer.listen(socketPort, () => {
-  console.log(`🔌 Socket.io server listening on port ${socketPort}`);
+  log.info({ port: socketPort }, "🔌 Socket.io server listening");
 });
 
 /**
  * Graceful shutdown
  */
 process.on("SIGTERM", () => {
-  console.log("SIGTERM signal received: closing HTTP server");
+  log.info("SIGTERM signal received: closing HTTP server");
 
   void (async () => {
     await socketManager.close();
     await server.stop();
     httpServer.close(() => {
-      console.log("HTTP server closed");
+      log.info("HTTP server closed");
       process.exit(0);
     });
   })();
 });
 
 process.on("SIGINT", () => {
-  console.log("SIGINT signal received: closing HTTP server");
+  log.info("SIGINT signal received: closing HTTP server");
 
   void (async () => {
     await socketManager.close();
     await server.stop();
     httpServer.close(() => {
-      console.log("HTTP server closed");
+      log.info("HTTP server closed");
       process.exit(0);
     });
   })();

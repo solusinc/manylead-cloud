@@ -2,6 +2,9 @@ import { channel, db as catalogDb, organization } from "@manylead/db";
 import { eq } from "@manylead/db";
 
 import { tenantManager } from "~/libs/tenant-manager";
+import { createLogger } from "~/libs/utils/logger";
+
+const log = createLogger("WebhookUtils");
 
 /**
  * Utilities para webhook handlers
@@ -17,7 +20,7 @@ export async function extractOrganizationId(instanceName: string): Promise<strin
   const slug = instanceName;
 
   if (!slug) {
-    console.warn(`[Utils] instanceName vazio`);
+    log.warn("Empty instanceName");
     return null;
   }
 
@@ -30,13 +33,13 @@ export async function extractOrganizationId(instanceName: string): Promise<strin
       .limit(1);
 
     if (!org) {
-      console.warn(`[Utils] Organização não encontrada para slug: ${slug}`);
+      log.warn({ slug }, "Organization not found for slug");
       return null;
     }
 
     return org.id;
   } catch (error) {
-    console.error(`[Utils] Erro ao buscar organização pelo slug ${slug}:`, error);
+    log.error({ err: error, slug }, "Error fetching organization by slug");
     return null;
   }
 }
@@ -47,16 +50,16 @@ export async function extractOrganizationId(instanceName: string): Promise<strin
  * @returns Canal encontrado ou null
  */
 export async function findChannelByInstanceName(instanceName: string) {
-  console.log(`[Utils] Buscando canal para instanceName: ${instanceName}`);
+  log.info({ instanceName }, "Searching for channel by instanceName");
 
   const organizationId = await extractOrganizationId(instanceName);
 
   if (!organizationId) {
-    console.log(`[Utils] organizationId não encontrado para instanceName: ${instanceName}`);
+    log.info({ instanceName }, "organizationId not found for instanceName");
     return null;
   }
 
-  console.log(`[Utils] organizationId encontrado: ${organizationId}`);
+  log.info({ organizationId }, "organizationId found");
 
   try {
     const tenantDb = await tenantManager.getConnection(organizationId);
@@ -67,11 +70,14 @@ export async function findChannelByInstanceName(instanceName: string) {
       .where(eq(channel.evolutionInstanceName, instanceName))
       .limit(1);
 
-    console.log(`[Utils] Canal encontrado:`, ch ? { id: ch.id, evolutionInstanceName: ch.evolutionInstanceName } : 'null');
+    log.info(
+      { channel: ch ? { id: ch.id, evolutionInstanceName: ch.evolutionInstanceName } : null },
+      "Channel found"
+    );
 
     return ch ?? null;
   } catch (error) {
-    console.error(`[Utils] Erro ao buscar canal:`, error);
+    log.error({ err: error }, "Error fetching channel");
     return null;
   }
 }
@@ -80,21 +86,21 @@ export async function findChannelByInstanceName(instanceName: string) {
  * Logger estruturado para webhooks
  */
 export class WebhookLogger {
-  private prefix: string;
+  private logger: ReturnType<typeof createLogger>;
 
   constructor(event: string, instanceName: string) {
-    this.prefix = `[Webhook:${event}:${instanceName}]`;
+    this.logger = createLogger(`Webhook:${event}`).child({ instanceName });
   }
 
   info(message: string, data?: unknown) {
-    console.log(this.prefix, message, data ? JSON.stringify(data) : "");
+    this.logger.info(data ?? {}, message);
   }
 
   warn(message: string, data?: unknown) {
-    console.warn(this.prefix, message, data ? JSON.stringify(data) : "");
+    this.logger.warn(data ?? {}, message);
   }
 
   error(message: string, error?: unknown) {
-    console.error(this.prefix, message, error);
+    this.logger.error({ err: error }, message);
   }
 }
