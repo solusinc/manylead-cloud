@@ -1,9 +1,8 @@
 import type { Job } from "bullmq";
-import Redis from "ioredis";
 import { channel, eq } from "@manylead/db";
-import { TenantDatabaseManager } from "@manylead/tenant-db";
 import { logger } from "~/libs/utils/logger";
-import { env } from "~/env";
+import { eventPublisher } from "~/libs/cache/event-publisher";
+import { tenantManager } from "~/libs/tenant-manager";
 
 /**
  * Channel sync job data schema
@@ -11,41 +10,6 @@ import { env } from "~/env";
 export interface ChannelSyncJobData {
   channelId: string;
   organizationId: string;
-}
-
-/**
- * Sync event for Socket.io
- */
-interface SyncEvent {
-  type: "channel:sync:start" | "channel:sync:complete" | "channel:sync:error";
-  organizationId: string;
-  channelId: string;
-  data: {
-    message?: string;
-    error?: string;
-  };
-}
-
-/**
- * Redis publisher for real-time updates
- */
-const redisPublisher = new Redis(env.REDIS_URL, {
-  lazyConnect: false,
-  enableAutoPipelining: true,
-  keepAlive: 30000,
-  connectTimeout: 10000,
-});
-
-/**
- * Publish sync event to Redis channel
- */
-async function publishEvent(event: SyncEvent): Promise<void> {
-  try {
-    await redisPublisher.publish("channel:sync", JSON.stringify(event));
-    logger.debug({ event }, "Published sync event to Redis");
-  } catch (error) {
-    logger.error({ error }, "Failed to publish sync event");
-  }
 }
 
 /**
@@ -66,7 +30,6 @@ export async function processChannelSync(
 
   try {
     // Get tenant database connection
-    const tenantManager = new TenantDatabaseManager();
     const tenantDb = await tenantManager.getConnection(organizationId);
 
     // Update status to syncing
@@ -79,7 +42,7 @@ export async function processChannelSync(
       .where(eq(channel.id, channelId));
 
     // Publish start event
-    await publishEvent({
+    await eventPublisher.publish("channel:sync", {
       type: "channel:sync:start",
       organizationId,
       channelId,
@@ -110,7 +73,7 @@ export async function processChannelSync(
       .where(eq(channel.id, channelId));
 
     // Publish complete event
-    await publishEvent({
+    await eventPublisher.publish("channel:sync", {
       type: "channel:sync:complete",
       organizationId,
       channelId,
@@ -131,7 +94,6 @@ export async function processChannelSync(
 
     try {
       // Get tenant database connection
-      const tenantManager = new TenantDatabaseManager();
       const tenantDb = await tenantManager.getConnection(organizationId);
 
       // Update status to failed
@@ -145,7 +107,7 @@ export async function processChannelSync(
         .where(eq(channel.id, channelId));
 
       // Publish error event
-      await publishEvent({
+      await eventPublisher.publish("channel:sync", {
         type: "channel:sync:error",
         organizationId,
         channelId,

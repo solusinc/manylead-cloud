@@ -1,6 +1,7 @@
 import type { Worker } from "bullmq";
 import { env } from "~/env";
 import { closeRedis } from "~/libs/cache/redis";
+import { eventPublisher } from "~/libs/cache/event-publisher";
 import { createWorkers } from "~/libs/queue/workers";
 import { logger } from "~/libs/utils/logger";
 
@@ -66,6 +67,9 @@ async function gracefulShutdown(workers: Worker[]) {
 
   // Close Redis connection
   await closeRedis();
+
+  // Close event publisher
+  await eventPublisher.close();
 
   logger.info("Graceful shutdown complete");
   process.exit(0);

@@ -1,6 +1,5 @@
 import type { Job } from "bullmq";
 import { attachment, eq } from "@manylead/db";
-import { TenantDatabaseManager } from "@manylead/tenant-db";
 import { R2StorageProvider } from "@manylead/storage/providers";
 import {
   generateMediaPath,
@@ -10,6 +9,7 @@ import {
 import { EvolutionAPIClient } from "@manylead/evolution-api-client";
 import { logger } from "~/libs/utils/logger";
 import { env } from "~/env";
+import { tenantManager } from "~/libs/tenant-manager";
 
 /**
  * Media download job data schema
@@ -72,7 +72,6 @@ export async function processMediaDownload(
     "Starting media download",
   );
 
-  const tenantManager = new TenantDatabaseManager();
   const tenantDb = await tenantManager.getConnection(organizationId);
 
   try {

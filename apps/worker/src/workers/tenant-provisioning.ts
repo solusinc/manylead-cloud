@@ -1,9 +1,8 @@
 import type { Job } from "bullmq";
-import Redis from "ioredis";
-import { TenantDatabaseManager } from "@manylead/tenant-db";
 import { agent } from "@manylead/db";
 import { logger } from "~/libs/utils/logger";
-import { env } from "~/env";
+import { eventPublisher } from "~/libs/cache/event-publisher";
+import { tenantManager } from "~/libs/tenant-manager";
 
 /**
  * Tenant provisioning job data schema
@@ -16,40 +15,80 @@ export interface TenantProvisioningJobData {
 }
 
 /**
- * Provisioning event for Socket.io
+ * Tenant provisioning progress steps
  */
-interface ProvisioningEvent {
-  type: "provisioning:progress" | "provisioning:complete" | "provisioning:error";
-  organizationId: string;
-  data: {
-    progress?: number;
-    currentStep?: string;
-    message?: string;
-    error?: string;
-  };
-}
+const PROGRESS = {
+  STARTING: 5,
+  CREATING_DATABASE: 20,
+  RUNNING_MIGRATIONS: 60,
+  SEEDING_DATA: 80,
+  CREATING_OWNER: 85,
+  FINALIZING: 95,
+  COMPLETE: 100,
+} as const;
 
 /**
- * Redis publisher for real-time updates
- * PERFORMANCE OPTIMIZATION: enableAutoPipelining batches publish commands
+ * Progress step metadata for UI feedback
  */
-const redisPublisher = new Redis(env.REDIS_URL, {
-  lazyConnect: false, // Connect immediately
-  enableAutoPipelining: true, // Batch commands for low latency
-  keepAlive: 30000, // Keep TCP connection alive
-  connectTimeout: 10000, // 10 second timeout
-});
+const PROGRESS_STEPS = {
+  [PROGRESS.STARTING]: {
+    step: "starting",
+    message: "Iniciando...",
+  },
+  [PROGRESS.CREATING_DATABASE]: {
+    step: "creating_database",
+    message: "Preparando tudo...",
+  },
+  [PROGRESS.RUNNING_MIGRATIONS]: {
+    step: "running_migrations",
+    message: "Configurando...",
+  },
+  [PROGRESS.SEEDING_DATA]: {
+    step: "seeding_data",
+    message: "Ajustando detalhes...",
+  },
+  [PROGRESS.CREATING_OWNER]: {
+    step: "creating_owner",
+    message: "Criando seu perfil...",
+  },
+  [PROGRESS.FINALIZING]: {
+    step: "finalizing",
+    message: "Finalizando...",
+  },
+  [PROGRESS.COMPLETE]: {
+    step: "completed",
+    message: "Concluído!",
+  },
+} as const;
 
 /**
- * Publish provisioning event to Redis channel
+ * Helper to update job progress and publish event to Redis
+ *
+ * Centralizes progress updates to avoid repetition and ensure
+ * consistency between job.updateProgress() and Redis event publishing.
+ *
+ * @param job - BullMQ job instance
+ * @param organizationId - Organization ID for event publishing
+ * @param progressValue - Progress percentage (from PROGRESS constants)
  */
-async function publishEvent(event: ProvisioningEvent): Promise<void> {
-  try {
-    await redisPublisher.publish("tenant:provisioning", JSON.stringify(event));
-    logger.debug({ event }, "Published provisioning event to Redis");
-  } catch (error) {
-    logger.error({ error, event }, "Failed to publish event to Redis");
-  }
+async function updateProgress(
+  job: Job<TenantProvisioningJobData>,
+  organizationId: string,
+  progressValue: number,
+): Promise<void> {
+  await job.updateProgress(progressValue);
+
+  const stepInfo = PROGRESS_STEPS[progressValue as keyof typeof PROGRESS_STEPS];
+
+  await eventPublisher.publish("tenant:provisioning", {
+    type: "provisioning:progress",
+    organizationId,
+    data: {
+      progress: progressValue,
+      currentStep: stepInfo.step,
+      message: stepInfo.message,
+    },
+  });
 }
 
 /**
@@ -71,34 +110,13 @@ export async function processTenantProvisioning(
     "Processing tenant provisioning job",
   );
 
-  const tenantManager = new TenantDatabaseManager();
-
   try {
     // Step 1: Starting provisioning
-    await job.updateProgress(5);
-    await publishEvent({
-      type: "provisioning:progress",
-      organizationId,
-      data: {
-        progress: 5,
-        currentStep: "starting",
-        message: "Iniciando...",
-      },
-    });
-
+    await updateProgress(job, organizationId, PROGRESS.STARTING);
     logger.info({ organizationId }, "Starting tenant provisioning...");
 
     // Step 2: Get tenant record (already created by provisionTenantAsync)
-    await job.updateProgress(20);
-    await publishEvent({
-      type: "provisioning:progress",
-      organizationId,
-      data: {
-        progress: 20,
-        currentStep: "creating_database",
-        message: "Preparando tudo...",
-      },
-    });
+    await updateProgress(job, organizationId, PROGRESS.CREATING_DATABASE);
 
     // Get the tenant that was already created by the API
     const tenant = await tenantManager.getTenantByOrganization(organizationId);
@@ -114,45 +132,18 @@ export async function processTenantProvisioning(
     logger.info({ organizationId, tenantId: tenant.id }, "Tenant database created and migrations applied");
 
     // Step 3: Running migrations
-    await job.updateProgress(60);
-    await publishEvent({
-      type: "provisioning:progress",
-      organizationId,
-      data: {
-        progress: 60,
-        currentStep: "running_migrations",
-        message: "Configurando...",
-      },
-    });
+    await updateProgress(job, organizationId, PROGRESS.RUNNING_MIGRATIONS);
 
     // Migrations are run by provisionTenant, just wait a bit for effect
     await new Promise((resolve) => setTimeout(resolve, 500));
 
     // Step 4: Seeding data
-    await job.updateProgress(80);
-    await publishEvent({
-      type: "provisioning:progress",
-      organizationId,
-      data: {
-        progress: 80,
-        currentStep: "seeding_data",
-        message: "Ajustando detalhes...",
-      },
-    });
+    await updateProgress(job, organizationId, PROGRESS.SEEDING_DATA);
 
     await new Promise((resolve) => setTimeout(resolve, 500));
 
     // Step 5: Create owner agent
-    await job.updateProgress(85);
-    await publishEvent({
-      type: "provisioning:progress",
-      organizationId,
-      data: {
-        progress: 85,
-        currentStep: "creating_owner",
-        message: "Criando seu perfil...",
-      },
-    });
+    await updateProgress(job, organizationId, PROGRESS.CREATING_OWNER);
 
     const tenantDb = await tenantManager.getConnection(organizationId);
     await tenantDb.insert(agent).values({
@@ -170,30 +161,20 @@ export async function processTenantProvisioning(
     logger.info({ organizationId, ownerId }, "Owner agent created");
 
     // Step 6: Finalizing
-    await job.updateProgress(95);
-    await publishEvent({
-      type: "provisioning:progress",
-      organizationId,
-      data: {
-        progress: 95,
-        currentStep: "finalizing",
-        message: "Finalizando...",
-      },
-    });
+    await updateProgress(job, organizationId, PROGRESS.FINALIZING);
 
     // Update tenant status to active
     await tenantManager.updateTenantStatus(tenant.id, "active");
 
-    await job.updateProgress(100);
-
-    // Step 6: Complete
-    await publishEvent({
+    // Step 7: Complete
+    await job.updateProgress(PROGRESS.COMPLETE);
+    await eventPublisher.publish("tenant:provisioning", {
       type: "provisioning:complete",
       organizationId,
       data: {
-        progress: 100,
-        currentStep: "completed",
-        message: "Concluído!",
+        progress: PROGRESS.COMPLETE,
+        currentStep: PROGRESS_STEPS[PROGRESS.COMPLETE].step,
+        message: PROGRESS_STEPS[PROGRESS.COMPLETE].message,
       },
     });
 
@@ -208,7 +189,7 @@ export async function processTenantProvisioning(
     );
 
     // Publish error event
-    await publishEvent({
+    await eventPublisher.publish("tenant:provisioning", {
       type: "provisioning:error",
       organizationId,
       data: {

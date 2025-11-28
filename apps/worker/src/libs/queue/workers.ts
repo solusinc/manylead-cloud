@@ -12,6 +12,74 @@ import { processMediaDownload } from "~/workers/media-download";
 import { processAttachmentCleanup } from "~/workers/attachment-cleanup";
 
 /**
+ * Worker event listeners configuration
+ */
+interface WorkerEventListenersOptions {
+  queueName: string;
+  supportsProgress?: boolean;
+}
+
+/**
+ * Attach standardized event listeners to a BullMQ worker
+ *
+ * Centralizes logging logic for all worker events:
+ * - ready: Worker initialized and ready to process jobs
+ * - error: Worker-level error occurred
+ * - completed: Job completed successfully
+ * - failed: Job failed with error
+ * - progress: Job progress update (optional, only if supportsProgress is true)
+ *
+ * @param worker - BullMQ worker instance
+ * @param options - Configuration options (queueName, supportsProgress)
+ */
+function attachEventListeners(
+  worker: Worker,
+  options: WorkerEventListenersOptions,
+): void {
+  const { queueName, supportsProgress = false } = options;
+
+  worker.on("ready", () => {
+    logger.info({ queueName }, "Worker ready");
+  });
+
+  worker.on("error", (err) => {
+    logger.error(
+      { queueName, error: err.message, stack: err.stack },
+      "Worker error",
+    );
+  });
+
+  worker.on("completed", (job) => {
+    logger.info(
+      { jobId: job.id, queueName },
+      "Job completed",
+    );
+  });
+
+  worker.on("failed", (job, err) => {
+    logger.error(
+      {
+        jobId: job?.id,
+        queueName,
+        error: err.message,
+        stack: err.stack,
+      },
+      "Job failed",
+    );
+  });
+
+  // Progress listener only for workers that support it
+  if (supportsProgress) {
+    worker.on("progress", (job, progress) => {
+      logger.debug(
+        { jobId: job.id, queueName, progress },
+        "Job progress",
+      );
+    });
+  }
+}
+
+/**
  * Create and configure all BullMQ workers
  */
 export function createWorkers(): Worker[] {
@@ -35,48 +103,9 @@ export function createWorkers(): Worker[] {
     },
   );
 
-  // Event listeners for tenant provisioning worker
-  tenantProvisioningWorker.on("ready", () => {
-    logger.info(
-      { queueName: env.QUEUE_TENANT_PROVISIONING },
-      "Worker ready",
-    );
-  });
-
-  tenantProvisioningWorker.on("error", (err) => {
-    logger.error(
-      { queueName: env.QUEUE_TENANT_PROVISIONING, error: err.message },
-      "Worker error",
-    );
-  });
-
-  tenantProvisioningWorker.on("completed", (job) => {
-    logger.info(
-      { jobId: job.id, queueName: env.QUEUE_TENANT_PROVISIONING },
-      "Job completed",
-    );
-  });
-
-  tenantProvisioningWorker.on("failed", (job, err) => {
-    logger.error(
-      {
-        jobId: job?.id,
-        queueName: env.QUEUE_TENANT_PROVISIONING,
-        error: err.message,
-      },
-      "Job failed",
-    );
-  });
-
-  tenantProvisioningWorker.on("progress", (job, progress) => {
-    logger.debug(
-      {
-        jobId: job.id,
-        queueName: env.QUEUE_TENANT_PROVISIONING,
-        progress,
-      },
-      "Job progress",
-    );
+  attachEventListeners(tenantProvisioningWorker, {
+    queueName: env.QUEUE_TENANT_PROVISIONING,
+    supportsProgress: true, // Only this worker supports progress updates
   });
 
   logger.info(`Worker created for queue: ${env.QUEUE_TENANT_PROVISIONING}`);
@@ -99,34 +128,8 @@ export function createWorkers(): Worker[] {
     }
   );
 
-  // Event listeners for channel sync worker
-  channelSyncWorker.on("ready", () => {
-    logger.info({ queueName: env.QUEUE_CHANNEL_SYNC }, "Worker ready");
-  });
-
-  channelSyncWorker.on("error", (err) => {
-    logger.error(
-      { queueName: env.QUEUE_CHANNEL_SYNC, error: err.message },
-      "Worker error"
-    );
-  });
-
-  channelSyncWorker.on("completed", (job) => {
-    logger.info(
-      { jobId: job.id, queueName: env.QUEUE_CHANNEL_SYNC },
-      "Job completed"
-    );
-  });
-
-  channelSyncWorker.on("failed", (job, err) => {
-    logger.error(
-      {
-        jobId: job?.id,
-        queueName: env.QUEUE_CHANNEL_SYNC,
-        error: err.message,
-      },
-      "Job failed"
-    );
+  attachEventListeners(channelSyncWorker, {
+    queueName: env.QUEUE_CHANNEL_SYNC,
   });
 
   logger.info(`Worker created for queue: ${env.QUEUE_CHANNEL_SYNC}`);
@@ -153,34 +156,8 @@ export function createWorkers(): Worker[] {
     },
   );
 
-  // Event listeners for media download worker
-  mediaDownloadWorker.on("ready", () => {
-    logger.info({ queueName: env.QUEUE_MEDIA_DOWNLOAD }, "Worker ready");
-  });
-
-  mediaDownloadWorker.on("error", (err) => {
-    logger.error(
-      { queueName: env.QUEUE_MEDIA_DOWNLOAD, error: err.message },
-      "Worker error",
-    );
-  });
-
-  mediaDownloadWorker.on("completed", (job) => {
-    logger.info(
-      { jobId: job.id, queueName: env.QUEUE_MEDIA_DOWNLOAD },
-      "Job completed",
-    );
-  });
-
-  mediaDownloadWorker.on("failed", (job, err) => {
-    logger.error(
-      {
-        jobId: job?.id,
-        queueName: env.QUEUE_MEDIA_DOWNLOAD,
-        error: err.message,
-      },
-      "Job failed",
-    );
+  attachEventListeners(mediaDownloadWorker, {
+    queueName: env.QUEUE_MEDIA_DOWNLOAD,
   });
 
   logger.info(`Worker created for queue: ${env.QUEUE_MEDIA_DOWNLOAD}`);
@@ -206,34 +183,8 @@ export function createWorkers(): Worker[] {
     },
   );
 
-  // Event listeners for attachment cleanup worker
-  attachmentCleanupWorker.on("ready", () => {
-    logger.info({ queueName: env.QUEUE_ATTACHMENT_CLEANUP }, "Worker ready");
-  });
-
-  attachmentCleanupWorker.on("error", (err) => {
-    logger.error(
-      { queueName: env.QUEUE_ATTACHMENT_CLEANUP, error: err.message },
-      "Worker error",
-    );
-  });
-
-  attachmentCleanupWorker.on("completed", (job) => {
-    logger.info(
-      { jobId: job.id, queueName: env.QUEUE_ATTACHMENT_CLEANUP },
-      "Job completed",
-    );
-  });
-
-  attachmentCleanupWorker.on("failed", (job, err) => {
-    logger.error(
-      {
-        jobId: job?.id,
-        queueName: env.QUEUE_ATTACHMENT_CLEANUP,
-        error: err.message,
-      },
-      "Job failed",
-    );
+  attachEventListeners(attachmentCleanupWorker, {
+    queueName: env.QUEUE_ATTACHMENT_CLEANUP,
   });
 
   logger.info(`Worker created for queue: ${env.QUEUE_ATTACHMENT_CLEANUP}`);

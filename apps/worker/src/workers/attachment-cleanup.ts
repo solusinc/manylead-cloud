@@ -1,7 +1,7 @@
 import type { Job } from "bullmq";
 import { and, attachment, eq, lte, sql } from "@manylead/db";
-import { TenantDatabaseManager } from "@manylead/tenant-db";
 import { logger } from "~/libs/utils/logger";
+import { tenantManager } from "~/libs/tenant-manager";
 
 /**
  * Attachment cleanup job data schema
@@ -30,7 +30,6 @@ export async function processAttachmentCleanup(
     "Starting attachment cleanup",
   );
 
-  const tenantManager = new TenantDatabaseManager();
   const tenantDb = await tenantManager.getConnection(organizationId);
 
   try {
