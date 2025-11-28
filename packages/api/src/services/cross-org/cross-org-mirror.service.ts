@@ -1,4 +1,5 @@
 import {
+  agent,
   and,
   chat,
   chatParticipant,
@@ -107,50 +108,81 @@ export class CrossOrgMirrorService {
 
     if (!sourceContact) return;
 
-    // Criar chat espelhado na org target
-    const [mirroredChat] = await targetTenantDb
-      .insert(chat)
+    // Buscar ou criar chat espelhado ativo
+    // NUNCA pode ter dois chats abertos entre as mesmas orgs
+    let mirroredChat = await this.findActiveMirroredChat(
+      targetTenantDb,
+      sourceContact.id,
+    );
+
+    // Se não encontrar chat ativo, criar novo
+    if (!mirroredChat) {
+      const [newChat] = await targetTenantDb
+        .insert(chat)
+        .values({
+          organizationId: targetOrgId,
+          contactId: sourceContact.id,
+          channelId: null,
+          messageSource: "internal",
+          initiatorAgentId: null,
+          assignedTo: null,
+          status: "pending",
+          createdAt: now,
+          updatedAt: now,
+          lastMessageAt: now,
+          lastMessageContent: messageContent.replace(/^\*\*.*?\*\*\n/, ""), // Remove signature
+          lastMessageSender: "agent",
+          totalMessages: 0,
+          unreadCount: 0,
+        })
+        .returning();
+
+      if (!newChat) return;
+
+      mirroredChat = newChat;
+
+      // Emitir evento chat:created apenas para chats novos
+      await this.eventPublisher.chatCreated(targetOrgId, newChat, {
+        contact: sourceContact,
+      });
+    }
+
+    // Criar mensagem espelhada com referência ao ID original
+    const [mirroredMessage] = await targetTenantDb
+      .insert(message)
       .values({
-        organizationId: targetOrgId,
-        contactId: sourceContact.id,
-        channelId: null,
+        chatId: mirroredChat.id,
         messageSource: "internal",
-        initiatorAgentId: null,
-        assignedTo: null,
-        status: "pending",
-        createdAt: now,
-        updatedAt: now,
-        lastMessageAt: now,
-        lastMessageContent: messageContent.replace(/^\*\*.*?\*\*\n/, ""), // Remove signature
-        lastMessageSender: "agent",
-        totalMessages: 1,
-        unreadCount: 1,
+        sender: "agent",
+        senderId: null,
+        messageType: "text",
+        content: messageContent,
+        metadata: {
+          ...metadata,
+          originalMessageId: messageId,
+        },
+        status: "sent",
+        timestamp: messageTimestamp,
+        sentAt: messageTimestamp,
       })
       .returning();
 
-    if (!mirroredChat) return;
+    // Atualizar chat com nova mensagem
+    await this.updateMirroredChatAfterMessage(
+      targetTenantDb,
+      mirroredChat,
+      messageContent.replace(/^\*\*.*?\*\*\n/, ""), // Remove signature
+      messageTimestamp,
+    );
 
-    // Criar mensagem espelhada com referência ao ID original
-    await targetTenantDb.insert(message).values({
-      chatId: mirroredChat.id,
-      messageSource: "internal",
-      sender: "agent",
-      senderId: null,
-      messageType: "text",
-      content: messageContent,
-      metadata: {
-        ...metadata,
-        originalMessageId: messageId,
-      },
-      status: "sent",
-      timestamp: messageTimestamp,
-      sentAt: messageTimestamp,
-    });
-
-    // Emitir evento chat:created na org target
-    await this.eventPublisher.chatCreated(targetOrgId, mirroredChat, {
-      contact: sourceContact,
-    });
+    // Emitir evento message:created
+    if (mirroredMessage) {
+      await this.eventPublisher.messageCreated(
+        targetOrgId,
+        mirroredChat.id,
+        mirroredMessage,
+      );
+    }
   }
 
   /**
@@ -629,19 +661,36 @@ export class CrossOrgMirrorService {
         })
         .where(eq(chat.id, mirroredChat.id));
 
-      // Incrementar unreadCount de todos os participants
-      await targetTenantDb
-        .update(chatParticipant)
-        .set({
-          unreadCount: sql`COALESCE(${chatParticipant.unreadCount}, 0) + 1`,
-          updatedAt: timestamp,
-        })
-        .where(
-          and(
-            eq(chatParticipant.chatId, mirroredChat.id),
-            eq(chatParticipant.chatCreatedAt, mirroredChat.createdAt),
-          ),
-        );
+      // Para chats cross-org, criar participants para TODOS os agents da org
+      // (não só para quem está assigned)
+      // Como estamos na tenantDb, todos os agents já são da org correta
+      const allAgents = await targetTenantDb
+        .select({ id: agent.id })
+        .from(agent);
+
+      // Upsert participants para todos os agents
+      for (const ag of allAgents) {
+        await targetTenantDb
+          .insert(chatParticipant)
+          .values({
+            chatId: mirroredChat.id,
+            chatCreatedAt: mirroredChat.createdAt,
+            agentId: ag.id,
+            unreadCount: 1,
+            lastReadAt: timestamp,
+          })
+          .onConflictDoUpdate({
+            target: [
+              chatParticipant.chatId,
+              chatParticipant.chatCreatedAt,
+              chatParticipant.agentId,
+            ],
+            set: {
+              unreadCount: sql`COALESCE(${chatParticipant.unreadCount}, 0) + 1`,
+              updatedAt: timestamp,
+            },
+          });
+      }
     } else {
       // Chat PENDING: incrementar chat.unreadCount
       await targetTenantDb

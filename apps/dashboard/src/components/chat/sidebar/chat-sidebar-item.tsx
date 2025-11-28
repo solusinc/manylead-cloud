@@ -12,6 +12,7 @@ import type { Tag } from "@manylead/db";
 import { cn } from "@manylead/ui";
 import { Avatar, AvatarFallback } from "@manylead/ui/avatar";
 import { Badge } from "@manylead/ui/badge";
+import { useDebouncedValue } from "~/hooks/use-debounced-value";
 
 // Calcula se o texto deve ser branco ou preto baseado na luminosidade do fundo
 function getContrastTextColor(hexColor: string): string {
@@ -78,6 +79,7 @@ export function ChatSidebarItem({
           timestamp={chat.lastMessageAt}
           unreadCount={chat.unreadCount}
           isTyping={isTyping}
+          isActive={isActive}
           tags={chat.tags}
         />
       </div>
@@ -158,6 +160,7 @@ export function ChatSidebarItemContent({
   timestamp,
   unreadCount,
   isTyping = false,
+  isActive = false,
   tags,
   className,
 }: {
@@ -166,9 +169,19 @@ export function ChatSidebarItemContent({
   timestamp: Date;
   unreadCount: number;
   isTyping?: boolean;
+  isActive?: boolean;
   tags?: Pick<Tag, "id" | "name" | "color">[];
   className?: string;
 }) {
+  // Debounce de 100ms para evitar flickering do badge
+  // Quando mensagem chega em chat ativo, markAsRead é chamado em < 50ms
+  // Então badge nunca chega a aparecer
+  const debouncedUnreadCount = useDebouncedValue(unreadCount, 100);
+
+  // Nunca mostrar badge se chat está ativo (sendo visualizado)
+  // Mesmo que backend ainda não tenha zerado o unreadCount
+  const shouldShowBadge = debouncedUnreadCount > 0 && !isActive;
+
   return (
     <div className={cn("space-y-1", className)}>
       <div className="flex items-center justify-between gap-2">
@@ -184,7 +197,7 @@ export function ChatSidebarItemContent({
             {message}
           </p>
         )}
-        {unreadCount > 0 && <ChatSidebarItemBadge count={unreadCount} />}
+        {shouldShowBadge && <ChatSidebarItemBadge count={debouncedUnreadCount} />}
       </div>
 
       {tags && tags.length > 0 && (

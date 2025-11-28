@@ -92,6 +92,14 @@ export function ChatWindow({
   // Marcar chat como lido quando abrir (apenas uma vez por chat)
   useEffect(() => {
     if (chatItem && !hasMarkedAsReadRef.current && chatItem.chat.unreadCount > 0) {
+      // Verificar se o chat está realmente ativo na URL
+      const currentPath = window.location.pathname;
+      const isInThisChat = currentPath.includes(`/chats/${chatId}`);
+
+      if (!isInThisChat) {
+        return; // Não marcar como lido se não estiver vendo o chat
+      }
+
       hasMarkedAsReadRef.current = true;
 
       // Marcar o chat como lido (zera unreadCount)
@@ -105,7 +113,7 @@ export function ChatWindow({
         chatId: chatItem.chat.id,
       });
     }
-  }, [chatItem, markAsReadMutation, markAllMessagesAsReadMutation]);
+  }, [chatItem, markAsReadMutation, markAllMessagesAsReadMutation, chatId]);
 
   // Marcar como lido automaticamente quando receber mensagem no chat ativo
   useEffect(() => {

@@ -657,7 +657,7 @@ export function ChatInput({
   // Se está atribuído para outro agent, mostrar "Em atendimento com..."
   if (assignedTo && assignedTo !== currentAgent?.id) {
     return (
-      <div className={cn("flex w-[calc(100%+2rem)] flex-col items-center gap-3 border-t bg-muted/30 py-4 -mx-4 -mb-2", className)} {...props}>
+      <div className={cn("flex w-[calc(100%+2rem)] flex-col items-center gap-3 border-t bg-muted/30 py-4 -mx-4 -mt-4 -mb-2", className)} {...props}>
         <p className="text-sm text-muted-foreground">
           Em atendimento com <span className="font-bold">{assignedAgent?.user?.name ?? "..."}</span>
         </p>

@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import {
   and,
+  chat,
   chatTag,
   eq,
   insertTagSchema,
@@ -12,6 +13,8 @@ import {
 } from "@manylead/db";
 
 import { createTRPCRouter, memberProcedure, ownerProcedure, tenantManager } from "../trpc";
+import { publishChatEvent } from "@manylead/shared";
+import { env } from "../env";
 
 /**
  * Tags Router
@@ -357,6 +360,28 @@ export const tagsRouter = createTRPCRouter({
         tagId: input.tagId,
       });
 
+      // Buscar chat atualizado para broadcast
+      const [chatRecord] = await tenantDb
+        .select()
+        .from(chat)
+        .where(and(eq(chat.id, input.chatId), eq(chat.createdAt, input.chatCreatedAt)))
+        .limit(1);
+
+      // Broadcast para todos da org
+      if (chatRecord) {
+        await publishChatEvent(
+          {
+            type: "chat:updated",
+            organizationId,
+            chatId: input.chatId,
+            data: {
+              chat: chatRecord as unknown as Record<string, unknown>,
+            },
+          },
+          env.REDIS_URL,
+        );
+      }
+
       return { success: true, alreadyExists: false };
     }),
 
@@ -392,6 +417,28 @@ export const tagsRouter = createTRPCRouter({
             eq(chatTag.tagId, input.tagId),
           ),
         );
+
+      // Buscar chat atualizado para broadcast
+      const [chatRecord] = await tenantDb
+        .select()
+        .from(chat)
+        .where(and(eq(chat.id, input.chatId), eq(chat.createdAt, input.chatCreatedAt)))
+        .limit(1);
+
+      // Broadcast para todos da org
+      if (chatRecord) {
+        await publishChatEvent(
+          {
+            type: "chat:updated",
+            organizationId,
+            chatId: input.chatId,
+            data: {
+              chat: chatRecord as unknown as Record<string, unknown>,
+            },
+          },
+          env.REDIS_URL,
+        );
+      }
 
       return { success: true };
     }),
@@ -435,6 +482,28 @@ export const tagsRouter = createTRPCRouter({
             chatCreatedAt: input.chatCreatedAt,
             tagId,
           })),
+        );
+      }
+
+      // Buscar chat atualizado para broadcast
+      const [chatRecord] = await tenantDb
+        .select()
+        .from(chat)
+        .where(and(eq(chat.id, input.chatId), eq(chat.createdAt, input.chatCreatedAt)))
+        .limit(1);
+
+      // Broadcast para todos da org
+      if (chatRecord) {
+        await publishChatEvent(
+          {
+            type: "chat:updated",
+            organizationId,
+            chatId: input.chatId,
+            data: {
+              chat: chatRecord as unknown as Record<string, unknown>,
+            },
+          },
+          env.REDIS_URL,
         );
       }
 

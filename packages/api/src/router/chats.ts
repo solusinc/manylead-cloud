@@ -4,37 +4,36 @@ import { z } from "zod";
 import {
   agent,
   and,
-  asc,
   chat,
   chatParticipant,
-  chatTag,
   contact,
   count,
-  department,
   desc,
-  ending,
   eq,
-  gte,
-  ilike,
   inArray,
-  isNull,
-  lte,
   message,
-  ne,
   or,
   organization,
   sql,
-  tag,
   user,
 } from "@manylead/db";
-import { publishChatEvent, formatTime, formatDateTime, calculateDuration } from "@manylead/shared";
+import { publishChatEvent, formatTime } from "@manylead/shared";
 
 import { env } from "../env";
 import {
   createTRPCRouter,
   memberProcedure,
   ownerProcedure,
+  tenantManager,
 } from "../trpc";
+import {
+  ChatPermissionsService,
+  ChatParticipantService,
+  getChatService,
+  ChatCrossOrgService,
+  getChatQueryBuilderService,
+} from "../services/chat";
+import type { ChatContext } from "../services/chat";
 
 /**
  * Chats Router
@@ -66,385 +65,24 @@ export const chatsRouter = createTRPCRouter({
       }),
     )
     .query(async ({ ctx, input }) => {
-      const { status, assignedTo, agentIds, departmentId, departmentIds, messageSource, messageSources, dateFrom, dateTo, search, unreadOnly, tagIds, endingIds, limit, offset } =
-        input;
+      // Buscar currentAgent
+      const permissionsService = new ChatPermissionsService(ctx.tenantDb);
+      const currentAgent = await permissionsService.getCurrentAgent(ctx.session.user.id);
 
-      // Buscar o agent do usuário atual
-      const [currentAgent] = await ctx.tenantDb
-        .select()
-        .from(agent)
-        .where(eq(agent.userId, ctx.session.user.id))
-        .limit(1);
-
-      // Construir where conditions
-      const conditions = [];
-
-      // Aplicar permissões baseadas no role:
-      // - owner/admin: vê TODAS as conversas
-      // - member: só vê conversas pending (não atribuídas) OU atribuídas a ele
-      if (currentAgent) {
-        const role = currentAgent.role as "owner" | "admin" | "member";
-
-        if (role === "member") {
-          // Agents (members) só veem conversas pending OU atribuídas a eles
-          conditions.push(
-            or(
-              eq(chat.status, "pending"), // Conversas pending (qualquer um pode pegar)
-              eq(chat.assignedTo, currentAgent.id), // OU conversas atribuídas a mim
-            ),
-          );
-        }
-        // owner e admin não têm restrição, veem tudo
-      }
-
-      // Filtro de departamento baseado em permissões do agent
-      if (currentAgent?.permissions.departments) {
-        const deptPermissions = currentAgent.permissions.departments;
-
-        // Se for "specific", aplica 3 regras:
-        // 1. Chats do(s) departamento(s) permitido(s)
-        // 2. OU chats atribuídos a mim (mesmo que de outro departamento)
-        // 3. OU chats sem departamento (ainda não atribuídos)
-        if (
-          deptPermissions.type === "specific" &&
-          deptPermissions.ids &&
-          deptPermissions.ids.length > 0
-        ) {
-          const departmentFilter = or(
-            inArray(chat.departmentId, deptPermissions.ids),
-            eq(chat.assignedTo, currentAgent.id),
-            isNull(chat.departmentId),
-          );
-          if (departmentFilter) {
-            conditions.push(departmentFilter);
-          }
-        }
-        // Se for "all", não adiciona filtro (vê todos)
-      }
-
-      // Filtro de chats finalizados baseado em permissão (apenas para members)
-      if (currentAgent) {
-        const role = currentAgent.role as "owner" | "admin" | "member";
-
-        // Members sem permissão não veem chats finalizados
-        // Owners e admins sempre veem tudo
-        if (role === "member" && !currentAgent.permissions.accessFinishedChats) {
-          conditions.push(ne(chat.status, "closed"));
-        }
-      }
-
-      if (status) {
-        conditions.push(eq(chat.status, status));
-      }
-
-      if (assignedTo) {
-        conditions.push(eq(chat.assignedTo, assignedTo));
-      }
-
-      // Filtro por múltiplos agents (OR - qualquer um dos selecionados)
-      if (agentIds && agentIds.length > 0) {
-        conditions.push(inArray(chat.assignedTo, agentIds));
-      }
-
-      if (departmentId) {
-        conditions.push(eq(chat.departmentId, departmentId));
-      }
-
-      // Filtro por múltiplos departamentos (OR - qualquer um dos selecionados)
-      if (departmentIds && departmentIds.length > 0) {
-        conditions.push(inArray(chat.departmentId, departmentIds));
-      }
-
-      if (messageSource) {
-        conditions.push(eq(chat.messageSource, messageSource));
-      }
-
-      // Filtro por múltiplos provedores (OR - qualquer um dos selecionados)
-      if (messageSources && messageSources.length > 0) {
-        conditions.push(inArray(chat.messageSource, messageSources));
-      }
-
-      // Filtro por período (data de criação do chat)
-      if (dateFrom) {
-        conditions.push(gte(chat.createdAt, dateFrom));
-      }
-      if (dateTo) {
-        conditions.push(lte(chat.createdAt, dateTo));
-      }
-
-      // Busca em nome do contato e telefone
-      if (search) {
-        conditions.push(
-          or(
-            ilike(contact.name, `%${search}%`),
-            ilike(contact.phoneNumber, `%${search}%`),
-          ),
-        );
-      }
-
-      // Filtrar apenas conversas com mensagens não lidas
-      // IMPORTANTE: Agora filtra baseado em chatParticipant.unreadCount
-      // E exclui chats pending (que não pertencem a ninguém ainda)
-      if (unreadOnly && currentAgent) {
-        conditions.push(sql`${chatParticipant.unreadCount} > 0`);
-        conditions.push(ne(chat.status, "pending"));
-      }
-
-      // Filtrar por tags (chats que têm TODAS as tags selecionadas)
-      if (tagIds && tagIds.length > 0) {
-        // Subquery: encontrar chats que têm todas as tags especificadas
-        const chatsWithAllTags = sql`
-          ${chat.id} IN (
-            SELECT ct.chat_id
-            FROM chat_tag ct
-            WHERE ct.tag_id IN (${sql.join(tagIds.map(id => sql`${id}`), sql`, `)})
-            GROUP BY ct.chat_id, ct.chat_created_at
-            HAVING COUNT(DISTINCT ct.tag_id) = ${tagIds.length}
-          )
-        `;
-        conditions.push(chatsWithAllTags);
-      }
-
-      // Filtrar por motivos de finalização (OR - qualquer um dos selecionados)
-      if (endingIds && endingIds.length > 0) {
-        conditions.push(inArray(chat.endingId, endingIds));
-      }
-
-      const where = conditions.length > 0 ? and(...conditions) : undefined;
-
-      // Executar queries em paralelo
-      const [items, totalResult] = await Promise.all([
-        ctx.tenantDb
-          .select({
-            chat,
-            contact,
-            assignedAgent: agent,
-            // Pegar unreadCount do participant (NULL se não for participant)
-            participant: chatParticipant,
-          })
-          .from(chat)
-          .leftJoin(contact, eq(chat.contactId, contact.id))
-          .leftJoin(agent, eq(chat.assignedTo, agent.id))
-          // JOIN com participant APENAS se tiver currentAgent
-          .leftJoin(
-            chatParticipant,
-            currentAgent
-              ? and(
-                  eq(chatParticipant.chatId, chat.id),
-                  eq(chatParticipant.chatCreatedAt, chat.createdAt),
-                  eq(chatParticipant.agentId, currentAgent.id),
-                )
-              : undefined,
-          )
-          .where(where)
-          .limit(limit)
-          .offset(offset)
-          .orderBy(desc(chat.lastMessageAt)),
-        // Query de count precisa do JOIN quando há busca por contact ou unreadOnly
-        search || unreadOnly
-          ? ctx.tenantDb
-              .select({ count: count() })
-              .from(chat)
-              .leftJoin(contact, eq(chat.contactId, contact.id))
-              .leftJoin(
-                chatParticipant,
-                currentAgent
-                  ? and(
-                      eq(chatParticipant.chatId, chat.id),
-                      eq(chatParticipant.chatCreatedAt, chat.createdAt),
-                      eq(chatParticipant.agentId, currentAgent.id),
-                    )
-                  : undefined,
-              )
-              .where(where)
-          : ctx.tenantDb.select({ count: count() }).from(chat).where(where),
-      ]);
-
-      // BATCH OPTIMIZATION: Buscar tags para todos os chats de uma vez
-      const chatIds = items.map((i) => i.chat.id);
-
-      const chatTagsData = chatIds.length > 0
-        ? await ctx.tenantDb
-            .select({
-              chatId: chatTag.chatId,
-              chatCreatedAt: chatTag.chatCreatedAt,
-              tagId: tag.id,
-              tagName: tag.name,
-              tagColor: tag.color,
-            })
-            .from(chatTag)
-            .innerJoin(tag, eq(chatTag.tagId, tag.id))
-            .where(inArray(chatTag.chatId, chatIds))
-        : [];
-
-      // Criar Map de tags por chatId para lookup O(1)
-      const tagsByChat = new Map<string, { id: string; name: string; color: string }[]>();
-      for (const ct of chatTagsData) {
-        const key = ct.chatId;
-        const existing = tagsByChat.get(key);
-        if (existing) {
-          existing.push({
-            id: ct.tagId,
-            name: ct.tagName,
-            color: ct.tagColor,
-          });
-        } else {
-          tagsByChat.set(key, [{
-            id: ct.tagId,
-            name: ct.tagName,
-            color: ct.tagColor,
-          }]);
-        }
-      }
-
-      // BATCH OPTIMIZATION: Buscar nomes dos agents atribuídos
-      const assignedUserIds = [
-        ...new Set(
-          items
-            .map((i) => i.assignedAgent?.userId)
-            .filter((id): id is string => !!id),
-        ),
-      ];
-
-      const assignedUsers = assignedUserIds.length > 0
-        ? await ctx.db
-            .select({ id: user.id, name: user.name })
-            .from(user)
-            .where(inArray(user.id, assignedUserIds))
-        : [];
-
-      // Map de userId -> nome para lookup O(1)
-      const assignedUserNameMap = new Map(assignedUsers.map((u) => [u.id, u.name]));
-
-      // BATCH OPTIMIZATION: Resolver "outro participante" para chats internos
-      // Coletar IDs únicos de initiators que precisam ser buscados
-      const initiatorAgentIds = [
-        ...new Set(
-          items
-            .map((i) => {
-              if (
-                i.chat.messageSource === "internal" &&
-                i.chat.initiatorAgentId &&
-                i.chat.initiatorAgentId !== currentAgent?.id
-              ) {
-                return i.chat.initiatorAgentId;
-              }
-              return null;
-            })
-            .filter((id): id is string => id !== null),
-        ),
-      ];
-
-      // Se não tem nenhum para resolver, mapear unreadCount e retornar
-      if (initiatorAgentIds.length === 0) {
-        const itemsWithCorrectUnreadCount = items.map((item) => ({
-          ...item,
-          chat: {
-            ...item.chat,
-            // Pending chats usam unreadCount do chat (ainda não tem participant)
-            // Chats atribuídos usam unreadCount do participant
-            unreadCount: item.chat.status === "pending"
-              ? item.chat.unreadCount
-              : (item.participant?.unreadCount ?? 0),
-          },
-          tags: tagsByChat.get(item.chat.id) ?? [],
-          assignedAgentName: item.assignedAgent?.userId
-            ? assignedUserNameMap.get(item.assignedAgent.userId) ?? null
-            : null,
-        }));
-
-        return { items: itemsWithCorrectUnreadCount, total: totalResult[0]?.count ?? 0, limit, offset };
-      }
-
-      // Buscar TODOS initiator agents (1 query ao invés de N)
-      const initiatorAgents = await ctx.tenantDb
-        .select()
-        .from(agent)
-        .where(inArray(agent.id, initiatorAgentIds));
-
-      // Buscar TODOS initiator users (1 query no catalog)
-      const initiatorUserIds = initiatorAgents.map((a) => a.userId);
-      const initiatorUsers = await ctx.db
-        .select()
-        .from(user)
-        .where(inArray(user.id, initiatorUserIds));
-
-      // Maps para lookup O(1) - muito mais rápido que Array.find()
-      const agentMap = new Map(initiatorAgents.map((a) => [a.id, a]));
-      const userMap = new Map(initiatorUsers.map((u) => [u.id, u]));
-
-      // Resolver contatos (100% síncrono!)
-      const resolvedItems = items.map((item) => {
-        // WhatsApp ou sem current agent: retorna contact normal
-        if (item.chat.messageSource !== "internal" || !currentAgent) {
-          return item;
-        }
-
-        // Chat CROSS-ORG: não substituir contact (já representa a org target)
-        if (item.contact?.metadata?.targetOrganizationId) {
-          return item;
-        }
-
-        // Usuário é INICIADOR: retorna contact (target)
-        if (item.chat.initiatorAgentId === currentAgent.id) {
-          return item;
-        }
-
-        // Usuário é TARGET: buscar initiator nos Maps
-        if (!item.chat.initiatorAgentId) {
-          return item;
-        }
-
-        const initiatorAgent = agentMap.get(item.chat.initiatorAgentId);
-        if (!initiatorAgent) {
-          return item;
-        }
-
-        const initiatorUser = userMap.get(initiatorAgent.userId);
-        if (!initiatorUser || !item.contact) {
-          return item;
-        }
-
-        // Chat INTRA-ORG: Substituir contact pelos dados do INITIATOR
-        return {
-          ...item,
-          contact: {
-            id: item.contact.id,
-            organizationId: item.contact.organizationId,
-            phoneNumber: null,
-            name: initiatorUser.name,
-            avatar: initiatorUser.image,
-            email: item.contact.email,
-            customName: item.contact.customName,
-            notes: item.contact.notes,
-            customFields: item.contact.customFields,
-            createdAt: item.contact.createdAt,
-            updatedAt: item.contact.updatedAt,
-            metadata: item.contact.metadata,
-          },
-        };
+      // Usar ChatQueryBuilderService para executar query com todos os filtros
+      const queryBuilderService = getChatQueryBuilderService({
+        redisUrl: env.REDIS_URL,
+        getTenantConnection: tenantManager.getConnection.bind(tenantManager),
+        getCatalogDb: () => ctx.db,
       });
 
-      // Mapear items para usar unreadCount do participant ou do chat
-      const itemsWithCorrectUnreadCount = resolvedItems.map((item) => ({
-        ...item,
-        chat: {
-          ...item.chat,
-          // Pending chats não têm unreadCount (ninguém foi atribuído ainda)
-          // Chats atribuídos usam unreadCount do participant (0 se não tiver participant)
-          unreadCount: item.chat.status === "pending" ? 0 : (item.participant?.unreadCount ?? 0),
-        },
-        tags: tagsByChat.get(item.chat.id) ?? [],
-        assignedAgentName: item.assignedAgent?.userId
-          ? assignedUserNameMap.get(item.assignedAgent.userId) ?? null
-          : null,
-      }));
+      const result = await queryBuilderService.list(ctx.tenantDb, currentAgent, input);
 
       return {
-        items: itemsWithCorrectUnreadCount,
-        total: totalResult[0]?.count ?? 0,
-        limit,
-        offset,
+        items: result.items,
+        total: result.total,
+        limit: input.limit,
+        offset: input.offset,
       };
     }),
 
@@ -479,65 +117,21 @@ export const chatsRouter = createTRPCRouter({
         });
       }
 
-      // Resolver "outro participante" para chats internos
-      if (chatRecord.chat.messageSource !== "internal") {
-        return chatRecord;
-      }
+      // Buscar currentAgent para cross-org resolution
+      const permissionsService = new ChatPermissionsService(ctx.tenantDb);
+      const currentAgent = await permissionsService.getCurrentAgent(ctx.session.user.id);
 
-      // Buscar o agent do usuário atual
-      const [currentAgent] = await ctx.tenantDb
-        .select()
-        .from(agent)
-        .where(eq(agent.userId, ctx.session.user.id))
-        .limit(1);
+      // Usar ChatCrossOrgService para resolver "outro participante" em chats internos
+      const crossOrgService = new ChatCrossOrgService(ctx.tenantDb, ctx.db);
+      const resolvedContact = await crossOrgService.resolveInternalChatParticipant(
+        chatRecord.chat,
+        chatRecord.contact,
+        currentAgent.id,
+      );
 
-      if (!currentAgent) {
-        return chatRecord;
-      }
-
-      // Se usuário atual é o INICIADOR, retornar contact (target)
-      if (chatRecord.chat.initiatorAgentId === currentAgent.id) {
-        return chatRecord;
-      }
-
-      // Se usuário atual é o TARGET, buscar dados do INICIADOR
-      if (!chatRecord.chat.initiatorAgentId) {
-        return chatRecord;
-      }
-
-      const [initiatorAgent] = await ctx.tenantDb
-        .select()
-        .from(agent)
-        .where(eq(agent.id, chatRecord.chat.initiatorAgentId))
-        .limit(1);
-
-      if (!initiatorAgent) {
-        return chatRecord;
-      }
-
-      const [initiatorUser] = await ctx.db
-        .select()
-        .from(user)
-        .where(eq(user.id, initiatorAgent.userId))
-        .limit(1);
-
-      if (!initiatorUser || !chatRecord.contact) {
-        return chatRecord;
-      }
-
-      // Substituir contact pelos dados do INICIADOR
       return {
         ...chatRecord,
-        contact: {
-          id: chatRecord.contact.id,
-          organizationId: chatRecord.contact.organizationId,
-          phoneNumber: null,
-          name: initiatorUser.name,
-          avatar: initiatorUser.image,
-          createdAt: chatRecord.contact.createdAt,
-          updatedAt: chatRecord.contact.updatedAt,
-          metadata: chatRecord.contact.metadata,
-        },
+        contact: resolvedContact,
       };
     }),
 
@@ -888,61 +482,40 @@ export const chatsRouter = createTRPCRouter({
     .mutation(async ({ ctx, input }) => {
       const { id, createdAt, ...data } = input;
 
+      // Usar ChatPermissionsService para buscar currentAgent
+      const permissionsService = new ChatPermissionsService(ctx.tenantDb);
+      const currentAgent = await permissionsService.getCurrentAgent(ctx.session.user.id);
+
+      // Validar organizationId
+      const organizationId = ctx.session.session.activeOrganizationId;
+      if (!organizationId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Nenhuma organização ativa",
+        });
+      }
+
       // Buscar chat atual para verificar permissões
-      const [currentChat] = await ctx.tenantDb
-        .select()
-        .from(chat)
-        .where(and(eq(chat.id, id), eq(chat.createdAt, createdAt)))
-        .limit(1);
+      const chatService = getChatService({
+        redisUrl: env.REDIS_URL,
+        getTenantConnection: tenantManager.getConnection.bind(tenantManager),
+        getCatalogDb: () => ctx.db,
+      });
 
-      if (!currentChat) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Chat não encontrado",
-        });
-      }
+      const chatContext: ChatContext = {
+        organizationId,
+        tenantDb: ctx.tenantDb,
+        agentId: currentAgent.id,
+        userId: ctx.session.user.id,
+      };
 
-      // Buscar agent do usuário logado
-      const [currentAgent] = await ctx.tenantDb
-        .select()
-        .from(agent)
-        .where(eq(agent.userId, ctx.session.user.id))
-        .limit(1);
+      const currentChat = await chatService.getById(chatContext, id, createdAt);
 
-      if (!currentAgent) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Agent não encontrado",
-        });
-      }
+      // Verificar permissões usando ChatPermissionsService
+      permissionsService.requireModifyPermission(currentAgent, currentChat);
 
-      // Verificar permissões: owner, admin, ou assigned
-      const isOwner = currentAgent.role === "owner";
-      const isAdmin = currentAgent.role === "admin";
-      const isAssigned = currentChat.assignedTo === currentAgent.id;
-
-      if (!isOwner && !isAdmin && !isAssigned) {
-        throw new TRPCError({
-          code: "FORBIDDEN",
-          message: "Apenas o agent responsável pelo atendimento pode atualizar este chat",
-        });
-      }
-
-      const [updated] = await ctx.tenantDb
-        .update(chat)
-        .set({
-          ...data,
-          updatedAt: new Date(),
-        })
-        .where(and(eq(chat.id, id), eq(chat.createdAt, createdAt)))
-        .returning();
-
-      if (!updated) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Chat não encontrado",
-        });
-      }
+      // Atualizar chat usando ChatService
+      const updated = await chatService.update(chatContext, id, createdAt, data);
 
       return updated;
     }),
@@ -959,42 +532,20 @@ export const chatsRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      // Buscar o agent atual
-      const [currentAgent] = await ctx.tenantDb
-        .select()
-        .from(agent)
-        .where(eq(agent.userId, ctx.session.user.id))
-        .limit(1);
-
-      if (!currentAgent) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Agent não encontrado",
-        });
-      }
+      // Usar ChatPermissionsService para buscar currentAgent
+      const permissionsService = new ChatPermissionsService(ctx.tenantDb);
+      const currentAgent = await permissionsService.getCurrentAgent(ctx.session.user.id);
 
       const now = new Date();
       const organizationId = ctx.session.session.activeOrganizationId;
 
-      // Atualizar chatParticipant APENAS para o agent atual
-      const [updated] = await ctx.tenantDb
-        .update(chatParticipant)
-        .set({
-          unreadCount: 0,
-          lastReadAt: now,
-          updatedAt: now,
-        })
-        .where(
-          and(
-            eq(chatParticipant.chatId, input.id),
-            eq(chatParticipant.chatCreatedAt, input.createdAt),
-            eq(chatParticipant.agentId, currentAgent.id),
-          ),
-        )
-        .returning();
+      // Usar ChatParticipantService para marcar como lido
+      const participantService = new ChatParticipantService(ctx.tenantDb);
+      const updated = await participantService.markAsRead(input.id, input.createdAt, currentAgent.id);
 
       if (!updated) {
-        // Se não existe participant, verificar se é chat pending cross-org
+        // Se não existe participant, é chat pending/unassigned
+        // NUNCA zerar badge de chats pending (badge fica até ser assigned)
         const [chatRecord] = await ctx.tenantDb
           .select()
           .from(chat)
@@ -1008,25 +559,25 @@ export const chatsRouter = createTRPCRouter({
           });
         }
 
-        // Se é chat pending (cross-org sem assignment), NÃO zerar unreadCount
-        // O badge deve continuar visível até alguém pegar o chat
-        if (chatRecord.status === "pending" && !chatRecord.assignedTo) {
-          // Retornar o chat sem modificar (apenas visualização)
-          return chatRecord;
-        }
-
-        // Para outros casos (WhatsApp, etc), zerar unreadCount normalmente
-        const [chatUpdated] = await ctx.tenantDb
-          .update(chat)
-          .set({
-            unreadCount: 0,
-            updatedAt: now,
-          })
-          .where(and(eq(chat.id, input.id), eq(chat.createdAt, input.createdAt)))
-          .returning();
-
-        return chatUpdated ?? chatRecord;
+        // Retornar sem modificar (pending nunca zera)
+        return chatRecord;
       }
+
+      // Chat ASSIGNED: zerar unreadCount de TODOS os participants da org
+      // Para que quando qualquer um clicar, todos vejam como lido
+      await ctx.tenantDb
+        .update(chatParticipant)
+        .set({
+          unreadCount: 0,
+          lastReadAt: now,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(chatParticipant.chatId, input.id),
+            eq(chatParticipant.chatCreatedAt, input.createdAt),
+          ),
+        );
 
       // Buscar chat atualizado para retornar
       const [chatRecord] = await ctx.tenantDb
@@ -1035,14 +586,15 @@ export const chatsRouter = createTRPCRouter({
         .where(and(eq(chat.id, input.id), eq(chat.createdAt, input.createdAt)))
         .limit(1);
 
-      // Broadcast para o agent que marcou como lido
+      // Broadcast para TODOS (sem targetAgentId)
+      // Para que todos vejam o badge desaparecer em tempo real
       if (organizationId) {
         await publishChatEvent(
           {
             type: "chat:updated",
             organizationId,
             chatId: input.id,
-            targetAgentId: currentAgent.id,
+            // Sem targetAgentId = broadcast para TODOS
             data: {
               chat: chatRecord as unknown as Record<string, unknown>,
             },
@@ -1051,7 +603,7 @@ export const chatsRouter = createTRPCRouter({
         );
       }
 
-      return chatRecord ?? updated;
+      return chatRecord ?? { id: input.id, createdAt: input.createdAt };
     }),
 
   /**
@@ -1065,38 +617,13 @@ export const chatsRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      // Buscar o agent atual
-      const [currentAgent] = await ctx.tenantDb
-        .select()
-        .from(agent)
-        .where(eq(agent.userId, ctx.session.user.id))
-        .limit(1);
+      // Usar ChatPermissionsService para buscar currentAgent
+      const permissionsService = new ChatPermissionsService(ctx.tenantDb);
+      const currentAgent = await permissionsService.getCurrentAgent(ctx.session.user.id);
 
-      if (!currentAgent) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Agent não encontrado",
-        });
-      }
-
-      const now = new Date();
-      const organizationId = ctx.session.session.activeOrganizationId;
-
-      // Atualizar chatParticipant para o agent atual
-      const [updated] = await ctx.tenantDb
-        .update(chatParticipant)
-        .set({
-          unreadCount: 1,
-          updatedAt: now,
-        })
-        .where(
-          and(
-            eq(chatParticipant.chatId, input.id),
-            eq(chatParticipant.chatCreatedAt, input.createdAt),
-            eq(chatParticipant.agentId, currentAgent.id),
-          ),
-        )
-        .returning();
+      // Usar ChatParticipantService para marcar como não lido
+      const participantService = new ChatParticipantService(ctx.tenantDb);
+      await participantService.markAsUnread(input.id, input.createdAt, currentAgent.id);
 
       // Buscar chat para retornar
       const [chatRecord] = await ctx.tenantDb
@@ -1105,7 +632,15 @@ export const chatsRouter = createTRPCRouter({
         .where(and(eq(chat.id, input.id), eq(chat.createdAt, input.createdAt)))
         .limit(1);
 
+      if (!chatRecord) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Chat não encontrado",
+        });
+      }
+
       // Broadcast para atualizar a lista
+      const organizationId = ctx.session.session.activeOrganizationId;
       if (organizationId) {
         await publishChatEvent(
           {
@@ -1121,7 +656,7 @@ export const chatsRouter = createTRPCRouter({
         );
       }
 
-      return chatRecord ?? updated;
+      return chatRecord;
     }),
 
   /**
@@ -1138,133 +673,34 @@ export const chatsRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      // Verificar se agent existe
-      const [agentExists] = await ctx.tenantDb
-        .select()
-        .from(agent)
-        .where(eq(agent.id, input.agentId))
-        .limit(1);
-
-      if (!agentExists) {
+      const organizationId = ctx.session.session.activeOrganizationId;
+      if (!organizationId) {
         throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Agent não encontrado",
+          code: "BAD_REQUEST",
+          message: "Nenhuma organização ativa",
         });
       }
 
-      // Atribuir chat ao agent SEM alterar department_id
-      // department_id só deve ser alterado na transferência
-      const [updated] = await ctx.tenantDb
-        .update(chat)
-        .set({
-          assignedTo: input.agentId,
-          status: "open",
-          updatedAt: new Date(),
-        })
-        .where(and(eq(chat.id, input.id), eq(chat.createdAt, input.createdAt)))
-        .returning();
+      // Usar ChatPermissionsService para buscar currentAgent
+      const permissionsService = new ChatPermissionsService(ctx.tenantDb);
+      const currentAgent = await permissionsService.getCurrentAgent(ctx.session.user.id);
 
-      if (!updated) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Chat não encontrado",
-        });
-      }
+      // Criar context
+      const chatContext: ChatContext = {
+        organizationId,
+        tenantDb: ctx.tenantDb,
+        agentId: currentAgent.id,
+        userId: ctx.session.user.id,
+      };
 
-      // Buscar nome do agent para mensagem de sistema
-      const [agentUser] = await ctx.db
-        .select()
-        .from(user)
-        .where(eq(user.id, agentExists.userId))
-        .limit(1);
-
-      const agentName = agentUser?.name ?? "Agente";
-      const assignTime = formatTime(updated.updatedAt);
-
-      // Criar mensagem de sistema "Sessão transferida para {Nome} às HH:mm"
-      await ctx.tenantDb.insert(message).values({
-        chatId: updated.id,
-        messageSource: updated.messageSource,
-        sender: "system",
-        senderId: null,
-        messageType: "system",
-        content: `Sessão transferida para ${agentName} às ${assignTime}`,
-        status: "sent",
-        timestamp: updated.updatedAt,
-        metadata: {
-          systemEventType: "session_assigned",
-          agentId: agentExists.id,
-          agentName,
-        },
+      // Usar ChatService para fazer toda a lógica
+      const chatService = getChatService({
+        redisUrl: env.REDIS_URL,
+        getTenantConnection: tenantManager.getConnection.bind(tenantManager),
+        getCatalogDb: () => ctx.db,
       });
 
-      // Atualizar lastMessage com "Sessão transferida"
-      await ctx.tenantDb
-        .update(chat)
-        .set({
-          lastMessageAt: updated.updatedAt,
-          lastMessageContent: "Sessão transferida",
-          lastMessageSender: "system",
-          unreadCount: 0, // Zerar unreadCount ao atribuir
-        })
-        .where(and(eq(chat.id, updated.id), eq(chat.createdAt, updated.createdAt)));
-
-      // Criar chatParticipant para o agent (se não existir)
-      const existingParticipant = await ctx.tenantDb
-        .select()
-        .from(chatParticipant)
-        .where(
-          and(
-            eq(chatParticipant.chatId, updated.id),
-            eq(chatParticipant.chatCreatedAt, updated.createdAt),
-            eq(chatParticipant.agentId, input.agentId),
-          ),
-        )
-        .limit(1);
-
-      if (existingParticipant.length === 0) {
-        await ctx.tenantDb.insert(chatParticipant).values({
-          chatId: updated.id,
-          chatCreatedAt: updated.createdAt,
-          agentId: input.agentId,
-          unreadCount: 0,
-          lastReadAt: updated.updatedAt,
-        });
-      } else {
-        // Se já existe, apenas zerar unreadCount
-        await ctx.tenantDb
-          .update(chatParticipant)
-          .set({
-            unreadCount: 0,
-            lastReadAt: updated.updatedAt,
-            updatedAt: updated.updatedAt,
-          })
-          .where(
-            and(
-              eq(chatParticipant.chatId, updated.id),
-              eq(chatParticipant.chatCreatedAt, updated.createdAt),
-              eq(chatParticipant.agentId, input.agentId),
-            ),
-          );
-      }
-
-      // Publicar evento de atualização para todos da organização
-      const organizationId = ctx.session.session.activeOrganizationId;
-      if (organizationId) {
-        await publishChatEvent(
-          {
-            type: "chat:updated",
-            organizationId,
-            chatId: updated.id,
-            data: {
-              chat: updated as unknown as Record<string, unknown>,
-            },
-          },
-          env.REDIS_URL,
-        );
-      }
-
-      return updated;
+      return await chatService.assign(chatContext, input);
     }),
 
   /**
@@ -1287,33 +723,33 @@ export const chatsRouter = createTRPCRouter({
         }),
     )
     .mutation(async ({ ctx, input }) => {
-      // Buscar chat atual para verificar permissões
-      const [currentChat] = await ctx.tenantDb
-        .select()
-        .from(chat)
-        .where(and(eq(chat.id, input.id), eq(chat.createdAt, input.createdAt)))
-        .limit(1);
-
-      if (!currentChat) {
+      const organizationId = ctx.session.session.activeOrganizationId;
+      if (!organizationId) {
         throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Chat não encontrado",
+          code: "BAD_REQUEST",
+          message: "Nenhuma organização ativa",
         });
       }
 
-      // Buscar agent do usuário logado
-      const [currentAgent] = await ctx.tenantDb
-        .select()
-        .from(agent)
-        .where(eq(agent.userId, ctx.session.user.id))
-        .limit(1);
+      // Usar ChatPermissionsService para buscar e validar currentAgent
+      const permissionsService = new ChatPermissionsService(ctx.tenantDb);
+      const currentAgent = await permissionsService.getCurrentAgent(ctx.session.user.id);
 
-      if (!currentAgent) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Agent não encontrado",
-        });
-      }
+      // Buscar chat para verificar permissões
+      const chatService = getChatService({
+        redisUrl: env.REDIS_URL,
+        getTenantConnection: tenantManager.getConnection.bind(tenantManager),
+        getCatalogDb: () => ctx.db,
+      });
+
+      const chatContext: ChatContext = {
+        organizationId,
+        tenantDb: ctx.tenantDb,
+        agentId: currentAgent.id,
+        userId: ctx.session.user.id,
+      };
+
+      const currentChat = await chatService.getById(chatContext, input.id, input.createdAt);
 
       // Verificar permissões: owner, admin, ou assigned
       const isOwner = currentAgent.role === "owner";
@@ -1327,171 +763,12 @@ export const chatsRouter = createTRPCRouter({
         });
       }
 
-      // Caso 1: Transferir para um agent específico
-      if (input.targetAgentId) {
-        // Verificar se agent existe
-        const [agentExists] = await ctx.tenantDb
-          .select()
-          .from(agent)
-          .where(eq(agent.id, input.targetAgentId))
-          .limit(1);
-
-        if (!agentExists) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Agent não encontrado",
-          });
-        }
-
-        // Determinar departmentId baseado nas permissões do agent
-        let chatDepartmentId: string | null = null;
-        if (
-          agentExists.permissions.departments.type === "specific" &&
-          agentExists.permissions.departments.ids &&
-          agentExists.permissions.departments.ids.length > 0
-        ) {
-          chatDepartmentId = agentExists.permissions.departments.ids[0] ?? null;
-        }
-
-        const [updated] = await ctx.tenantDb
-          .update(chat)
-          .set({
-            assignedTo: input.targetAgentId,
-            departmentId: chatDepartmentId,
-            status: "open",
-            updatedAt: new Date(),
-          })
-          .where(
-            and(eq(chat.id, input.id), eq(chat.createdAt, input.createdAt)),
-          )
-          .returning();
-
-        if (!updated) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Chat não encontrado",
-          });
-        }
-
-        // Buscar nomes dos agents para mensagem de sistema
-        const [fromUser] = await ctx.db
-          .select()
-          .from(user)
-          .where(eq(user.id, currentAgent.userId))
-          .limit(1);
-
-        const [toUser] = await ctx.db
-          .select()
-          .from(user)
-          .where(eq(user.id, agentExists.userId))
-          .limit(1);
-
-        const fromName = fromUser?.name ?? "Agente";
-        const toName = toUser?.name ?? "Agente";
-        const transferTime = formatTime(updated.updatedAt);
-
-        // Criar mensagem de sistema "Sessão transferida de X para Y às HH:mm"
-        await ctx.tenantDb.insert(message).values({
-          chatId: updated.id,
-          messageSource: updated.messageSource,
-          sender: "system",
-          senderId: null,
-          messageType: "system",
-          content: `Sessão transferida de ${fromName} para ${toName} às ${transferTime}`,
-          status: "sent",
-          timestamp: updated.updatedAt,
-          metadata: {
-            systemEventType: "session_transferred",
-            fromAgentId: currentAgent.id,
-            fromAgentName: fromName,
-            toAgentId: agentExists.id,
-            toAgentName: toName,
-          },
-        });
-
-        // Atualizar lastMessage com "Sessão transferida"
-        await ctx.tenantDb
-          .update(chat)
-          .set({
-            lastMessageAt: updated.updatedAt,
-            lastMessageContent: "Sessão transferida",
-            lastMessageSender: "system",
-          })
-          .where(and(eq(chat.id, updated.id), eq(chat.createdAt, updated.createdAt)));
-
-        // Publicar evento de atualização para todos da organização
-        const organizationId = ctx.session.session.activeOrganizationId;
-        if (organizationId) {
-          await publishChatEvent(
-            {
-              type: "chat:updated",
-              organizationId,
-              chatId: updated.id,
-              data: {
-                chat: updated as unknown as Record<string, unknown>,
-              },
-            },
-            env.REDIS_URL,
-          );
-        }
-
-        return updated;
-      }
-
-      // Caso 2: Transferir para um departamento (sem agent específico)
-      if (input.targetDepartmentId) {
-        const [updated] = await ctx.tenantDb
-          .update(chat)
-          .set({
-            assignedTo: null,
-            departmentId: input.targetDepartmentId,
-            status: "pending",
-            updatedAt: new Date(),
-          })
-          .where(
-            and(eq(chat.id, input.id), eq(chat.createdAt, input.createdAt)),
-          )
-          .returning();
-
-        if (!updated) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Chat não encontrado",
-          });
-        }
-
-        // Atualizar lastMessage com "Sessão transferida"
-        await ctx.tenantDb
-          .update(chat)
-          .set({
-            lastMessageAt: updated.updatedAt,
-            lastMessageContent: "Sessão transferida",
-            lastMessageSender: "system",
-          })
-          .where(and(eq(chat.id, updated.id), eq(chat.createdAt, updated.createdAt)));
-
-        // Publicar evento de atualização para todos da organização
-        const organizationId = ctx.session.session.activeOrganizationId;
-        if (organizationId) {
-          await publishChatEvent(
-            {
-              type: "chat:updated",
-              organizationId,
-              chatId: updated.id,
-              data: {
-                chat: updated as unknown as Record<string, unknown>,
-              },
-            },
-            env.REDIS_URL,
-          );
-        }
-
-        return updated;
-      }
-
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: "Deve especificar targetAgentId ou targetDepartmentId",
+      // Usar ChatService para fazer a transferência
+      return await chatService.transfer(chatContext, {
+        id: input.id,
+        createdAt: input.createdAt,
+        toAgentId: input.targetAgentId,
+        toDepartmentId: input.targetDepartmentId,
       });
     }),
 
@@ -1508,35 +785,34 @@ export const chatsRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      // 1. Buscar chat atual
-      const [currentChat] = await ctx.tenantDb
-        .select()
-        .from(chat)
-        .where(and(eq(chat.id, input.id), eq(chat.createdAt, input.createdAt)))
-        .limit(1);
+      const organizationId = ctx.session.session.activeOrganizationId;
 
-      if (!currentChat) {
+      if (!organizationId) {
         throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Chat não encontrado",
+          code: "BAD_REQUEST",
+          message: "Nenhuma organização ativa",
         });
       }
 
-      // 2. Buscar agent do usuário logado
-      const [currentAgent] = await ctx.tenantDb
-        .select()
-        .from(agent)
-        .where(eq(agent.userId, ctx.session.user.id))
-        .limit(1);
+      const permissionsService = new ChatPermissionsService(ctx.tenantDb);
+      const currentAgent = await permissionsService.getCurrentAgent(ctx.session.user.id);
 
-      if (!currentAgent) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Agent não encontrado",
-        });
-      }
+      const chatService = getChatService({
+        redisUrl: env.REDIS_URL,
+        getTenantConnection: tenantManager.getConnection.bind(tenantManager),
+        getCatalogDb: () => ctx.db,
+      });
 
-      // 3. Verificar permissões: owner, admin, ou assigned
+      const chatContext: ChatContext = {
+        organizationId,
+        tenantDb: ctx.tenantDb,
+        agentId: currentAgent.id,
+        userId: ctx.session.user.id,
+      };
+
+      const currentChat = await chatService.getById(chatContext, input.id, input.createdAt);
+
+      // Verificar permissões: owner, admin, ou assigned
       const isOwner = currentAgent.role === "owner";
       const isAdmin = currentAgent.role === "admin";
       const isAssigned = currentChat.assignedTo === currentAgent.id;
@@ -1548,126 +824,7 @@ export const chatsRouter = createTRPCRouter({
         });
       }
 
-      // 4. Buscar informações do agent para a mensagem de sistema
-      const [agentUser] = await ctx.db
-        .select()
-        .from(user)
-        .where(eq(user.id, currentAgent.userId))
-        .limit(1);
-
-      const agentName = agentUser?.name ?? "Agente";
-
-      // 5. Buscar departamento (se houver)
-      let departmentName = "";
-      if (currentChat.departmentId) {
-        const [deptData] = await ctx.tenantDb
-          .select()
-          .from(department)
-          .where(eq(department.id, currentChat.departmentId))
-          .limit(1);
-
-        departmentName = deptData?.name ?? "";
-      }
-
-      // 5.1. Buscar motivo de finalização (se houver)
-      let endingName = "";
-      if (input.endingId) {
-        const [endingData] = await ctx.tenantDb
-          .select()
-          .from(ending)
-          .where(eq(ending.id, input.endingId))
-          .limit(1);
-
-        endingName = endingData?.title ?? "";
-      }
-
-      // 6. Buscar primeira mensagem enviada (não de sistema) para pegar "Atendido em"
-      const [firstMessage] = await ctx.tenantDb
-        .select()
-        .from(message)
-        .where(
-          and(
-            eq(message.chatId, input.id),
-            sql`${message.sender} != 'system'`, // Ignorar mensagens de sistema
-          ),
-        )
-        .orderBy(asc(message.timestamp))
-        .limit(1);
-
-      // 7. Fechar o chat
-      const closedAt = new Date();
-      const [updated] = await ctx.tenantDb
-        .update(chat)
-        .set({
-          status: "closed",
-          endingId: input.endingId ?? null,
-          updatedAt: closedAt,
-        })
-        .where(and(eq(chat.id, input.id), eq(chat.createdAt, input.createdAt)))
-        .returning();
-
-      if (!updated) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Chat não encontrado",
-        });
-      }
-
-      // 8. Calcular duração (entre primeira mensagem e finalizado)
-      const attendedAt = firstMessage?.timestamp ?? currentChat.createdAt;
-      const duration = calculateDuration(new Date(attendedAt), closedAt);
-
-      // 9. Gerar mensagem de sistema formatada
-      const systemMessageContent = `Protocolo: ${currentChat.id}
-Usuário: ${agentName}
-Departamento: ${departmentName || "-"}
-Motivo: ${endingName || "-"}
-Iniciado em: ${formatDateTime(currentChat.createdAt)}
-Atendido em: ${formatDateTime(new Date(attendedAt))}
-Finalizado em: ${formatDateTime(closedAt)}
-Duração: ${duration}`;
-
-      await ctx.tenantDb.insert(message).values({
-        chatId: updated.id,
-        messageSource: updated.messageSource,
-        sender: "system",
-        senderId: null,
-        messageType: "system",
-        content: systemMessageContent,
-        status: "sent",
-        timestamp: closedAt,
-        metadata: {
-          systemEventType: "session_closed",
-          agentId: currentAgent.id,
-          agentName,
-          protocol: currentChat.id,
-          departmentName,
-          endingId: input.endingId,
-          endingName,
-          startedAt: currentChat.createdAt.toISOString(),
-          attendedAt: new Date(attendedAt).toISOString(),
-          closedAt: closedAt.toISOString(),
-          duration,
-        },
-      });
-
-      // 10. Publicar evento de atualização para todos da organização
-      const organizationId = ctx.session.session.activeOrganizationId;
-      if (organizationId) {
-        await publishChatEvent(
-          {
-            type: "chat:updated",
-            organizationId,
-            chatId: updated.id,
-            data: {
-              chat: updated as unknown as Record<string, unknown>,
-            },
-          },
-          env.REDIS_URL,
-        );
-      }
-
-      return updated;
+      return await chatService.close(chatContext, input);
     }),
 
   /**
@@ -1681,23 +838,35 @@ Duração: ${duration}`;
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const [updated] = await ctx.tenantDb
-        .update(chat)
-        .set({
-          status: "open",
-          updatedAt: new Date(),
-        })
-        .where(and(eq(chat.id, input.id), eq(chat.createdAt, input.createdAt)))
-        .returning();
+      // Usar ChatService para reabrir chat
+      const permissionsService = new ChatPermissionsService(ctx.tenantDb);
+      const currentAgent = await permissionsService.getCurrentAgent(ctx.session.user.id);
 
-      if (!updated) {
+      // Validar organizationId
+      const organizationId = ctx.session.session.activeOrganizationId;
+      if (!organizationId) {
         throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Chat não encontrado",
+          code: "BAD_REQUEST",
+          message: "Nenhuma organização ativa",
         });
       }
 
-      // Criar mensagem de sistema
+      const chatService = getChatService({
+        redisUrl: env.REDIS_URL,
+        getTenantConnection: tenantManager.getConnection.bind(tenantManager),
+        getCatalogDb: () => ctx.db,
+      });
+
+      const chatContext: ChatContext = {
+        organizationId,
+        tenantDb: ctx.tenantDb,
+        agentId: currentAgent.id,
+        userId: ctx.session.user.id,
+      };
+
+      const updated = await chatService.reopen(chatContext, input.id, input.createdAt);
+
+      // Criar mensagem de sistema (ainda não está no service)
       await ctx.tenantDb.insert(message).values({
         chatId: updated.id,
         messageSource: updated.messageSource,
@@ -1715,31 +884,14 @@ Duração: ${duration}`;
         },
       });
 
-      // Atualizar lastMessage com "Nova sessão criada"
-      await ctx.tenantDb
-        .update(chat)
-        .set({
-          lastMessageAt: updated.updatedAt,
-          lastMessageContent: "Nova sessão criada",
-          lastMessageSender: "system",
-        })
-        .where(and(eq(chat.id, updated.id), eq(chat.createdAt, updated.createdAt)));
-
-      // Publicar evento de atualização para todos da organização
-      const organizationId = ctx.session.session.activeOrganizationId;
-      if (organizationId) {
-        await publishChatEvent(
-          {
-            type: "chat:updated",
-            organizationId,
-            chatId: updated.id,
-            data: {
-              chat: updated as unknown as Record<string, unknown>,
-            },
-          },
-          env.REDIS_URL,
-        );
-      }
+      // Atualizar lastMessage
+      await chatService.updateLastMessage(
+        chatContext,
+        updated.id,
+        updated.createdAt,
+        "Nova sessão criada",
+        "system",
+      );
 
       return updated;
     }),
