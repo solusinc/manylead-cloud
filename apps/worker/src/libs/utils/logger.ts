@@ -1,7 +1,8 @@
 import pino from "pino";
 import { env } from "~/env";
 
-export const logger = pino({
+// Root logger with pino-pretty for worker (readable logs in development)
+const rootLogger = pino({
   level: env.NODE_ENV === "production" ? "info" : "debug",
   transport:
     env.NODE_ENV === "development"
@@ -15,3 +16,9 @@ export const logger = pino({
         }
       : undefined,
 });
+
+export const logger = rootLogger.child({ component: "Worker" });
+
+export function createLogger(component: string) {
+  return rootLogger.child({ component });
+}

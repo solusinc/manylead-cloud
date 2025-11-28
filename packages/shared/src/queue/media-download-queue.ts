@@ -1,5 +1,7 @@
-import { Queue } from "bullmq";
-import Redis from "ioredis";
+import type { Queue } from "bullmq";
+import { createRedisClient } from "@manylead/clients/redis";
+import { createQueue } from "@manylead/clients/queue";
+import { createLogger } from "@manylead/clients/logger";
 
 /**
  * Media download job data
@@ -17,28 +19,19 @@ export interface MediaDownloadJobData {
 /**
  * Create media download queue
  */
-export function createMediaDownloadQueue(redisUrl: string, queueName = "media-download") {
-  const connection = new Redis(redisUrl, {
-    maxRetriesPerRequest: null,
-    enableReadyCheck: false,
+export function createMediaDownloadQueue(redisUrl: string, queueName = "media-download"): Queue<MediaDownloadJobData> {
+  const logger = createLogger({ component: "MediaDownloadQueue" });
+  const connection = createRedisClient({
+    url: redisUrl,
+    preset: "queue",
+    logger,
   });
 
-  return new Queue<MediaDownloadJobData>(queueName, {
+  return createQueue<MediaDownloadJobData>({
+    name: queueName,
     connection,
-    defaultJobOptions: {
-      attempts: 3, // Retry até 3 vezes
-      backoff: {
-        type: "exponential",
-        delay: 5000, // 5s, 25s, 125s
-      },
-      removeOnComplete: {
-        age: 24 * 60 * 60, // Remover jobs completados após 24h
-        count: 1000, // Manter no máximo 1000 jobs completados
-      },
-      removeOnFail: {
-        age: 7 * 24 * 60 * 60, // Remover jobs falhados após 7 dias
-      },
-    },
+    preset: "media-download",
+    logger,
   });
 }
 

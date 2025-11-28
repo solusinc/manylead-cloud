@@ -2,10 +2,11 @@ import type { ErrorCode } from './error-code'
 import { BaseError } from './base-error'
 import { statusToCode } from './utils'
 
-type Context = {
-  url?: string
-  method?: string
-  statusCode?: number
+interface Context {
+  url?: string;
+  method?: string;
+  statusCode?: number;
+  [key: string]: unknown;
 }
 
 export class HttpError extends BaseError<Context> {

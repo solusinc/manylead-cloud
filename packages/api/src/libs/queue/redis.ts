@@ -1,5 +1,9 @@
-import Redis from "ioredis";
+import type Redis from "ioredis";
+import { createRedisClient } from "@manylead/clients/redis";
+import { createLogger } from "@manylead/clients/logger";
 import { env } from "~/env";
+
+const logger = createLogger({ component: "API:Redis" });
 
 /**
  * Shared Redis connection for BullMQ queues
@@ -7,16 +11,10 @@ import { env } from "~/env";
 let redisClient: Redis | null = null;
 
 export function getRedisClient(): Redis {
-  redisClient ??= new Redis(env.REDIS_URL, {
-    maxRetriesPerRequest: null, // Required for BullMQ
-    lazyConnect: false,
-    enableAutoPipelining: true,
-    keepAlive: 30000,
-    connectTimeout: 10000,
-    retryStrategy(times) {
-      const delay = Math.min(times * 50, 2000);
-      return delay;
-    },
+  redisClient ??= createRedisClient({
+    url: env.REDIS_URL,
+    preset: "queue",
+    logger,
   });
 
   return redisClient;
@@ -26,5 +24,6 @@ export async function closeRedis(): Promise<void> {
   if (redisClient) {
     await redisClient.quit();
     redisClient = null;
+    logger.info("Redis connection closed");
   }
 }

@@ -1,15 +1,18 @@
-import { Worker } from "bullmq";
+import type { Worker } from "bullmq";
+import { createWorker } from "@manylead/clients/queue";
+import { createLogger } from "@manylead/clients/logger";
 import type { TenantProvisioningJobData } from "~/workers/tenant-provisioning";
 import type { ChannelSyncJobData } from "~/workers/channel-sync";
 import type { MediaDownloadJobData } from "~/workers/media-download";
 import type { AttachmentCleanupJobData } from "~/workers/attachment-cleanup";
 import { env } from "~/env";
 import { getRedisClient } from "~/libs/cache/redis";
-import { logger } from "~/libs/utils/logger";
 import { processTenantProvisioning } from "~/workers/tenant-provisioning";
 import { processChannelSync } from "~/workers/channel-sync";
 import { processMediaDownload } from "~/workers/media-download";
 import { processAttachmentCleanup } from "~/workers/attachment-cleanup";
+
+const logger = createLogger({ component: "Worker:Queue" });
 
 /**
  * Worker event listeners configuration
@@ -91,17 +94,13 @@ export function createWorkers(): Worker[] {
    */
   logger.info(`Creating worker for queue: ${env.QUEUE_TENANT_PROVISIONING}`);
 
-  const tenantProvisioningWorker = new Worker<TenantProvisioningJobData>(
-    env.QUEUE_TENANT_PROVISIONING,
-    async (job) => {
-      return await processTenantProvisioning(job);
-    },
-    {
-      connection,
-      concurrency: env.WORKER_CONCURRENCY,
-      autorun: true,
-    },
-  );
+  const tenantProvisioningWorker = createWorker<TenantProvisioningJobData>({
+    name: env.QUEUE_TENANT_PROVISIONING,
+    processor: processTenantProvisioning,
+    connection,
+    concurrency: env.WORKER_CONCURRENCY,
+    logger,
+  });
 
   attachEventListeners(tenantProvisioningWorker, {
     queueName: env.QUEUE_TENANT_PROVISIONING,
@@ -116,17 +115,13 @@ export function createWorkers(): Worker[] {
    */
   logger.info(`Creating worker for queue: ${env.QUEUE_CHANNEL_SYNC}`);
 
-  const channelSyncWorker = new Worker<ChannelSyncJobData>(
-    env.QUEUE_CHANNEL_SYNC,
-    async (job) => {
-      return await processChannelSync(job);
-    },
-    {
-      connection,
-      concurrency: env.WORKER_CONCURRENCY,
-      autorun: true,
-    }
-  );
+  const channelSyncWorker = createWorker<ChannelSyncJobData>({
+    name: env.QUEUE_CHANNEL_SYNC,
+    processor: processChannelSync,
+    connection,
+    concurrency: env.WORKER_CONCURRENCY,
+    logger,
+  });
 
   attachEventListeners(channelSyncWorker, {
     queueName: env.QUEUE_CHANNEL_SYNC,
@@ -140,21 +135,19 @@ export function createWorkers(): Worker[] {
    */
   logger.info(`Creating worker for queue: ${env.QUEUE_MEDIA_DOWNLOAD}`);
 
-  const mediaDownloadWorker = new Worker<MediaDownloadJobData>(
-    env.QUEUE_MEDIA_DOWNLOAD,
-    async (job) => {
-      return await processMediaDownload(job);
-    },
-    {
-      connection,
-      concurrency: env.WORKER_CONCURRENCY,
-      autorun: true,
+  const mediaDownloadWorker = createWorker<MediaDownloadJobData>({
+    name: env.QUEUE_MEDIA_DOWNLOAD,
+    processor: processMediaDownload,
+    connection,
+    concurrency: env.WORKER_CONCURRENCY,
+    config: {
       limiter: {
         max: 10, // Max 10 downloads per...
         duration: 1000, // ...second (rate limiting)
       },
     },
-  );
+    logger,
+  });
 
   attachEventListeners(mediaDownloadWorker, {
     queueName: env.QUEUE_MEDIA_DOWNLOAD,
@@ -171,17 +164,13 @@ export function createWorkers(): Worker[] {
    */
   logger.info(`Creating worker for queue: ${env.QUEUE_ATTACHMENT_CLEANUP}`);
 
-  const attachmentCleanupWorker = new Worker<AttachmentCleanupJobData>(
-    env.QUEUE_ATTACHMENT_CLEANUP,
-    async (job) => {
-      return await processAttachmentCleanup(job);
-    },
-    {
-      connection,
-      concurrency: 1, // Process one organization at a time
-      autorun: true,
-    },
-  );
+  const attachmentCleanupWorker = createWorker<AttachmentCleanupJobData>({
+    name: env.QUEUE_ATTACHMENT_CLEANUP,
+    processor: processAttachmentCleanup,
+    connection,
+    concurrency: 1, // Process one organization at a time
+    logger,
+  });
 
   attachEventListeners(attachmentCleanupWorker, {
     queueName: env.QUEUE_ATTACHMENT_CLEANUP,

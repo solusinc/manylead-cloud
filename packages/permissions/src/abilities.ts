@@ -1,5 +1,8 @@
 import { AbilityBuilder, createMongoAbility } from '@casl/ability';
 import type { AppAbility, AgentRole } from './types';
+import { PermissionError } from './errors';
+
+const VALID_ROLES: readonly AgentRole[] = ['owner', 'admin', 'member'] as const;
 
 /**
  * Define as abilities (permissões) baseado no role do usuário
@@ -7,6 +10,7 @@ import type { AppAbility, AgentRole } from './types';
  * @param role - O role do agente (owner, admin, member)
  * @param userId - ID do usuário (opcional, usado para permissões específicas do usuário)
  * @returns Uma instância de AppAbility configurada
+ * @throws {PermissionError} Se o role fornecido for inválido
  *
  * @example
  * ```typescript
@@ -22,6 +26,14 @@ export function defineAbilitiesFor(
   role: AgentRole,
   userId?: string,
 ): AppAbility {
+  // Validate role input
+  if (!VALID_ROLES.includes(role)) {
+    throw new PermissionError('Invalid role provided', {
+      providedRole: role,
+      validRoles: VALID_ROLES,
+    });
+  }
+
   const { can, build } = new AbilityBuilder<AppAbility>(
     createMongoAbility,
   );

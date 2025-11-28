@@ -1,5 +1,7 @@
-import { Queue } from "bullmq";
-import Redis from "ioredis";
+import type { Queue } from "bullmq";
+import { createRedisClient } from "@manylead/clients/redis";
+import { createQueue } from "@manylead/clients/queue";
+import { createLogger } from "@manylead/clients/logger";
 
 /**
  * Attachment cleanup job data
@@ -14,28 +16,19 @@ export interface AttachmentCleanupJobData {
 export function createAttachmentCleanupQueue(
   redisUrl: string,
   queueName = "attachment-cleanup",
-) {
-  const connection = new Redis(redisUrl, {
-    maxRetriesPerRequest: null,
-    enableReadyCheck: false,
+): Queue<AttachmentCleanupJobData> {
+  const logger = createLogger({ component: "AttachmentCleanupQueue" });
+  const connection = createRedisClient({
+    url: redisUrl,
+    preset: "queue",
+    logger,
   });
 
-  return new Queue<AttachmentCleanupJobData>(queueName, {
+  return createQueue<AttachmentCleanupJobData>({
+    name: queueName,
     connection,
-    defaultJobOptions: {
-      attempts: 2, // Retry apenas 1 vez
-      backoff: {
-        type: "fixed",
-        delay: 60000, // 1 minuto
-      },
-      removeOnComplete: {
-        age: 24 * 60 * 60, // Remover jobs completados após 24h
-        count: 100, // Manter no máximo 100 jobs completados
-      },
-      removeOnFail: {
-        age: 7 * 24 * 60 * 60, // Remover jobs falhados após 7 dias
-      },
-    },
+    preset: "cleanup",
+    logger,
   });
 }
 

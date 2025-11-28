@@ -1,5 +1,7 @@
 import type Redis from "ioredis";
+
 import type { Tenant } from "@manylead/db";
+import { createLogger } from "@manylead/clients/logger";
 
 /**
  * Redis-based distributed cache for tenant metadata
@@ -14,9 +16,11 @@ export class TenantCache {
   private redis: Redis;
   private readonly prefix = "tenant:";
   private readonly ttl = 300; // 5 minutes in seconds
+  private logger;
 
   constructor(redisClient: Redis) {
     this.redis = redisClient;
+    this.logger = createLogger({ component: "TenantCache" });
   }
 
   /**
@@ -41,7 +45,7 @@ export class TenantCache {
 
       return JSON.parse(cached) as Tenant;
     } catch (error) {
-      console.error("[TenantCache] Error getting from cache:", error);
+      this.logger.error({ err: error, organizationId }, "Error getting from cache");
       // Graceful degradation: return null, caller will query DB
       return null;
     }
@@ -57,7 +61,7 @@ export class TenantCache {
 
       await this.redis.setex(key, this.ttl, value);
     } catch (error) {
-      console.error("[TenantCache] Error setting cache:", error);
+      this.logger.error({ err: error, organizationId }, "Error setting cache");
       // Non-blocking: cache write failure doesn't affect the operation
     }
   }
@@ -71,7 +75,7 @@ export class TenantCache {
       const key = this.getTenantKey(organizationId);
       await this.redis.del(key);
     } catch (error) {
-      console.error("[TenantCache] Error invalidating cache:", error);
+      this.logger.error({ err: error, organizationId }, "Error invalidating cache");
       // Non-blocking
     }
   }
@@ -88,7 +92,7 @@ export class TenantCache {
         await this.redis.del(...keys);
       }
     } catch (error) {
-      console.error("[TenantCache] Error invalidating all caches:", error);
+      this.logger.error({ err: error }, "Error invalidating all caches");
       // Non-blocking
     }
   }
@@ -115,7 +119,7 @@ export class TenantCache {
         memoryUsed,
       };
     } catch (error) {
-      console.error("[TenantCache] Error getting stats:", error);
+      this.logger.error({ err: error }, "Error getting stats");
       return {
         totalKeys: 0,
         memoryUsed: "unknown",

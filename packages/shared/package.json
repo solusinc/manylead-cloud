@@ -14,6 +14,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@manylead/clients": "workspace:*",
     "bullmq": "^5.63.0",
     "date-fns": "^4.1.0",
     "ioredis": "^5.8.2",

@@ -1,4 +1,8 @@
-import Redis from "ioredis";
+import type Redis from "ioredis";
+import { createRedisClient } from "@manylead/clients/redis";
+import { createLogger } from "@manylead/clients/logger";
+
+const logger = createLogger({ component: "RedisPublisher" });
 
 /**
  * Socket.io Event Types (duplicated from server for independence)
@@ -51,20 +55,11 @@ export const REDIS_CHANNELS = {
 let publisher: Redis | null = null;
 
 function getPublisher(redisUrl: string): Redis {
-  if (!publisher) {
-    publisher = new Redis(redisUrl, {
-      lazyConnect: false,
-      enableAutoPipelining: true,
-      retryStrategy: (times) => {
-        const delay = Math.min(times * 50, 2000);
-        return delay;
-      },
-    });
-
-    publisher.on("error", (error) => {
-      console.error("[Redis Publisher] Error:", error);
-    });
-  }
+  publisher ??= createRedisClient({
+    url: redisUrl,
+    preset: "pubsub",
+    logger,
+  });
 
   return publisher;
 }
@@ -79,11 +74,12 @@ export async function publishChatEvent(
   try {
     const redis = getPublisher(redisUrl);
     await redis.publish(REDIS_CHANNELS.CHAT, JSON.stringify(event));
-    console.log(
-      `[Redis Publisher] Published ${event.type} for chat ${event.chatId}`,
+    logger.debug(
+      { type: event.type, chatId: event.chatId },
+      "Published chat event",
     );
   } catch (error) {
-    console.error("[Redis Publisher] Failed to publish chat event:", error);
+    logger.error({ err: error, event }, "Failed to publish chat event");
     throw error;
   }
 }
@@ -98,11 +94,12 @@ export async function publishMessageEvent(
   try {
     const redis = getPublisher(redisUrl);
     await redis.publish(REDIS_CHANNELS.MESSAGE, JSON.stringify(event));
-    console.log(
-      `[Redis Publisher] Published ${event.type} for message ${event.messageId}`,
+    logger.debug(
+      { type: event.type, messageId: event.messageId },
+      "Published message event",
     );
   } catch (error) {
-    console.error("[Redis Publisher] Failed to publish message event:", error);
+    logger.error({ err: error, event }, "Failed to publish message event");
     throw error;
   }
 }
@@ -117,11 +114,12 @@ export async function publishTypingEvent(
   try {
     const redis = getPublisher(redisUrl);
     await redis.publish(REDIS_CHANNELS.TYPING, JSON.stringify(event));
-    console.log(
-      `[Redis Publisher] Published ${event.type} for chat ${event.chatId}`,
+    logger.debug(
+      { type: event.type, chatId: event.chatId },
+      "Published typing event",
     );
   } catch (error) {
-    console.error("[Redis Publisher] Failed to publish typing event:", error);
+    logger.error({ err: error, event }, "Failed to publish typing event");
     // Don't throw - typing indicators are not critical
   }
 }
@@ -133,6 +131,6 @@ export async function closePublisher(): Promise<void> {
   if (publisher) {
     await publisher.quit();
     publisher = null;
-    console.log("[Redis Publisher] Connection closed");
+    logger.info("Redis publisher connection closed");
   }
 }

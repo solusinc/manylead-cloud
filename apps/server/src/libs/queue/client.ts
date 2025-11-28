@@ -1,70 +1,36 @@
-import { Queue } from "bullmq";
+import { createQueue } from "@manylead/clients/queue";
+import { createLogger } from "~/libs/utils/logger";
 import { env } from "~/env";
 import { getRedisClient } from "~/libs/cache/redis";
-import { logger } from "~/libs/utils/logger";
+
+const logger = createLogger("Server:Queue");
 
 /**
  * Queue clients for BullMQ
  */
 
 // Tenant provisioning queue
-export const tenantProvisioningQueue = new Queue(
-  env.QUEUE_TENANT_PROVISIONING,
-  {
-    connection: getRedisClient(),
-    defaultJobOptions: {
-      attempts: 3,
-      backoff: {
-        type: "exponential",
-        delay: 2000,
-      },
-      removeOnComplete: {
-        count: 100, // Keep last 100 completed jobs
-        age: 24 * 3600, // Keep for 24 hours
-      },
-      removeOnFail: {
-        count: 500, // Keep last 500 failed jobs
-      },
-    },
-  },
-);
+export const tenantProvisioningQueue = createQueue({
+  name: env.QUEUE_TENANT_PROVISIONING,
+  connection: getRedisClient(),
+  preset: "default",
+  logger,
+});
 
 // Tenant migration queue (for future use)
-export const tenantMigrationQueue = new Queue(env.QUEUE_TENANT_MIGRATION, {
+export const tenantMigrationQueue = createQueue({
+  name: env.QUEUE_TENANT_MIGRATION,
   connection: getRedisClient(),
-  defaultJobOptions: {
-    attempts: 3,
-    backoff: {
-      type: "exponential",
-      delay: 2000,
-    },
-    removeOnComplete: {
-      count: 50,
-      age: 24 * 3600,
-    },
-    removeOnFail: {
-      count: 200,
-    },
-  },
+  preset: "default",
+  logger,
 });
 
 // Channel sync queue
-export const channelSyncQueue = new Queue(env.QUEUE_CHANNEL_SYNC, {
+export const channelSyncQueue = createQueue({
+  name: env.QUEUE_CHANNEL_SYNC,
   connection: getRedisClient(),
-  defaultJobOptions: {
-    attempts: 3,
-    backoff: {
-      type: "exponential",
-      delay: 2000,
-    },
-    removeOnComplete: {
-      count: 100,
-      age: 24 * 3600,
-    },
-    removeOnFail: {
-      count: 200,
-    },
-  },
+  preset: "default",
+  logger,
 });
 
 /**

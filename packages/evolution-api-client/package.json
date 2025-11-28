@@ -11,6 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@manylead/clients": "workspace:*",
     "@t3-oss/env-core": "catalog:",
     "zod": "catalog:"
   },

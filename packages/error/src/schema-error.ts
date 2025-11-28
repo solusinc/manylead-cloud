@@ -4,7 +4,10 @@ import type { ErrorCode } from './error-code'
 import { BaseError } from './base-error'
 import { parseZodErrorIssues } from './utils'
 
-type Context = { raw: unknown }
+interface Context {
+  raw: unknown;
+  [key: string]: unknown;
+}
 
 export class SchemaError extends BaseError<Context> {
   public readonly name = 'SchemaError'

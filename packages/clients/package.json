@@ -1,0 +1,64 @@
+{
+  "name": "@manylead/clients",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./src/index.ts"
+    },
+    "./redis": {
+      "types": "./dist/redis/index.d.ts",
+      "default": "./src/redis/index.ts"
+    },
+    "./postgres": {
+      "types": "./dist/postgres/index.d.ts",
+      "default": "./src/postgres/index.ts"
+    },
+    "./queue": {
+      "types": "./dist/queue/index.d.ts",
+      "default": "./src/queue/index.ts"
+    },
+    "./storage": {
+      "types": "./dist/storage/index.d.ts",
+      "default": "./src/storage/index.ts"
+    },
+    "./api": {
+      "types": "./dist/api/index.d.ts",
+      "default": "./src/api/index.ts"
+    },
+    "./logger": {
+      "types": "./dist/logger/index.d.ts",
+      "default": "./src/logger/index.ts"
+    },
+    "./env": {
+      "types": "./dist/env.d.ts",
+      "default": "./src/env.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "git clean -xdf .cache .turbo dist node_modules",
+    "dev": "tsc",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.932.0",
+    "@t3-oss/env-core": "catalog:",
+    "bullmq": "^5.63.0",
+    "ioredis": "^5.8.2",
+    "pino": "^8.16.2",
+    "postgres": "^3.4.7",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@manylead/eslint-config": "workspace:*",
+    "@manylead/prettier-config": "workspace:*",
+    "@manylead/tsconfig": "workspace:*",
+    "@types/node": "catalog:",
+    "eslint": "catalog:",
+    "typescript": "catalog:"
+  },
+  "prettier": "@manylead/prettier-config"
+}

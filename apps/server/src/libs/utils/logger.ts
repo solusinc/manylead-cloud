@@ -1,10 +1,8 @@
 import pino from "pino";
 import { env } from "~/env";
 
-/**
- * Structured logger using Pino
- */
-export const logger = pino({
+// Root logger with pino-pretty for server (readable logs in development)
+const rootLogger = pino({
   level: env.NODE_ENV === "production" ? "info" : "debug",
   transport:
     env.NODE_ENV === "development"
@@ -19,16 +17,8 @@ export const logger = pino({
       : undefined,
 });
 
-/**
- * Create a child logger with component context
- *
- * Usage:
- * ```ts
- * const log = createLogger("SocketManager");
- * log.info("Server started");
- * log.error({ err }, "Failed to connect");
- * ```
- */
+export const logger = rootLogger.child({ component: "Server" });
+
 export function createLogger(component: string) {
-  return logger.child({ component });
+  return rootLogger.child({ component });
 }

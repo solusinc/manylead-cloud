@@ -1,12 +1,14 @@
 import { Readable } from "node:stream";
+import type { S3Client } from "@aws-sdk/client-s3";
 import {
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
-  S3Client,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+
+import { createStorageClient } from "@manylead/clients/storage";
 
 import type {
   StorageProvider,
@@ -28,14 +30,11 @@ export class R2StorageProvider implements StorageProvider {
   private publicUrl: string;
 
   constructor(config: R2Config) {
-    this.client = new S3Client({
-      region: "auto",
-      endpoint: `https://${config.accountId}.r2.cloudflarestorage.com`,
-      credentials: {
-        accessKeyId: config.accessKeyId,
-        secretAccessKey: config.secretAccessKey,
-      },
-      forcePathStyle: true, // R2 requer path-style URLs
+    // Use factory to create S3Client singleton
+    this.client = createStorageClient({
+      accountId: config.accountId,
+      accessKeyId: config.accessKeyId,
+      secretAccessKey: config.secretAccessKey,
     });
     this.bucketName = config.bucketName;
     this.publicUrl = config.publicUrl;

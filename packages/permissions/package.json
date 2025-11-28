@@ -18,7 +18,8 @@
     "typecheck": "tsc --noEmit --emitDeclarationOnly false"
   },
   "dependencies": {
-    "@casl/ability": "catalog:"
+    "@casl/ability": "catalog:",
+    "@manylead/error": "workspace:*"
   },
   "devDependencies": {
     "@manylead/eslint-config": "workspace:*",

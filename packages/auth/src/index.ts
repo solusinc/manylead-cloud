@@ -4,6 +4,9 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { customSession, organization } from "better-auth/plugins";
 
 import { db, eq, organization as organizationTable } from "@manylead/db";
+import { createLogger } from "@manylead/clients/logger";
+
+const logger = createLogger({ component: "BetterAuth" });
 
 export function initAuth<
   TExtraPlugins extends BetterAuthPlugin[] = [],
@@ -38,7 +41,7 @@ export function initAuth<
     ],
     onAPIError: {
       onError(error, ctx) {
-        console.error("BETTER AUTH API ERROR", error, ctx);
+        logger.error({ err: error, ctx }, "Better Auth API error");
       },
     },
   } satisfies BetterAuthOptions;

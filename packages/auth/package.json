@@ -17,6 +17,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@manylead/clients": "workspace:*",
     "@manylead/db": "workspace:*",
     "@manylead/tenant-db": "workspace:*",
     "@t3-oss/env-core": "catalog:",

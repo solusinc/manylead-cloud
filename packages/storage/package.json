@@ -15,6 +15,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.932.0",
     "@aws-sdk/s3-request-presigner": "^3.932.0",
+    "@manylead/clients": "workspace:*",
     "@t3-oss/env-core": "catalog:",
     "nanoid": "^5.1.6",
     "zod": "catalog:"

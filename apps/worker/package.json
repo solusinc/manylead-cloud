@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@manylead/clients": "workspace:*",
     "@manylead/db": "workspace:*",
     "@manylead/error": "workspace:*",
     "@manylead/evolution-api-client": "workspace:^",

@@ -1,11 +1,13 @@
 import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
 
+import { createLogger } from "@manylead/clients/logger";
+import { createPostgresClient } from "@manylead/clients/postgres";
 import { activityLog } from "@manylead/db";
 import type { ActivityLogParams } from "./types";
 
 export class ActivityLogger {
   private catalogDb;
+  private logger;
 
   constructor(catalogConnectionString?: string) {
     const connString =
@@ -15,9 +17,13 @@ export class ActivityLogger {
       throw new Error("Missing catalog database connection string");
     }
 
-    const client = postgres(connString, {
-      max: 2,
-      prepare: false,
+    this.logger = createLogger({ component: "ActivityLogger" });
+
+    // Create client using factory (small-pool preset)
+    const client = createPostgresClient({
+      connectionString: connString,
+      preset: "small-pool",
+      logger: this.logger,
     });
 
     this.catalogDb = drizzle(client);
@@ -34,7 +40,10 @@ export class ActivityLogger {
         metadata: params.metadata,
       });
     } catch (error) {
-      console.error("[ActivityLogger] Failed to log activity:", error);
+      this.logger.error(
+        { err: error, action: params.action },
+        "Failed to log activity",
+      );
     }
   }
 

@@ -56,16 +56,15 @@ export function codeToStatus(code: ErrorCode) {
 export function parseZodErrorIssues(issues: ZodIssue[]): string {
   return issues
     .map((i) =>
-      i.code === "invalid_union"
-        ? i.unionErrors.map((ue) => parseZodErrorIssues(ue.issues)).join("; ")
-        : i.code === "unrecognized_keys"
-          ? i.message
-          : `${i.path.length ? `${i.code} in '${i.path}': ` : ""}${i.message}`,
+      i.code === "unrecognized_keys"
+        ? i.message
+        : `${i.path.length ? `${i.code} in '${i.path.join(".")}': ` : ""}${i.message}`,
     )
     .join("; ");
 }
 
-export function redactError<TError extends Error | unknown>(err: TError) {
+export function redactError<TError>(err: TError) {
   if (!(err instanceof Error)) return err;
-  console.error(`Type of Error: ${err.constructor}`);
+  // Error type logging removed - use structured logging instead
+  return err;
 }

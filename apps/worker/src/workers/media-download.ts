@@ -1,14 +1,13 @@
 import type { Job } from "bullmq";
 import { attachment, eq } from "@manylead/db";
-import { R2StorageProvider } from "@manylead/storage/providers";
 import {
   generateMediaPath,
   getMediaTypeFromMimeType,
   getR2TagsForMedia,
 } from "@manylead/storage/utils";
-import { EvolutionAPIClient } from "@manylead/evolution-api-client";
+import { evolutionAPI } from "@manylead/evolution-api-client";
+import { storage } from "@manylead/storage";
 import { logger } from "~/libs/utils/logger";
-import { env } from "~/env";
 import { tenantManager } from "~/libs/tenant-manager";
 
 /**
@@ -23,25 +22,6 @@ export interface MediaDownloadJobData {
   fileName: string;
   mimeType: string;
 }
-
-/**
- * Initialize R2 Storage Provider
- */
-const storageProvider = new R2StorageProvider({
-  accountId: env.R2_ACCOUNT_ID,
-  accessKeyId: env.R2_ACCESS_KEY_ID,
-  secretAccessKey: env.R2_SECRET_ACCESS_KEY,
-  bucketName: env.R2_BUCKET_NAME,
-  publicUrl: env.R2_PUBLIC_URL,
-});
-
-/**
- * Initialize Evolution API Client
- */
-const evolutionClient = new EvolutionAPIClient(
-  env.EVOLUTION_API_URL,
-  env.EVOLUTION_API_KEY,
-);
 
 /**
  * Process media download job
@@ -91,7 +71,7 @@ export async function processMediaDownload(
       "Downloading media from Evolution API",
     );
 
-    const mediaData = await evolutionClient.message.downloadMedia(
+    const mediaData = await evolutionAPI.message.downloadMedia(
       instanceName,
       whatsappMediaId,
     );
@@ -116,7 +96,7 @@ export async function processMediaDownload(
     );
 
     // Upload to R2
-    const uploadResult = await storageProvider.upload({
+    const uploadResult = await storage.upload({
       key: storagePath,
       body: buffer,
       contentType: mimeType,

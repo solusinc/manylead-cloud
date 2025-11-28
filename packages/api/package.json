@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@manylead/auth": "workspace:*",
+    "@manylead/clients": "workspace:*",
     "@manylead/db": "workspace:*",
     "@manylead/emails": "workspace:*",
     "@manylead/evolution-api-client": "workspace:*",

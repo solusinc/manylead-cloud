@@ -1,9 +1,14 @@
-import { Queue } from "bullmq";
+import type { Queue } from "bullmq";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
-import Redis from "ioredis";
-import postgres from "postgres";
+import { LRUCache } from "lru-cache";
+import type postgres from "postgres";
+
+import { createLogger } from "@manylead/clients/logger";
+import { createPostgresClient } from "@manylead/clients/postgres";
+import { createQueue } from "@manylead/clients/queue";
+import { createRedisClient } from "@manylead/clients/redis";
 
 import type { Tenant } from "@manylead/db";
 import * as schema from "@manylead/db";
@@ -35,11 +40,16 @@ export class TenantDatabaseManager {
   private activityLogger: ActivityLogger;
   private tenantProvisioningQueue: Queue;
   private tenantCache: TenantCache;
+  private logger;
 
-  // Singleton cache: one postgres client per unique connection string
-  // Prevents memory leak from creating unlimited client objects
-  // With max 3 orgs per user, RAM impact is negligible (~50KB per client)
-  private clientCache = new Map<string, ReturnType<typeof postgres>>();
+  // LRU cache: prevents memory leak from unbounded Map
+  // With max 100 tenants cached, ~5MB total (50KB per client)
+  // LRU evicts least-recently-used when full
+  private clientCache = new LRUCache<string, ReturnType<typeof postgres>>({
+    max: 100, // Max 100 cached clients
+    ttl: 1000 * 60 * 30, // 30 minutes TTL
+    updateAgeOnGet: true, // Reset TTL on access
+  });
 
   constructor(catalogConnectionString?: string) {
     // Use PgBouncer by default for better connection pooling
@@ -49,44 +59,34 @@ export class TenantDatabaseManager {
       throw new Error("Missing catalog database connection string");
     }
 
-    // PgBouncer transaction mode: need VERY few connections per instance
-    // PgBouncer reuses connections efficiently, so max: 2-3 is enough
-    this.catalogClient = postgres(connString, {
-      max: 3, // Small pool - PgBouncer handles the real pooling
-      idle_timeout: 20, // Short timeout - PgBouncer manages connection lifecycle
-      connect_timeout: 10,
-      max_lifetime: null, // No limit - let PgBouncer recycle connections
-      prepare: false, // Required for PgBouncer transaction mode
+    // Initialize logger for structured logging
+    this.logger = createLogger({ component: "TenantManager" });
+
+    // Create Postgres client using factory (pgbouncer preset)
+    this.catalogClient = createPostgresClient({
+      connectionString: connString,
+      preset: "pgbouncer",
+      logger: this.logger,
     });
 
     this.catalogDb = drizzle(this.catalogClient, { schema });
+
     // ActivityLogger should also use PgBouncer
     this.activityLogger = new ActivityLogger(connString);
 
-    // Initialize BullMQ queue for async provisioning
-    // PERFORMANCE OPTIMIZATION for high-latency networks:
-    // - enableAutoPipelining: Automatically batches commands into pipelines
-    //   reducing network roundtrips from 5-10× to 1× per operation
-    // - keepAlive: Maintains TCP connection alive, avoiding reconnection overhead
-    const redisConnection = new Redis(env.REDIS_URL, {
-      maxRetriesPerRequest: null, // BullMQ requires null for blocking commands
-      lazyConnect: false, // Connect immediately
-      enableAutoPipelining: true, // CRITICAL: Batches commands automatically
-      keepAlive: 30000, // Keep TCP connection alive for 30 seconds
-      connectTimeout: 10000, // 10 second timeout for initial connection
-      retryStrategy: (times) => {
-        const delay = Math.min(times * 50, 2000);
-        return delay;
-      },
+    // Create Redis connection using factory (queue preset)
+    const redisConnection = createRedisClient({
+      url: env.REDIS_URL,
+      preset: "queue",
+      logger: this.logger,
     });
 
-    // Log only errors
-    redisConnection.on("error", (error) => {
-      console.error("[TenantManager] Redis connection error:", error);
-    });
-
-    this.tenantProvisioningQueue = new Queue(env.QUEUE_TENANT_PROVISIONING, {
+    // Create BullMQ queue using factory
+    this.tenantProvisioningQueue = createQueue({
+      name: env.QUEUE_TENANT_PROVISIONING,
       connection: redisConnection,
+      preset: "default",
+      logger: this.logger,
     });
 
     // Initialize Redis-based tenant cache
@@ -292,7 +292,12 @@ export class TenantDatabaseManager {
         password: postgresPassword,
       });
 
-      const adminClient = postgres(adminConnString, { max: 1 });
+      // Create admin client for database creation (admin preset)
+      const adminClient = createPostgresClient({
+        connectionString: adminConnString,
+        preset: "admin",
+        logger: this.logger,
+      });
 
       // Criar banco de dados físico
       await adminClient.unsafe(
@@ -300,9 +305,11 @@ export class TenantDatabaseManager {
       );
       await adminClient.end();
 
-      const tenantClient = postgres(existingTenant.connectionString, {
-        max: 1,
-        prepare: false,
+      // Create tenant client for migrations (migration preset)
+      const tenantClient = createPostgresClient({
+        connectionString: existingTenant.connectionString,
+        preset: "migration",
+        logger: this.logger,
       });
 
       // Criar extensões
@@ -319,8 +326,9 @@ export class TenantDatabaseManager {
       await migrate(tenantDb, { migrationsFolder: TENANT_MIGRATIONS_PATH });
 
       // Configurar TimescaleDB hypertables (particionamento automático + compression + retention)
-      console.log(
-        `[TenantManager] Setting up TimescaleDB for ${existingTenant.databaseName}...`,
+      this.logger.info(
+        { databaseName: existingTenant.databaseName },
+        "Setting up TimescaleDB",
       );
       await setupTimescaleDB(tenantClient);
 
@@ -388,21 +396,16 @@ export class TenantDatabaseManager {
       );
     }
 
-    // Singleton pattern: reuse client if already exists for this connection string
-    // Prevents memory leak from creating unlimited client objects
+    // LRU cache pattern: reuse client if already exists for this connection string
+    // LRU automatically evicts least-recently-used when max is reached
     let client = this.clientCache.get(tenantRecord.connectionString);
 
     if (!client) {
-
-      // Create new postgres client (lightweight wrapper, not a real TCP connection)
-      // PgBouncer handles connection pooling centrally
-      // Small pool size: PgBouncer reuses connections efficiently across all app instances
-      client = postgres(tenantRecord.connectionString, {
-        max: 2, // Small pool - PgBouncer does the real pooling
-        idle_timeout: 20,
-        connect_timeout: 10,
-        max_lifetime: null,
-        prepare: false, // Required for PgBouncer transaction mode
+      // Create new postgres client using factory (pgbouncer preset)
+      client = createPostgresClient({
+        connectionString: tenantRecord.connectionString,
+        preset: "pgbouncer",
+        logger: this.logger,
       });
 
       this.clientCache.set(tenantRecord.connectionString, client);
@@ -447,9 +450,11 @@ export class TenantDatabaseManager {
     const startTime = Date.now();
 
     try {
-      const client = postgres(tenantRecord.connectionString, {
-        max: 1,
-        prepare: false,
+      // Create client for migration (migration preset)
+      const client = createPostgresClient({
+        connectionString: tenantRecord.connectionString,
+        preset: "migration",
+        logger: this.logger,
       });
 
       const db = drizzle({
@@ -572,9 +577,11 @@ export class TenantDatabaseManager {
     }
 
     try {
-      const client = postgres(tenantRecord.connectionString, {
-        max: 1,
-        prepare: false,
+      // Create client for health check (admin preset)
+      const client = createPostgresClient({
+        connectionString: tenantRecord.connectionString,
+        preset: "admin",
+        logger: this.logger,
       });
 
       await retryWithBackoff(() => client`SELECT 1`, {
@@ -637,7 +644,10 @@ export class TenantDatabaseManager {
     // ALWAYS invalidate cache when status changes (fresh data on next getConnection)
     if (tenantRecord) {
       await this.tenantCache.invalidate(tenantRecord.organizationId);
-      console.log(`[TenantManager] ✅ Invalidated cache for ${tenantRecord.organizationId} (new status: ${status})`);
+      this.logger.info(
+        { organizationId: tenantRecord.organizationId, status },
+        "Invalidated cache for tenant",
+      );
     }
   }
 
@@ -721,7 +731,12 @@ export class TenantDatabaseManager {
       password: postgresPassword,
     });
 
-    const adminClient = postgres(adminConnString, { max: 1 });
+    // Create admin client for database deletion (admin preset)
+    const adminClient = createPostgresClient({
+      connectionString: adminConnString,
+      preset: "admin",
+      logger: this.logger,
+    });
 
     try {
       await adminClient.unsafe(
@@ -736,8 +751,8 @@ export class TenantDatabaseManager {
   }
 
   async close(): Promise<void> {
-    // Close all cached tenant clients
-    for (const client of this.clientCache.values()) {
+    // Close all cached tenant clients from LRU cache
+    for (const [, client] of this.clientCache.entries()) {
       await client.end({ timeout: 5 });
     }
     this.clientCache.clear();

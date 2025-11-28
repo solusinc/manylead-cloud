@@ -2,10 +2,9 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import { and, attachment, count, desc, eq, sql } from "@manylead/db";
-import { R2StorageProvider } from "@manylead/storage/providers";
+import { storage, getPublicUrl } from "@manylead/storage";
 import { generateMediaPath } from "@manylead/storage/utils";
 
-import { env } from "../env";
 import { createTRPCRouter, ownerProcedure } from "../trpc";
 
 /**
@@ -217,15 +216,6 @@ export const attachmentsRouter = createTRPCRouter({
         });
       }
 
-      // Inicializar R2 Storage Provider
-      const storageProvider = new R2StorageProvider({
-        accountId: env.R2_ACCOUNT_ID,
-        accessKeyId: env.R2_ACCESS_KEY_ID,
-        secretAccessKey: env.R2_SECRET_ACCESS_KEY,
-        bucketName: env.R2_BUCKET_NAME,
-        publicUrl: env.R2_PUBLIC_URL,
-      });
-
       // Gerar path único para o arquivo
       const storagePath = generateMediaPath(
         organizationId,
@@ -233,8 +223,8 @@ export const attachmentsRouter = createTRPCRouter({
         input.mimeType,
       );
 
-      // Gerar pre-signed URL
-      const signedUrl = await storageProvider.getSignedUploadUrl(
+      // Gerar pre-signed URL usando singleton storage
+      const signedUrl = await storage.getSignedUploadUrl(
         storagePath,
         input.expiresIn,
       );
@@ -242,7 +232,7 @@ export const attachmentsRouter = createTRPCRouter({
       return {
         uploadUrl: signedUrl,
         storagePath,
-        publicUrl: `${env.R2_PUBLIC_URL}/${storagePath}`,
+        publicUrl: `${getPublicUrl()}/${storagePath}`,
         expiresIn: input.expiresIn,
       };
     }),
