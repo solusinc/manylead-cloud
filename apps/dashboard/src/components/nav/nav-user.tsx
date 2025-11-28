@@ -38,16 +38,27 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@manylead/ui/sidebar";
+import { Skeleton } from "@manylead/ui/skeleton";
 import { useTheme } from "@manylead/ui/theme";
 
 import { authClient, useSession } from "~/lib/auth/client";
 import { usePermissions } from "~/lib/permissions";
+import { useServerSession } from "~/components/providers/session-provider";
 import { useTRPC } from "~/lib/trpc/react";
 
 export function NavUser() {
   const { isMobile, setOpenMobile } = useSidebar();
   const { themeMode, setTheme } = useTheme();
-  const { data: session, isPending: isLoadingSession } = useSession();
+
+  // Use server session for SSR (avoid hydration error)
+  const serverSession = useServerSession();
+
+  // Use client session for real-time updates (after hydration)
+  const { data: clientSession } = useSession();
+
+  // Prefer client session if available (for real-time updates), fallback to server
+  const session = clientSession ?? serverSession;
+
   const router = useRouter();
   const trpc = useTRPC();
   const { can } = usePermissions();
@@ -63,11 +74,27 @@ export function NavUser() {
   // Se não há organização ativa mas há organizações disponíveis, use a primeira
   const activeOrg = organization ?? organizations?.[0];
 
-  if (isLoadingOrg || isLoadingOrgs || isLoadingSession) {
-    return null;
+  // Renderizar skeleton enquanto carrega para evitar hydration mismatch
+  if (isLoadingOrg || isLoadingOrgs) {
+    return (
+      <SidebarMenu>
+        <SidebarMenuItem>
+          <SidebarMenuButton
+            size="lg"
+            className="h-14 rounded-none px-4 ring-inset group-data-[collapsible=icon]:mx-2!"
+          >
+            <Skeleton className="h-8 w-8 rounded-lg" />
+            <div className="grid flex-1 gap-1.5 text-left text-sm leading-tight">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-3 w-32" />
+            </div>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
+      </SidebarMenu>
+    );
   }
 
-  if (!activeOrg || !session?.user) {
+  if (!activeOrg || !session.user) {
     return null;
   }
 

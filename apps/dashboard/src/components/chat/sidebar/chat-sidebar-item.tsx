@@ -39,9 +39,11 @@ interface ChatSidebarItemProps {
     messageSource?: "whatsapp" | "internal";
     tags?: Pick<Tag, "id" | "name" | "color">[];
     assignedAgentName?: string | null;
+    assignedTo?: string | null;
   };
   isActive?: boolean;
   isTyping?: boolean;
+  currentAgentId?: string;
   className?: string;
 }
 
@@ -49,6 +51,7 @@ export function ChatSidebarItem({
   chat,
   isActive,
   isTyping = false,
+  currentAgentId,
   className,
   ...props
 }: ChatSidebarItemProps & React.ComponentProps<"a">) {
@@ -81,6 +84,8 @@ export function ChatSidebarItem({
           isTyping={isTyping}
           isActive={isActive}
           tags={chat.tags}
+          assignedTo={chat.assignedTo}
+          currentAgentId={currentAgentId}
         />
       </div>
 
@@ -162,6 +167,8 @@ export function ChatSidebarItemContent({
   isTyping = false,
   isActive = false,
   tags,
+  assignedTo,
+  currentAgentId,
   className,
 }: {
   name: string;
@@ -171,6 +178,8 @@ export function ChatSidebarItemContent({
   isTyping?: boolean;
   isActive?: boolean;
   tags?: Pick<Tag, "id" | "name" | "color">[];
+  assignedTo?: string | null;
+  currentAgentId?: string;
   className?: string;
 }) {
   // Debounce de 100ms para evitar flickering do badge
@@ -178,9 +187,13 @@ export function ChatSidebarItemContent({
   // Então badge nunca chega a aparecer
   const debouncedUnreadCount = useDebouncedValue(unreadCount, 100);
 
-  // Nunca mostrar badge se chat está ativo (sendo visualizado)
+  // REGRA: Só ocultar badge otimisticamente se o chat está assigned ao agente atual
+  // Se não está assigned ou está assigned para outro, sempre mostrar badge (não ocultar otimisticamente)
+  const isAssignedToMe = assignedTo === currentAgentId;
+
+  // Nunca mostrar badge se chat está ativo E está assigned ao usuário (sendo visualizado)
   // Mesmo que backend ainda não tenha zerado o unreadCount
-  const shouldShowBadge = debouncedUnreadCount > 0 && !isActive;
+  const shouldShowBadge = debouncedUnreadCount > 0 && !(isActive && isAssignedToMe);
 
   return (
     <div className={cn("space-y-1", className)}>

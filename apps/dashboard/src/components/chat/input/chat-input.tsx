@@ -83,11 +83,30 @@ export function ChatInput({
     enabled: chatStatus === "closed",
   });
 
+  // Mutation para marcar chat como lido
+  const markAsReadMutation = useMutation(trpc.chats.markAsRead.mutationOptions());
+
+  // Mutation para marcar todas as mensagens como lidas
+  const markAllMessagesAsReadMutation = useMutation(
+    trpc.messages.markAllAsRead.mutationOptions()
+  );
+
   // Mutation para atribuir chat ao agent atual
   const assignMutation = useMutation(
     trpc.chats.assign.mutationOptions({
       onSuccess: () => {
         void queryClient.invalidateQueries({ queryKey: [["chats", "list"]] });
+
+        // Marcar chat como lido após pegar atendimento
+        markAsReadMutation.mutate({
+          id: chatId,
+          createdAt: chatCreatedAt,
+        });
+
+        // Marcar todas as mensagens como lidas
+        markAllMessagesAsReadMutation.mutate({
+          chatId,
+        });
       },
       onError: (error) => {
         toast.error(error.message || "Erro ao atribuir chat");

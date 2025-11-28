@@ -100,6 +100,13 @@ export function ChatWindow({
         return; // Não marcar como lido se não estiver vendo o chat
       }
 
+      // REGRA: Só marcar como lido se o chat estiver assigned ao agente atual
+      const isAssignedToMe = chatItem.chat.assignedTo === currentAgent?.id;
+
+      if (!isAssignedToMe) {
+        return; // Não marcar como lido se não estiver assigned ao usuário
+      }
+
       hasMarkedAsReadRef.current = true;
 
       // Marcar o chat como lido (zera unreadCount)
@@ -113,7 +120,7 @@ export function ChatWindow({
         chatId: chatItem.chat.id,
       });
     }
-  }, [chatItem, markAsReadMutation, markAllMessagesAsReadMutation, chatId]);
+  }, [chatItem, markAsReadMutation, markAllMessagesAsReadMutation, chatId, currentAgent]);
 
   // Marcar como lido automaticamente quando receber mensagem no chat ativo
   useEffect(() => {
@@ -128,6 +135,13 @@ export function ChatWindow({
       const isInThisChat = currentPath.includes(`/chats/${chatId}`);
 
       if (!isInThisChat) return;
+
+      // REGRA: Só marcar como lido se o chat estiver assigned ao agente atual
+      const isAssignedToMe = chatItem.chat.assignedTo === currentAgent?.id;
+
+      if (!isAssignedToMe) {
+        return; // Não marcar como lido se não estiver assigned ao usuário
+      }
 
       const messageChatId = event.message.chatId as string;
       if (messageChatId === chatId) {
@@ -145,7 +159,47 @@ export function ChatWindow({
     });
 
     return unsubscribe;
-  }, [socket, socket.isConnected, chatId, chatItem, markAsReadMutation, markAllMessagesAsReadMutation]);
+  }, [socket, socket.isConnected, chatId, chatItem, markAsReadMutation, markAllMessagesAsReadMutation, currentAgent]);
+
+  // Detectar quando o chat é transferido PARA o agente atual (marcar como lido)
+  useEffect(() => {
+    if (!socket.isConnected || !chatItem || !currentAgent) return;
+
+    const unsubscribe = socket.onChatUpdated((event) => {
+      const updatedChatId = event.chat.id as string;
+      const updatedAssignedTo = event.chat.assignedTo as string | null;
+      const updatedUnreadCount = (event.chat.unreadCount as number) ?? 0;
+
+      // Se é o chat atual E foi transferido PARA o agente atual E está vendo o chat
+      if (
+        updatedChatId === chatId &&
+        updatedAssignedTo === currentAgent.id &&
+        chatItem.chat.assignedTo !== currentAgent.id && // Estava assigned para outro (ou null)
+        updatedUnreadCount > 0 // Só marcar se realmente tem mensagens não lidas (evita loop)
+      ) {
+        console.log("[ChatWindow] 📩 Chat transferido para mim - marcando como lido");
+
+        // Verificar se o chat está realmente ativo na URL
+        const currentPath = window.location.pathname;
+        const isInThisChat = currentPath.includes(`/chats/${chatId}`);
+
+        if (isInThisChat) {
+          // Marcar o chat como lido (zera unreadCount)
+          markAsReadMutation.mutate({
+            id: chatItem.chat.id,
+            createdAt: chatItem.chat.createdAt,
+          });
+
+          // Marcar todas as mensagens do contato como lidas (atualiza ticks)
+          markAllMessagesAsReadMutation.mutate({
+            chatId: chatItem.chat.id,
+          });
+        }
+      }
+    });
+
+    return unsubscribe;
+  }, [socket, socket.isConnected, chatId, chatItem, currentAgent, markAsReadMutation, markAllMessagesAsReadMutation]);
 
   // Detectar quando o chat é atribuído para outro agent (APENAS para members)
   useEffect(() => {

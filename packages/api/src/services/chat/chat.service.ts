@@ -439,7 +439,7 @@ Duração: ${duration}`;
       chatDepartmentId = agentExists.permissions.departments.ids[0] ?? null;
     }
 
-    // 3. Atualizar chat
+    // 3. Atualizar chat (sem modificar unreadCount)
     const [updated] = await ctx.tenantDb
       .update(chat)
       .set({
@@ -458,7 +458,19 @@ Duração: ${duration}`;
       });
     }
 
-    // 4. Buscar nomes dos agents (from/to)
+    // 4. Criar/atualizar participant do novo agente preservando unreadCount
+    const participantService = new ChatParticipantService(ctx.tenantDb);
+    await participantService.upsertParticipant(
+      updated.id,
+      updated.createdAt,
+      targetAgentId,
+      {
+        unreadCount: updated.unreadCount, // Preservar o unreadCount do chat
+        lastReadAt: undefined, // Novo agente ainda não leu
+      },
+    );
+
+    // 5. Buscar nomes dos agents (from/to)
     const catalogDb = this.getCatalogDb() as TenantDB;
     const [fromAgent] = await ctx.tenantDb
       .select()
@@ -482,7 +494,7 @@ Duração: ${duration}`;
     const toName = toUser?.name ?? "Agente";
     const transferTime = formatTime(updated.updatedAt);
 
-    // 5. Criar system message
+    // 6. Criar system message
     await this.createSystemMessage(ctx, updated, {
       content: `Sessão transferida de ${fromName} para ${toName} às ${transferTime}`,
       systemEventType: "session_transferred",
@@ -494,7 +506,7 @@ Duração: ${duration}`;
       },
     });
 
-    // 6. Atualizar lastMessage
+    // 7. Atualizar lastMessage
     await this.updateLastMessage(
       ctx,
       updated.id,
@@ -503,7 +515,7 @@ Duração: ${duration}`;
       "system",
     );
 
-    // 7. Publicar evento
+    // 8. Publicar evento
     await this.eventPublisher.chatUpdated(ctx.organizationId, updated);
 
     return updated;

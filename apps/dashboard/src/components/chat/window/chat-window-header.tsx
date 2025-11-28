@@ -243,12 +243,15 @@ export function ChatWindowHeaderActions({
     }),
   );
 
-  // APENAS quem está assigned pode transferir, adicionar tags ou finalizar
+  // Owner/Admin podem ver ações em chats PENDING
+  // Members só veem se estiverem assigned
+  const isOwnerOrAdmin = currentAgent?.role === "owner" || currentAgent?.role === "admin";
   const isAssigned = chat.assignedTo === currentAgent?.id;
+  const isPending = chat.assignedTo === null;
   const isClosed = chat.status === "closed";
 
-  // Mostrar ações apenas se assigned E chat aberto
-  const showActions = isAssigned && !isClosed;
+  // Mostrar ações se: (Owner/Admin vendo pending OU assigned ao usuário) E não fechado
+  const showActions = ((isOwnerOrAdmin && isPending) || isAssigned) && !isClosed;
 
   const handleMarkAsUnread = () => {
     // Navegar primeiro para desmontar o chat-window (evita que markAsRead seja chamado)

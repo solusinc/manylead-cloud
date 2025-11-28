@@ -116,6 +116,7 @@ export function ChatSidebarList({
     messageSource: item.chat.messageSource as "whatsapp" | "internal",
     tags: item.tags,
     assignedAgentName: item.assignedAgentName,
+    assignedTo: item.chat.assignedTo,
   })) ?? [];
 
   const virtualizer = useVirtualizer({
@@ -192,6 +193,7 @@ export function ChatSidebarList({
                 chat={chat}
                 isActive={chat.id === activeChatId}
                 isTyping={typingChats.has(chat.id)}
+                currentAgentId={currentAgent?.id}
               />
             </div>
           );
