@@ -1,15 +1,16 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useEffect } from "react";
 import Image from "next/image";
 import { format } from "date-fns";
-import { BanIcon, Check, CheckCheck, Clock, Download, FileVideo, Star } from "lucide-react";
+import { BanIcon, Check, CheckCheck, Clock, FileVideo, Star } from "lucide-react";
 import type { Attachment } from "@manylead/db";
 
 import { cn } from "@manylead/ui";
 
 import { useChatReply } from "../providers/chat-reply-provider";
 import { ChatMessageActions } from "./chat-message-actions";
+import { useChatImages } from "./chat-images-context";
 import type { Message } from "./chat-message";
 
 /**
@@ -55,45 +56,59 @@ function formatDuration(seconds: number): string {
  */
 export function ChatMessageAttachment({
   attachment,
+  messageId,
   onImageLoad,
 }: {
   attachment: Attachment;
+  messageId: string;
   onImageLoad?: () => void;
 }) {
+  const { registerImage, openLightbox } = useChatImages();
   const isImage = attachment.mediaType === "image";
   const isVideo = attachment.mediaType === "video";
+
+  // Registrar imagem no context quando o componente montar
+  useEffect(() => {
+    if (isImage && attachment.storageUrl) {
+      registerImage({
+        url: attachment.storageUrl,
+        alt: attachment.fileName,
+        messageId,
+      });
+    }
+  }, [isImage, attachment.storageUrl, attachment.fileName, messageId, registerImage]);
 
   if (!attachment.storageUrl) return null;
 
   return (
     <div className="mb-2 overflow-hidden rounded-lg">
       {isImage && (
-        <Image
-          src={attachment.storageUrl}
-          alt={attachment.fileName}
-          width={attachment.width ?? 400}
-          height={attachment.height ?? 300}
-          className="max-h-80 w-full object-cover"
-          loading="lazy"
-          onLoad={onImageLoad}
-        />
+        <button
+          onClick={() => openLightbox(messageId)}
+          className="cursor-pointer transition-opacity hover:opacity-90"
+        >
+          <Image
+            src={attachment.storageUrl}
+            alt={attachment.fileName}
+            width={attachment.width ?? 400}
+            height={attachment.height ?? 300}
+            className="max-h-80 w-full object-cover"
+            loading="lazy"
+            onLoad={onImageLoad}
+          />
+        </button>
       )}
 
       {isVideo && (
-        <div className="flex items-center gap-3 rounded-md bg-black/10 px-3 py-2 dark:bg-white/10">
-          <FileVideo className="h-8 w-8" />
-          <div className="flex-1 min-w-0">
-            <p className="truncate text-sm font-medium">{attachment.fileName}</p>
-            {attachment.fileSize && (
-              <p className="text-xs text-muted-foreground">
-                {formatFileSize(attachment.fileSize)}
-                {attachment.duration && ` • ${formatDuration(attachment.duration)}`}
-              </p>
-            )}
-          </div>
-          <a href={attachment.storageUrl} download target="_blank" rel="noopener noreferrer">
-            <Download className="h-4 w-4" />
-          </a>
+        <div className="max-w-sm">
+          <video
+            src={attachment.storageUrl}
+            controls
+            className="h-auto max-h-64 w-full rounded-lg object-cover"
+            preload="metadata"
+          >
+            <track kind="captions" />
+          </video>
         </div>
       )}
     </div>
@@ -144,7 +159,7 @@ export function ChatMessageBubble({
     >
       {showActions && (
         <div
-          className="absolute top-1 right-1 rounded-full p-0.5 transition-all duration-200"
+          className="absolute top-1 right-1 z-10 rounded-full p-0.5 transition-all duration-200"
           style={{
             backgroundImage: isOutgoing
               ? "radial-gradient(circle at 66% 25%, var(--msg-outgoing) 0%, var(--msg-outgoing) 55%, transparent 70%)"
@@ -175,6 +190,7 @@ export function ChatMessageBubble({
       {message.attachment && !message.isDeleted && (
         <ChatMessageAttachment
           attachment={message.attachment}
+          messageId={message.id}
           onImageLoad={onImageLoad}
         />
       )}
@@ -191,6 +207,15 @@ export function ChatMessageBubble({
         isStarred={message.isStarred}
         isEdited={message.isEdited}
         isDeleted={message.isDeleted}
+        mediaMetadata={
+          message.attachment
+            ? {
+                fileSize: message.attachment.fileSize ?? undefined,
+                duration: message.attachment.duration ?? undefined,
+                mediaType: message.attachment.mediaType as "image" | "video",
+              }
+            : undefined
+        }
       />
     </div>
   );
@@ -369,6 +394,7 @@ export const ChatMessageFooter = memo(function ChatMessageFooter({
   isStarred = false,
   isEdited = false,
   isDeleted = false,
+  mediaMetadata,
   className,
 }: {
   timestamp: Date;
@@ -377,18 +403,40 @@ export const ChatMessageFooter = memo(function ChatMessageFooter({
   isStarred?: boolean;
   isEdited?: boolean;
   isDeleted?: boolean;
+  mediaMetadata?: {
+    fileSize?: number;
+    duration?: number;
+    mediaType?: "image" | "video";
+  };
   className?: string;
 }) {
   return (
-    <div className={cn("mt-1 flex items-center justify-end gap-1", className)}>
-      {isStarred && <Star className="h-3 w-3 fill-current opacity-70" />}
-      {isEdited && !isDeleted && (
-        <span className="text-[10px] opacity-60">editado</span>
-      )}
-      <ChatMessageTime timestamp={timestamp} />
-      {isOutgoing && status && !isDeleted && (
-        <ChatMessageStatus status={status} />
-      )}
+    <div className={cn("mt-1 flex items-center justify-between gap-2", className)}>
+      {/* Info da mídia - lado esquerdo */}
+      <div className="flex items-center gap-1.5">
+        {mediaMetadata && (mediaMetadata.fileSize ?? mediaMetadata.duration) && (
+          <>
+            <FileVideo className="h-3 w-3 opacity-70" />
+            <span className="text-xs opacity-70">
+              {mediaMetadata.fileSize && formatFileSize(mediaMetadata.fileSize)}
+              {mediaMetadata.fileSize && mediaMetadata.duration && " • "}
+              {mediaMetadata.duration && formatDuration(mediaMetadata.duration)}
+            </span>
+          </>
+        )}
+      </div>
+
+      {/* Timestamp e status - lado direito */}
+      <div className="flex items-center gap-1">
+        {isStarred && <Star className="h-3 w-3 fill-current opacity-70" />}
+        {isEdited && !isDeleted && (
+          <span className="text-[10px] opacity-60">editado</span>
+        )}
+        <ChatMessageTime timestamp={timestamp} />
+        {isOutgoing && status && !isDeleted && (
+          <ChatMessageStatus status={status} />
+        )}
+      </div>
     </div>
   );
 });

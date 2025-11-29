@@ -35,6 +35,20 @@ export function MediaPreviewDialog({
     inputRef.current?.focus();
   }, []);
 
+  // Fechar com ESC
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !isLoading) {
+        onClose();
+      }
+    };
+
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [isLoading, onClose]);
+
   const handleSend = () => {
     onSend(caption);
   };

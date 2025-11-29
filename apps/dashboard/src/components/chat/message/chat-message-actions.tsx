@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronDown,
+  Download,
   MessageCircle,
   Pencil,
   Star,
@@ -72,6 +73,32 @@ export function ChatMessageActions({
   const canEdit = canEditMessages && isOutgoing && !message.readAt && !message.isDeleted;
   const canDelete = canDeleteMessages && isOutgoing && (hasMedia || !message.readAt) && !message.isDeleted;
 
+  const handleDownload = async () => {
+    if (!message.attachment?.storageUrl) return;
+
+    try {
+      // Fetch da URL da mídia
+      const response = await fetch(message.attachment.storageUrl);
+      const blob = await response.blob();
+
+      // Criar URL temporária do blob
+      const blobUrl = URL.createObjectURL(blob);
+
+      // Criar link de download
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = message.attachment.fileName || "download";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      // Limpar URL do blob
+      URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error("Erro ao fazer download:", error);
+    }
+  };
+
   return (
     <>
       <DropdownMenu onOpenChange={onOpenChange}>
@@ -102,6 +129,15 @@ export function ChatMessageActions({
             <span>Responder</span>
           </DropdownMenuItem>
           <ChatMessageActionStar message={message} />
+          {hasMedia && (
+            <DropdownMenuItem
+              className="cursor-pointer gap-3"
+              onClick={handleDownload}
+            >
+              <Download className="h-4 w-4" />
+              <span>Download</span>
+            </DropdownMenuItem>
+          )}
           {canEdit && (
             <DropdownMenuItem
               className="cursor-pointer gap-3"

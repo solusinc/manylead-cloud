@@ -18,6 +18,7 @@ import { ChatErrorBoundary } from "../providers/chat-error-boundary";
 import { useChatAccessControl } from "./hooks/use-chat-access-control";
 import { MediaPreviewDialog } from "../input/media-preview";
 import { useSendMedia } from "../input/hooks/use-send-media";
+import { ChatImagesProvider } from "../message/chat-images-context";
 
 // Context for scroll to bottom function
 const ScrollToBottomContext = createContext<(() => void) | null>(null);
@@ -241,9 +242,11 @@ function ChatWindowContent({
 
       <ChatWindowHeader chat={chat} />
 
-      <ScrollArea ref={scrollAreaRef} className="flex-1 overflow-auto px-6 py-0">
-        <ChatMessageList chatId={chatId} />
-      </ScrollArea>
+      <ChatImagesProvider>
+        <ScrollArea ref={scrollAreaRef} className="flex-1 overflow-auto px-6 py-0">
+          <ChatMessageList chatId={chatId} />
+        </ScrollArea>
+      </ChatImagesProvider>
 
       {/* Input bar - WhatsApp style */}
       <div
