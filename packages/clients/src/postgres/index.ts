@@ -54,10 +54,6 @@ export function createPostgresClient(
   // Cache the client
   postgresClients.set(connectionString, client);
 
-  if (logger) {
-    logger.info({ preset }, "Postgres client created");
-  }
-
   return client;
 }
 

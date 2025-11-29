@@ -52,10 +52,6 @@ export function createRedisClient(
 
   // Event listeners with optional structured logging
   if (logger) {
-    client.on("connect", () => {
-      logger.info("Redis connected");
-    });
-
     client.on("error", (err) => {
       logger.error({ err }, "Redis error");
     });

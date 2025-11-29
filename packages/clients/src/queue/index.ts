@@ -39,10 +39,6 @@ export function createQueue<T = unknown>(
     ...config,
   });
 
-  if (logger) {
-    logger.info({ queue: name, preset }, "Queue created");
-  }
-
   return queue;
 }
 
