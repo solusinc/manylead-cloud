@@ -7,6 +7,7 @@ import { v7 as uuidv7 } from "uuid";
 import { useTRPC } from "~/lib/trpc/react";
 import { useMessageDeduplication } from "~/hooks/use-message-deduplication";
 import { useServerSession } from "~/components/providers/session-provider";
+import { useNotificationSound } from "~/hooks/use-notification-sound";
 
 interface SendMessageOptions {
   chatId: string;
@@ -27,6 +28,7 @@ export function useSendMessage(chatId: string) {
   const queryClient = useQueryClient();
   const { register } = useMessageDeduplication();
   const session = useServerSession();
+  const { playNotificationSound } = useNotificationSound();
 
   // Mutation for sending text messages
   const sendMessageMutation = useMutation(
@@ -92,6 +94,9 @@ export function useSendMessage(chatId: string) {
         void queryClient.invalidateQueries({
           queryKey: [["chats", "list"]],
         });
+
+        // Play notification sound
+        playNotificationSound();
       },
       onError: (error, variables) => {
         // REMOVE optimistic message on error

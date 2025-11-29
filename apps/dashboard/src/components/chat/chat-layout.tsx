@@ -8,6 +8,7 @@ import { ChatSocketProvider, useChatSocketContext } from "~/components/providers
 import { useServerSession } from "~/components/providers/session-provider";
 import { useMessageDeduplication } from "~/hooks/use-message-deduplication";
 import { useSocketListener } from "~/hooks/chat/use-socket-listener";
+import { useNotificationSound } from "~/hooks/use-notification-sound";
 import { ChatSidebar } from "./sidebar";
 import { ChatWindowEmpty } from "./window";
 
@@ -36,6 +37,7 @@ function ChatLayoutInner({
   const session = useServerSession();
   const socket = useChatSocketContext();
   const { register, isAnyProcessed } = useMessageDeduplication();
+  const { playNotificationSound } = useNotificationSound();
 
   // Conectar ao Socket.io quando o layout montar
   useEffect(() => {
@@ -157,8 +159,11 @@ function ChatLayoutInner({
       void queryClient.invalidateQueries({
         queryKey: [["chats", "list"]],
       });
+
+      // Play notification sound for incoming message
+      playNotificationSound();
     },
-    [queryClient, register, isAnyProcessed]
+    [queryClient, register, isAnyProcessed, playNotificationSound]
   );
 
   // 2. Quando um novo chat é criado - invalidar queries
