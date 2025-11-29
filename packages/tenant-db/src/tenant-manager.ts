@@ -30,6 +30,7 @@ import {
   retryWithBackoff,
 } from "./utils";
 import { setupTimescaleDB } from "./timescale";
+import { seedTenantDefaults } from "./seed-tenant";
 
 // Migrations path from env (supports both local dev and Docker)
 const TENANT_MIGRATIONS_PATH = env.TENANT_MIGRATIONS_PATH;
@@ -331,6 +332,13 @@ export class TenantDatabaseManager {
         "Setting up TimescaleDB",
       );
       await setupTimescaleDB(tenantClient);
+
+      // Seed de dados padrões (tags e endings)
+      this.logger.info(
+        { organizationId: existingTenant.organizationId },
+        "Seeding tenant defaults",
+      );
+      await seedTenantDefaults(tenantClient, existingTenant.organizationId);
 
       await tenantClient.end();
 
