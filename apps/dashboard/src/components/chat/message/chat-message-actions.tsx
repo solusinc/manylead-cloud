@@ -67,8 +67,10 @@ export function ChatMessageActions({
   };
 
   // Não pode editar/deletar se a mensagem já foi lida
+  // EXCETO para mídias: sempre pode deletar mensagens com attachment (imagem/vídeo)
+  const hasMedia = !!message.attachment;
   const canEdit = canEditMessages && isOutgoing && !message.readAt && !message.isDeleted;
-  const canDelete = canDeleteMessages && isOutgoing && !message.readAt && !message.isDeleted;
+  const canDelete = canDeleteMessages && isOutgoing && (hasMedia || !message.readAt) && !message.isDeleted;
 
   return (
     <>

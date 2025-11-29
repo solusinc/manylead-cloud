@@ -1,8 +1,10 @@
 "use client";
 
 import { memo } from "react";
+import Image from "next/image";
 import { format } from "date-fns";
-import { Check, CheckCheck, Clock, Star, Trash2 } from "lucide-react";
+import { BanIcon, Check, CheckCheck, Clock, Download, FileVideo, Star } from "lucide-react";
+import type { Attachment } from "@manylead/db";
 
 import { cn } from "@manylead/ui";
 
@@ -29,6 +31,76 @@ function scrollToMessage(messageId: string) {
 }
 
 /**
+ * Formata tamanho de arquivo
+ */
+function formatFileSize(bytes: number): string {
+  if (bytes === 0) return "0 Bytes";
+  const k = 1024;
+  const sizes = ["Bytes", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${Math.round(bytes / Math.pow(k, i))} ${sizes[i]}`;
+}
+
+/**
+ * Formata duração em segundos
+ */
+function formatDuration(seconds: number): string {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${secs.toString().padStart(2, "0")}`;
+}
+
+/**
+ * Renderiza attachment de mensagem (foto/vídeo)
+ */
+export function ChatMessageAttachment({
+  attachment,
+  onImageLoad,
+}: {
+  attachment: Attachment;
+  onImageLoad?: () => void;
+}) {
+  const isImage = attachment.mediaType === "image";
+  const isVideo = attachment.mediaType === "video";
+
+  if (!attachment.storageUrl) return null;
+
+  return (
+    <div className="mb-2 overflow-hidden rounded-lg">
+      {isImage && (
+        <Image
+          src={attachment.storageUrl}
+          alt={attachment.fileName}
+          width={attachment.width ?? 400}
+          height={attachment.height ?? 300}
+          className="max-h-80 w-full object-cover"
+          loading="lazy"
+          onLoad={onImageLoad}
+        />
+      )}
+
+      {isVideo && (
+        <div className="flex items-center gap-3 rounded-md bg-black/10 px-3 py-2 dark:bg-white/10">
+          <FileVideo className="h-8 w-8" />
+          <div className="flex-1 min-w-0">
+            <p className="truncate text-sm font-medium">{attachment.fileName}</p>
+            {attachment.fileSize && (
+              <p className="text-xs text-muted-foreground">
+                {formatFileSize(attachment.fileSize)}
+                {attachment.duration && ` • ${formatDuration(attachment.duration)}`}
+              </p>
+            )}
+          </div>
+          <a href={attachment.storageUrl} download target="_blank" rel="noopener noreferrer">
+            <Download className="h-4 w-4" />
+          </a>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
  * Bubble da mensagem (container com fundo, padding, actions)
  */
 export function ChatMessageBubble({
@@ -38,6 +110,7 @@ export function ChatMessageBubble({
   onMenuOpenChange,
   canEditMessages = false,
   canDeleteMessages = false,
+  onImageLoad,
   className,
 }: {
   message: Message;
@@ -46,6 +119,7 @@ export function ChatMessageBubble({
   onMenuOpenChange?: (open: boolean) => void;
   canEditMessages?: boolean;
   canDeleteMessages?: boolean;
+  onImageLoad?: () => void;
   className?: string;
 }) {
   // Extrair dados da mensagem respondida do metadata
@@ -61,7 +135,7 @@ export function ChatMessageBubble({
     <div
       className={cn(
         "relative max-w-[280px] overflow-hidden rounded-2xl sm:max-w-md md:max-w-lg lg:max-w-xl",
-        repliedMessage ? "px-2 py-1.5" : "px-4 py-2",
+        repliedMessage ? "px-2 py-1.5" : "px-2 py-2",
         isOutgoing
           ? "bg-msg-outgoing rounded-br-sm"
           : "bg-msg-incoming rounded-bl-sm",
@@ -94,6 +168,14 @@ export function ChatMessageBubble({
           senderName={repliedMessage.senderName}
           isOutgoing={isOutgoing}
           repliedToMessageId={message.repliedToMessageId}
+        />
+      )}
+
+      {/* Attachment - se existe e não foi deletada */}
+      {message.attachment && !message.isDeleted && (
+        <ChatMessageAttachment
+          attachment={message.attachment}
+          onImageLoad={onImageLoad}
         />
       )}
 
@@ -245,7 +327,7 @@ export const ChatMessageContent = memo(function ChatMessageContent({
           className,
         )}
       >
-        <Trash2 className="size-3.5" />
+        <BanIcon className="size-3.5" />
         Esta mensagem foi excluída
       </p>
     );

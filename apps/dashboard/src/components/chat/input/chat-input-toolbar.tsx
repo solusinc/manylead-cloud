@@ -3,7 +3,7 @@
 import { useState } from "react";
 import data from "@emoji-mart/data";
 import Picker from "@emoji-mart/react";
-import { Smile, Plus, MessageSquareText, FileText, Image as ImageIcon } from "lucide-react";
+import { Smile, Plus, MessageSquareText, File, Image as ImageIcon } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { useDisclosure } from "~/hooks/use-disclosure";
@@ -98,12 +98,33 @@ export function ChatInputAttachButton({
   const { isOpen, setIsOpen, onClose } = useDisclosure();
   const commentDialog = useDisclosure();
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, _type: string) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: string) => {
     const file = e.target.files?.[0];
-    if (file) {
-      onFileSelect?.(file);
-      onClose();
+    if (!file) return;
+
+    // Validar tipo
+    if (type === "media") {
+      const isValid = file.type.startsWith("image/") || file.type.startsWith("video/");
+      if (!isValid) {
+        toast.error("Arquivo inválido", {
+          description: "Selecione apenas fotos ou vídeos",
+        });
+        return;
+      }
+
+      // Validar tamanho
+      const maxSize = file.type.startsWith("video/") ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
+      if (file.size > maxSize) {
+        toast.error("Arquivo muito grande", {
+          description: `Máximo: ${Math.floor(maxSize / (1024 * 1024))}MB`,
+        });
+        return;
+      }
     }
+
+    onFileSelect?.(file);
+    onClose();
+    e.target.value = "";
   };
 
   return (
@@ -138,7 +159,7 @@ export function ChatInputAttachButton({
               }}
             />
             <AttachMenuOption
-              icon={FileText}
+              icon={File}
               label="Documento"
               inputId="document-upload"
               accept=".pdf,.doc,.docx,.xls,.xlsx,.txt"

@@ -1,6 +1,7 @@
 import {
   agent,
   and,
+  attachment,
   chat,
   chatParticipant,
   contact,
@@ -71,6 +72,17 @@ export class CrossOrgMirrorService {
     messageTimestamp: Date,
     messageContent: string,
     metadata?: Record<string, unknown>,
+    attachmentData?: {
+      fileName: string;
+      mimeType: string;
+      mediaType: string;
+      storagePath: string;
+      storageUrl: string;
+      fileSize?: number | null;
+      width?: number | null;
+      height?: number | null;
+      duration?: number | null;
+    },
   ): Promise<void> {
     // Buscar contact source para pegar targetOrganizationId
     const [contactRecord] = await sourceTenantDb
@@ -156,7 +168,7 @@ export class CrossOrgMirrorService {
         messageSource: "internal",
         sender: "agent",
         senderId: null,
-        messageType: "text",
+        messageType: attachmentData?.mediaType === "image" ? "image" : attachmentData?.mediaType === "video" ? "video" : "text",
         content: messageContent,
         metadata: {
           ...metadata,
@@ -168,6 +180,24 @@ export class CrossOrgMirrorService {
         deliveredAt: messageTimestamp,
       })
       .returning();
+
+    // Criar attachment espelhado (mesma URL)
+    if (attachmentData && mirroredMessage) {
+      await targetTenantDb.insert(attachment).values({
+        messageId: mirroredMessage.id,
+        fileName: attachmentData.fileName,
+        mimeType: attachmentData.mimeType,
+        mediaType: attachmentData.mediaType,
+        storagePath: attachmentData.storagePath,
+        storageUrl: attachmentData.storageUrl, // MESMA URL
+        fileSize: attachmentData.fileSize ?? null,
+        width: attachmentData.width ?? null,
+        height: attachmentData.height ?? null,
+        duration: attachmentData.duration ?? null,
+        downloadStatus: "completed",
+        downloadedAt: messageTimestamp,
+      });
+    }
 
     // Atualizar chat com nova mensagem
     await this.updateMirroredChatAfterMessage(
@@ -198,6 +228,17 @@ export class CrossOrgMirrorService {
     messageTimestamp: Date,
     messageContent: string,
     metadata?: Record<string, unknown>,
+    attachmentData?: {
+      fileName: string;
+      mimeType: string;
+      mediaType: string;
+      storagePath: string;
+      storageUrl: string;
+      fileSize?: number | null;
+      width?: number | null;
+      height?: number | null;
+      duration?: number | null;
+    },
   ): Promise<void> {
     // Buscar contact source para pegar targetOrganizationId
     const [contactRecord] = await sourceTenantDb
@@ -265,7 +306,7 @@ export class CrossOrgMirrorService {
         messageSource: "internal",
         sender: "agent",
         senderId: null,
-        messageType: "text",
+        messageType: attachmentData?.mediaType === "image" ? "image" : attachmentData?.mediaType === "video" ? "video" : "text",
         content: messageContent,
         metadata: {
           ...metadata,
@@ -277,6 +318,24 @@ export class CrossOrgMirrorService {
         deliveredAt: messageTimestamp,
       })
       .returning();
+
+    // Criar attachment espelhado (mesma URL)
+    if (attachmentData && mirroredMessage) {
+      await targetTenantDb.insert(attachment).values({
+        messageId: mirroredMessage.id,
+        fileName: attachmentData.fileName,
+        mimeType: attachmentData.mimeType,
+        mediaType: attachmentData.mediaType,
+        storagePath: attachmentData.storagePath,
+        storageUrl: attachmentData.storageUrl, // MESMA URL
+        fileSize: attachmentData.fileSize ?? null,
+        width: attachmentData.width ?? null,
+        height: attachmentData.height ?? null,
+        duration: attachmentData.duration ?? null,
+        downloadStatus: "completed",
+        downloadedAt: messageTimestamp,
+      });
+    }
 
     // Atualizar chat espelhado
     await this.updateMirroredChatAfterMessage(
@@ -539,45 +598,41 @@ export class CrossOrgMirrorService {
         deletedMirrored,
       );
 
-      // Se a mensagem deletada era a última mensagem do chat, buscar a anterior
-      if (
-        mirroredChat.lastMessageAt &&
-        deletedMirrored.timestamp.getTime() === mirroredChat.lastMessageAt.getTime()
-      ) {
-        // Buscar a mensagem anterior não deletada
-        const [previousMessage] = await targetTenantDb
-          .select()
-          .from(message)
+      // Se a mensagem deletada estava como não lida, decrementar unreadCount
+      // Para chats internos, decrementar chatParticipant.unreadCount de TODOS os participants
+      if (mirroredMessage.status !== "read") {
+        // Decrementar unreadCount de todos os participants desse chat
+        await targetTenantDb
+          .update(chatParticipant)
+          .set({
+            unreadCount: sql`GREATEST(${chatParticipant.unreadCount} - 1, 0)`,
+          })
           .where(
             and(
-              eq(message.chatId, mirroredChat.id),
-              eq(message.isDeleted, false),
+              eq(chatParticipant.chatId, mirroredChat.id),
+              eq(chatParticipant.chatCreatedAt, mirroredChat.createdAt),
             ),
-          )
-          .orderBy(sql`${message.timestamp} DESC`)
-          .limit(1);
+          );
 
-        // Atualizar chat com a mensagem anterior ou limpar se não houver
-        // Extrair conteúdo sem assinatura se houver mensagem anterior
-        let lastContent = null;
-        if (previousMessage?.content) {
-          lastContent = previousMessage.content.replace(/^\*\*[^*]+\*\*\n/, '');
-        }
-
-        const [updatedChat] = await targetTenantDb
+        // Também decrementar chat.unreadCount (usado para pending chats)
+        await targetTenantDb
           .update(chat)
           .set({
-            lastMessageAt: previousMessage?.timestamp ?? null,
-            lastMessageContent: lastContent,
-            lastMessageSender: previousMessage?.sender ?? null,
+            unreadCount: sql`GREATEST(${chat.unreadCount} - 1, 0)`,
           })
-          .where(eq(chat.id, mirroredChat.id))
-          .returning();
+          .where(eq(chat.id, mirroredChat.id));
+      }
 
-        // Emitir evento de chat atualizado na org target
-        if (updatedChat) {
-          await this.eventPublisher.chatUpdated(targetOrgId, updatedChat);
-        }
+      // Buscar chat atualizado para emitir evento com unreadCount correto
+      const [updatedChat] = await targetTenantDb
+        .select()
+        .from(chat)
+        .where(eq(chat.id, mirroredChat.id))
+        .limit(1);
+
+      // Emitir evento de chat atualizado na org target para atualizar sidebar em tempo real
+      if (updatedChat) {
+        await this.eventPublisher.chatUpdated(targetOrgId, updatedChat);
       }
     }
   }

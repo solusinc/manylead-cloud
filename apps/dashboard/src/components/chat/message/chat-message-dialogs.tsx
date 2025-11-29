@@ -123,7 +123,6 @@ export function DeleteMessageDialog({
       onSuccess: () => {
         void queryClient.invalidateQueries({ queryKey: [["messages"]] });
         onOpenChange(false);
-        toast.success("Mensagem deletada");
       },
       onError: (error) => {
         toast.error(error.message || "Erro ao deletar mensagem");

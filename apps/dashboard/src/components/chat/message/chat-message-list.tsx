@@ -131,6 +131,7 @@ export function ChatMessageList({
         repliedToMessageId: item.message.repliedToMessageId as string | null | undefined,
         metadata: item.message.metadata as Record<string, unknown> | undefined,
         chatId,
+        attachment: item.attachment ?? undefined,
       })),
     [data?.pages, chatId]
   );
@@ -629,6 +630,10 @@ export function ChatMessageList({
                   showAvatar={showAvatar}
                   canEditMessages={canEditMessages}
                   canDeleteMessages={canDeleteMessages}
+                  onImageLoad={() => {
+                    // Scroll após imagem carregar (para mensagens com mídia)
+                    setTimeout(() => scrollToBottom("instant"), 100);
+                  }}
                 />
               )}
             </Fragment>

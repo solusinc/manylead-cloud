@@ -121,6 +121,14 @@ export function ChatSidebarList({
           | "agent"
           | "contact"
           | "system",
+        lastMessageType: (item.lastMessageType ?? "text") as
+          | "text"
+          | "image"
+          | "video"
+          | "audio"
+          | "document"
+          | "system",
+        lastMessageIsDeleted: item.lastMessageIsDeleted,
         unreadCount: item.chat.unreadCount,
         status: item.chat.status as "open" | "closed" | "pending",
         messageSource: item.chat.messageSource as "whatsapp" | "internal",

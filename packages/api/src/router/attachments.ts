@@ -160,21 +160,37 @@ export const attachmentsRouter = createTRPCRouter({
   delete: ownerProcedure
     .input(z.object({ id: z.string().uuid() }))
     .mutation(async ({ ctx, input }) => {
-      const [deleted] = await ctx.tenantDb
-        .delete(attachment)
+      // Buscar attachment antes de deletar para ter o storagePath
+      const [attachmentRecord] = await ctx.tenantDb
+        .select()
+        .from(attachment)
         .where(eq(attachment.id, input.id))
-        .returning();
+        .limit(1);
 
-      if (!deleted) {
+      if (!attachmentRecord) {
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Anexo não encontrado",
         });
       }
 
-      // TODO: Deletar arquivo do R2 também
+      // Deletar do banco
+      const [deleted] = await ctx.tenantDb
+        .delete(attachment)
+        .where(eq(attachment.id, input.id))
+        .returning();
 
-      return { success: true };
+      // Deletar arquivo do R2
+      if (attachmentRecord.storagePath) {
+        try {
+          await storage.delete(attachmentRecord.storagePath);
+        } catch (error) {
+          console.error("Erro ao deletar arquivo do R2:", error);
+          // Não falhar a operação se o arquivo já foi deletado ou não existe
+        }
+      }
+
+      return { success: true, deleted };
     }),
 
   /**

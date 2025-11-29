@@ -2,6 +2,7 @@
 
 import type React from "react";
 import { useState } from "react";
+import type { Attachment } from "@manylead/db";
 
 import { cn } from "@manylead/ui";
 
@@ -22,6 +23,7 @@ export interface Message {
   repliedToMessageId?: string | null;
   metadata?: Record<string, unknown>;
   chatId?: string;
+  attachment?: Attachment;
 }
 
 export function ChatMessage({
@@ -29,6 +31,7 @@ export function ChatMessage({
   showAvatar: _showAvatar = true,
   canEditMessages = false,
   canDeleteMessages = false,
+  onImageLoad,
   className,
   ...props
 }: {
@@ -36,6 +39,7 @@ export function ChatMessage({
   showAvatar?: boolean;
   canEditMessages?: boolean;
   canDeleteMessages?: boolean;
+  onImageLoad?: () => void;
 } & React.ComponentProps<"div">) {
   const isOutgoing = message.sender === "agent";
   const [isHovered, setIsHovered] = useState(false);
@@ -60,6 +64,7 @@ export function ChatMessage({
         onMenuOpenChange={setIsMenuOpen}
         canEditMessages={canEditMessages}
         canDeleteMessages={canDeleteMessages}
+        onImageLoad={onImageLoad}
       />
     </div>
   );

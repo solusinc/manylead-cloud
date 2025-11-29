@@ -18,6 +18,9 @@ interface ChatReplyContextValue {
   messageSource: "whatsapp" | "internal";
   instanceCode?: string;
   organizationName?: string;
+  mediaPreview: File | null;
+  setMediaPreview: (file: File | null) => void;
+  cancelMediaPreview: () => void;
 }
 
 const ChatReplyContext = createContext<ChatReplyContextValue | null>(null);
@@ -36,13 +39,31 @@ export function ChatReplyProvider({
   organizationName?: string;
 }) {
   const [replyingTo, setReplyingTo] = useState<ReplyMessage | null>(null);
+  const [mediaPreview, setMediaPreview] = useState<File | null>(null);
 
   const cancelReply = () => {
     setReplyingTo(null);
   };
 
+  const cancelMediaPreview = () => {
+    setMediaPreview(null);
+  };
+
   return (
-    <ChatReplyContext.Provider value={{ replyingTo, setReplyingTo, cancelReply, contactName, messageSource, instanceCode, organizationName }}>
+    <ChatReplyContext.Provider
+      value={{
+        replyingTo,
+        setReplyingTo,
+        cancelReply,
+        contactName,
+        messageSource,
+        instanceCode,
+        organizationName,
+        mediaPreview,
+        setMediaPreview,
+        cancelMediaPreview,
+      }}
+    >
       {children}
     </ChatReplyContext.Provider>
   );

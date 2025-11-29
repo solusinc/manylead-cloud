@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useRef } from "react";
+import { createContext, useCallback, useContext, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 
@@ -13,9 +13,11 @@ import { useTRPC } from "~/lib/trpc/react";
 import { ChatInput } from "../input";
 import { ChatMessageList } from "../message";
 import { ChatWindowHeader } from "./chat-window-header";
-import { ChatReplyProvider } from "../providers/chat-reply-provider";
+import { ChatReplyProvider, useChatReply } from "../providers/chat-reply-provider";
 import { ChatErrorBoundary } from "../providers/chat-error-boundary";
 import { useChatAccessControl } from "./hooks/use-chat-access-control";
+import { MediaPreviewDialog } from "../input/media-preview";
+import { useSendMedia } from "../input/hooks/use-send-media";
 
 // Context for scroll to bottom function
 const ScrollToBottomContext = createContext<(() => void) | null>(null);
@@ -133,40 +135,133 @@ export function ChatWindow({
         organizationName={chat.contact.name}
       >
         <ScrollToBottomContext.Provider value={scrollToBottom}>
-          <div
-            className={cn(
-              "flex h-full max-h-[calc(100vh-3.5rem)] flex-col sm:max-h-full",
-              "bg-auto] bg-[url('/assets/chat-messages-bg-light.png')] bg-repeat dark:bg-[url('/assets/chat-messages-bg-dark.png')]",
-              className
-            )}
+          <ChatWindowContent
+            chat={chat}
+            chatItem={chatItem}
+            chatId={chatId}
+            scrollAreaRef={scrollAreaRef}
+            socket={socket}
+            className={className}
             {...props}
-          >
-            <ChatWindowHeader chat={chat} />
-
-            <ScrollArea ref={scrollAreaRef} className="flex-1 overflow-auto px-6 py-0">
-              <ChatMessageList chatId={chatId} />
-            </ScrollArea>
-
-            {/* Input bar - WhatsApp style */}
-            <div
-              className={cn(
-                "min-h-14 items-center bg-background",
-                chat.status === "open" && "px-4 py-4"
-              )}
-            >
-              <ChatInput
-                chatId={chatId}
-                chatCreatedAt={chatItem.chat.createdAt}
-                chatStatus={chat.status}
-                assignedTo={chat.assignedTo}
-                onTypingStart={() => socket.emitTypingStart(chatId)}
-                onTypingStop={() => socket.emitTypingStop(chatId)}
-              />
-            </div>
-          </div>
+          />
         </ScrollToBottomContext.Provider>
       </ChatReplyProvider>
     </ChatErrorBoundary>
+  );
+}
+
+function ChatWindowContent({
+  chat,
+  chatItem,
+  chatId,
+  scrollAreaRef,
+  socket,
+  className,
+  ...props
+}: {
+  chat: {
+    id: string;
+    createdAt: Date;
+    contact: {
+      id: string;
+      name: string;
+      phoneNumber: string;
+      avatar: string | null;
+      instanceCode?: string;
+      customName?: string | null;
+      notes?: string | null;
+      customFields?: Record<string, string> | null;
+    };
+    status: "open" | "closed";
+    assignedTo: string | null;
+    source: "whatsapp" | "internal";
+  };
+  chatItem: {
+    chat: {
+      id: string;
+      createdAt: Date;
+      status: string;
+      assignedTo: string | null;
+      messageSource: string;
+    };
+  };
+  chatId: string;
+  scrollAreaRef: React.RefObject<HTMLDivElement | null>;
+  socket: ReturnType<typeof useChatSocketContext>;
+  className?: string;
+} & React.ComponentProps<"div">) {
+  const { mediaPreview, replyingTo, cancelReply, cancelMediaPreview } = useChatReply();
+  const { sendMedia, isUploading, uploadProgress } = useSendMedia(chatId);
+
+  const handleMediaSend = useCallback(
+    async (caption: string) => {
+      if (!mediaPreview) return;
+
+      try {
+        await sendMedia({
+          chatId,
+          file: mediaPreview,
+          caption: caption || undefined,
+          metadata: replyingTo
+            ? {
+                repliedToMessageId: replyingTo.id,
+                repliedToContent: replyingTo.content,
+                repliedToSender: replyingTo.senderName,
+              }
+            : undefined,
+        });
+        cancelMediaPreview();
+        cancelReply();
+      } catch (error) {
+        console.error("Failed to send media:", error);
+      }
+    },
+    [mediaPreview, sendMedia, chatId, replyingTo, cancelMediaPreview, cancelReply]
+  );
+
+  return (
+    <div
+      className={cn(
+        "relative flex h-full max-h-[calc(100vh-3.5rem)] flex-col sm:max-h-full",
+        "bg-auto] bg-[url('/assets/chat-messages-bg-light.png')] bg-repeat dark:bg-[url('/assets/chat-messages-bg-dark.png')]",
+        className
+      )}
+      {...props}
+    >
+      {/* Media Preview Dialog */}
+      {mediaPreview && (
+        <MediaPreviewDialog
+          file={mediaPreview}
+          onSend={handleMediaSend}
+          onClose={cancelMediaPreview}
+          isLoading={isUploading}
+          uploadProgress={uploadProgress}
+        />
+      )}
+
+      <ChatWindowHeader chat={chat} />
+
+      <ScrollArea ref={scrollAreaRef} className="flex-1 overflow-auto px-6 py-0">
+        <ChatMessageList chatId={chatId} />
+      </ScrollArea>
+
+      {/* Input bar - WhatsApp style */}
+      <div
+        className={cn(
+          "min-h-14 items-center bg-background",
+          chat.status === "open" && "px-4 py-4"
+        )}
+      >
+        <ChatInput
+          chatId={chatId}
+          chatCreatedAt={chatItem.chat.createdAt}
+          chatStatus={chat.status}
+          assignedTo={chat.assignedTo}
+          onTypingStart={() => socket.emitTypingStart(chatId)}
+          onTypingStop={() => socket.emitTypingStop(chatId)}
+        />
+      </div>
+    </div>
   );
 }
 

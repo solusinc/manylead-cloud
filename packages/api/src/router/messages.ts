@@ -5,6 +5,18 @@ import { agent, and, attachment, channel, chat, chatParticipant, contact, desc, 
 import { EvolutionAPIClient } from "@manylead/evolution-api-client";
 import { publishMessageEvent } from "@manylead/shared";
 
+// Schema para upload de attachment (validação do frontend)
+const uploadAttachmentSchema = z.object({
+  fileName: z.string().min(1),
+  mimeType: z.string().min(1),
+  storagePath: z.string().min(1),
+  publicUrl: z.string().url(),
+  fileSize: z.number().optional(),
+  width: z.number().optional(),
+  height: z.number().optional(),
+  duration: z.number().optional(),
+});
+
 import { env } from "../env";
 import { getMessageService } from "../services";
 import type { MessageContext } from "../services";
@@ -441,6 +453,127 @@ export const messagesRouter = createTRPCRouter({
     }),
 
   /**
+   * Envia mensagem com attachment (foto/vídeo)
+   */
+  sendWithAttachment: memberProcedure
+    .input(
+      z.object({
+        chatId: z.string().uuid(),
+        content: z.string().default(""),
+        tempId: z.string().uuid(),
+        attachment: uploadAttachmentSchema,
+        metadata: z.record(z.string(), z.unknown()).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const organizationId = ctx.session.session.activeOrganizationId;
+      if (!organizationId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Nenhuma organização ativa",
+        });
+      }
+
+      const userId = ctx.session.user.id;
+
+      // Buscar o agent do usuário logado
+      const [currentAgent] = await ctx.tenantDb
+        .select()
+        .from(agent)
+        .where(eq(agent.userId, userId))
+        .limit(1);
+
+      if (!currentAgent) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Agent não encontrado para o usuário",
+        });
+      }
+
+      const { tenantManager } = await import("../trpc");
+      const messageService = getMessageService({
+        redisUrl: env.REDIS_URL,
+        getTenantConnection: tenantManager.getConnection.bind(tenantManager),
+        getCatalogDb: () => ctx.db,
+      });
+
+      const messageContext: MessageContext = {
+        organizationId,
+        tenantDb: ctx.tenantDb,
+        agentId: currentAgent.id,
+        agentName: ctx.session.user.name,
+      };
+
+      // Determinar messageType
+      let messageType: "image" | "video" | "audio" | "document" = "document";
+      if (input.attachment.mimeType.startsWith("image/")) messageType = "image";
+      else if (input.attachment.mimeType.startsWith("video/")) messageType = "video";
+      else if (input.attachment.mimeType.startsWith("audio/")) messageType = "audio";
+
+      // Criar mensagem com attachmentData
+      const result = await messageService.createTextMessage(messageContext, {
+        chatId: input.chatId,
+        content: input.content || "", // ✅ Não salvar [image] se não tiver caption
+        messageType,
+        tempId: input.tempId,
+        agentId: currentAgent.id,
+        agentName: ctx.session.user.name,
+        metadata: input.metadata,
+        attachmentData: {
+          fileName: input.attachment.fileName,
+          mimeType: input.attachment.mimeType,
+          mediaType: messageType,
+          storagePath: input.attachment.storagePath,
+          storageUrl: input.attachment.publicUrl,
+          fileSize: input.attachment.fileSize ?? null,
+          width: input.attachment.width ?? null,
+          height: input.attachment.height ?? null,
+          duration: input.attachment.duration ?? null,
+        },
+      });
+
+      const { message: newMessage, chat: chatRecord } = result;
+
+      // Lógica adicional para chats intra-org (com initiatorAgentId)
+      if (chatRecord.messageSource === "internal" && chatRecord.initiatorAgentId) {
+        const isInitiator = currentAgent.id === chatRecord.initiatorAgentId;
+        const now = new Date();
+
+        // Buscar o outro participante (destinatário)
+        const targetAgentId = isInitiator
+          ? (await ctx.tenantDb
+              .select()
+              .from(contact)
+              .where(eq(contact.id, chatRecord.contactId))
+              .limit(1)
+              .then((rows) => {
+                const metadata = rows[0]?.metadata as { agentId?: string } | null;
+                return metadata?.agentId;
+              }))
+          : chatRecord.initiatorAgentId;
+
+        // Incrementar unreadCount APENAS do destinatário
+        if (targetAgentId) {
+          await ctx.tenantDb
+            .update(chatParticipant)
+            .set({
+              unreadCount: sql`COALESCE(${chatParticipant.unreadCount}, 0) + 1`,
+              updatedAt: now,
+            })
+            .where(
+              and(
+                eq(chatParticipant.chatId, input.chatId),
+                eq(chatParticipant.chatCreatedAt, chatRecord.createdAt),
+                eq(chatParticipant.agentId, targetAgentId),
+              ),
+            );
+        }
+      }
+
+      return newMessage;
+    }),
+
+  /**
    * Marcar todas as mensagens de um chat como lidas (bulk)
    * Apenas mensagens do contato (sender !== agent) que ainda não foram lidas
    */
@@ -730,8 +863,18 @@ export const messagesRouter = createTRPCRouter({
         });
       }
 
+      // Verificar se a mensagem tem mídia (attachment)
+      const [messageAttachment] = await ctx.tenantDb
+        .select()
+        .from(attachment)
+        .where(eq(attachment.messageId, input.id))
+        .limit(1);
+
+      const hasMedia = !!messageAttachment;
+
       // Verificar se a mensagem já foi lida
-      if (existingMessage.readAt) {
+      // EXCETO para mídias: sempre pode deletar mensagens com attachment
+      if (existingMessage.readAt && !hasMedia) {
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "Não é possível deletar mensagens que já foram lidas",

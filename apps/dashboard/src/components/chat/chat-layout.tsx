@@ -202,7 +202,20 @@ function ChatLayoutInner({
     [queryClient]
   );
 
-  // 4. Quando uma mensagem é atualizada (status read/delivered) - atualizar sidebar
+  // 4. Quando um chat é atualizado (unreadCount, lastMessage, etc) - invalidar cache
+  useSocketListener(
+    socket,
+    'onChatUpdated',
+    () => {
+      // Invalidar cache de chats para refetch com dados atualizados
+      void queryClient.invalidateQueries({
+        queryKey: [["chats"]],
+      });
+    },
+    [queryClient]
+  );
+
+  // 5. Quando uma mensagem é atualizada (status read/delivered) - atualizar sidebar
   useSocketListener(
     socket,
     'onMessageUpdated',

@@ -45,7 +45,7 @@ export function ChatInput({
   const router = useRouter();
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-  const { replyingTo, cancelReply } = useChatReply();
+  const { replyingTo, cancelReply, setMediaPreview } = useChatReply();
 
   // Custom hooks
   const { data: currentAgent } = useCurrentAgent();
@@ -287,6 +287,13 @@ export function ChatInput({
     [content, handleContentChange, textareaRef]
   );
 
+  const handleFileSelect = useCallback(
+    (file: File) => {
+      setMediaPreview(file);
+    },
+    [setMediaPreview]
+  );
+
   // Determina se deve usar rounded-full ou rounded-3xl (WhatsApp style)
   const isMultiLine = rows > 2;
 
@@ -422,7 +429,7 @@ export function ChatInput({
             isMultiLine ? "rounded-3xl" : "rounded-full"
           )}
         >
-          <ChatInputToolbar chatId={chatId} onEmojiSelect={insertEmoji} />
+          <ChatInputToolbar chatId={chatId} onEmojiSelect={insertEmoji} onFileSelect={handleFileSelect} />
 
           <ChatInputArea
             ref={textareaRef}

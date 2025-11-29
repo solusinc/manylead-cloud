@@ -1,5 +1,6 @@
-import { and, chat, eq, message, or, sql } from "@manylead/db";
+import { and, attachment, chat, eq, message, or, sql } from "@manylead/db";
 import type { TenantDB, Chat, Message } from "@manylead/db";
+import { storage } from "@manylead/storage";
 
 import { getEventPublisher } from "../events";
 import type { EventPublisher } from "../events";
@@ -52,7 +53,11 @@ export class MessageService {
     }
 
     const now = new Date();
-    const formattedContent = `**${agentName}**\n${input.content}`;
+
+    // ✅ Não adicionar assinatura se tiver attachment (imagem/vídeo já é visual)
+    const formattedContent = input.attachmentData
+      ? input.content
+      : `**${agentName}**\n${input.content}`;
 
     // Criar mensagem local
     const [newMessage] = await tenantDb
@@ -78,6 +83,24 @@ export class MessageService {
       throw new Error("Erro ao criar mensagem");
     }
 
+    // Criar attachment se fornecido
+    if (input.attachmentData) {
+      await tenantDb.insert(attachment).values({
+        messageId: newMessage.id,
+        fileName: input.attachmentData.fileName,
+        mimeType: input.attachmentData.mimeType,
+        mediaType: input.attachmentData.mediaType,
+        storagePath: input.attachmentData.storagePath,
+        storageUrl: input.attachmentData.storageUrl,
+        fileSize: input.attachmentData.fileSize ?? null,
+        width: input.attachmentData.width ?? null,
+        height: input.attachmentData.height ?? null,
+        duration: input.attachmentData.duration ?? null,
+        downloadStatus: "completed",
+        downloadedAt: now,
+      });
+    }
+
     // Atualizar chat
     const updatedChat = await this.updateChatAfterMessage(
       tenantDb,
@@ -98,6 +121,7 @@ export class MessageService {
         newMessage.timestamp,
         formattedContent,
         input.metadata,
+        input.attachmentData,
       );
     } else {
       // Se NÃO é cross-org, emitir evento normalmente
@@ -224,6 +248,28 @@ export class MessageService {
       throw new Error("Mensagem não encontrada");
     }
 
+    // Buscar attachment da mensagem (se houver)
+    const [messageAttachment] = await tenantDb
+      .select()
+      .from(attachment)
+      .where(eq(attachment.messageId, messageId))
+      .limit(1);
+
+    // Deletar attachment do R2 (se houver)
+    if (messageAttachment?.storagePath) {
+      try {
+        await storage.delete(messageAttachment.storagePath);
+      } catch (error) {
+        console.error("Erro ao deletar arquivo do R2:", error);
+        // Não falhar a operação se o arquivo já foi deletado ou não existe
+      }
+
+      // Deletar attachment do banco
+      await tenantDb
+        .delete(attachment)
+        .where(eq(attachment.messageId, messageId));
+    }
+
     // Soft delete
     const [deletedMessage] = await tenantDb
       .update(message)
@@ -241,55 +287,26 @@ export class MessageService {
     // Emitir evento local
     await this.eventPublisher.messageUpdated(organizationId, chatId, deletedMessage);
 
-    // Buscar chat para verificar se precisa atualizar lastMessageContent
+    // Se a mensagem deletada estava como não lida, decrementar unreadCount
+    if (existingMessage.status !== "read") {
+      await tenantDb
+        .update(chat)
+        .set({
+          unreadCount: sql`GREATEST(${chat.unreadCount} - 1, 0)`,
+        })
+        .where(eq(chat.id, chatId));
+    }
+
+    // Buscar chat atualizado para emitir evento com unreadCount correto
     const [chatRecord] = await tenantDb
       .select()
       .from(chat)
       .where(eq(chat.id, chatId))
       .limit(1);
 
-    // Se a mensagem deletada era a última mensagem do chat, buscar a anterior
-    if (
-      chatRecord?.lastMessageAt &&
-      deletedMessage.timestamp.getTime() === chatRecord.lastMessageAt.getTime()
-    ) {
-      // Buscar a mensagem anterior não deletada
-      const [previousMessage] = await tenantDb
-        .select()
-        .from(message)
-        .where(
-          and(
-            eq(message.chatId, chatId),
-            eq(message.isDeleted, false),
-          ),
-        )
-        .orderBy(sql`${message.timestamp} DESC`)
-        .limit(1);
-
-      // Atualizar chat com a mensagem anterior ou limpar se não houver
-      // Extrair conteúdo sem assinatura se houver mensagem anterior
-      let lastContent = null;
-      if (previousMessage?.content) {
-        // Remover assinatura se for mensagem de agent, senão manter original
-        lastContent = previousMessage.sender === "agent"
-          ? previousMessage.content.replace(/^\*\*[^*]+\*\*\n/, '')
-          : previousMessage.content;
-      }
-
-      const [updatedChat] = await tenantDb
-        .update(chat)
-        .set({
-          lastMessageAt: previousMessage?.timestamp ?? null,
-          lastMessageContent: lastContent,
-          lastMessageSender: previousMessage?.sender ?? null,
-        })
-        .where(eq(chat.id, chatId))
-        .returning();
-
-      // Emitir evento de chat atualizado
-      if (updatedChat) {
-        await this.eventPublisher.chatUpdated(organizationId, updatedChat);
-      }
+    // Emitir evento de chat atualizado para atualizar sidebar em tempo real
+    if (chatRecord) {
+      await this.eventPublisher.chatUpdated(organizationId, chatRecord);
     }
 
     if (chatRecord && this.crossOrgMirror.shouldMirror(chatRecord)) {
@@ -420,6 +437,7 @@ export class MessageService {
     messageTimestamp: Date,
     messageContent: string,
     metadata?: Record<string, unknown>,
+    attachmentData?: CreateMessageInput["attachmentData"],
   ): Promise<void> {
     // Contar mensagens TEXT do chat (excluindo SYSTEM)
     const textMessagesCount = await tenantDb
@@ -447,6 +465,7 @@ export class MessageService {
         messageTimestamp,
         contentWithoutSignature,
         metadata,
+        attachmentData,
       );
     } else {
       // Mensagem subsequente: espelhar no chat existente
@@ -458,6 +477,7 @@ export class MessageService {
         messageTimestamp,
         contentWithoutSignature,
         metadata,
+        attachmentData,
       );
     }
 

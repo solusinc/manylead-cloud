@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { format, isToday, isYesterday, isThisWeek } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Clock, User } from "lucide-react";
+import { BanIcon, Clock, Image as ImageIcon, User, Video } from "lucide-react";
 import { FaUser, FaWhatsapp } from "react-icons/fa";
 
 import type { Tag } from "@manylead/db";
@@ -38,6 +38,8 @@ interface ChatSidebarItemProps {
     lastMessageAt: Date;
     lastMessageStatus?: "pending" | "sent" | "delivered" | "read" | "failed";
     lastMessageSender?: "agent" | "contact" | "system";
+    lastMessageType?: "text" | "image" | "video" | "audio" | "document" | "system";
+    lastMessageIsDeleted: boolean;
     unreadCount: number;
     status: "open" | "closed" | "pending";
     messageSource?: "whatsapp" | "internal";
@@ -86,6 +88,8 @@ export function ChatSidebarItem({
           timestamp={chat.lastMessageAt}
           messageStatus={chat.lastMessageStatus}
           messageSender={chat.lastMessageSender}
+          messageType={chat.lastMessageType}
+          lastMessageIsDeleted={chat.lastMessageIsDeleted}
           unreadCount={chat.unreadCount}
           isTyping={isTyping}
           isActive={isActive}
@@ -171,6 +175,8 @@ export function ChatSidebarItemContent({
   timestamp,
   messageStatus,
   messageSender,
+  messageType = "text",
+  lastMessageIsDeleted = false,
   unreadCount,
   isTyping = false,
   isActive = false,
@@ -184,6 +190,8 @@ export function ChatSidebarItemContent({
   timestamp: Date;
   messageStatus?: MessageStatus;
   messageSender?: "agent" | "contact" | "system";
+  messageType?: "text" | "image" | "video" | "audio" | "document" | "system";
+  lastMessageIsDeleted?: boolean;
   unreadCount: number;
   isTyping?: boolean;
   isActive?: boolean;
@@ -215,13 +223,31 @@ export function ChatSidebarItemContent({
       <div className="flex items-center justify-between gap-2">
         {isTyping ? (
           <TypingIndicator />
+        ) : lastMessageIsDeleted ? (
+          // Mensagem deletada: mostrar ícone + texto
+          <div className="flex min-w-0 flex-1 items-center gap-1.5">
+            <BanIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            <p className="text-muted-foreground flex-1 truncate text-sm italic">Esta mensagem foi excluída</p>
+          </div>
         ) : (
           <div className="flex min-w-0 flex-1 items-center gap-1.5">
             {/* Mostrar status icon SOMENTE se última mensagem foi enviada pelo agent */}
             {messageSender === "agent" && messageStatus && (
               <MessageStatusIcon status={messageStatus} size={14} className="shrink-0" />
             )}
-            <p className="text-muted-foreground flex-1 truncate text-sm">{message}</p>
+
+            {/* Ícone de mídia se for imagem/vídeo */}
+            {messageType === "image" && (
+              <ImageIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            )}
+            {messageType === "video" && (
+              <Video className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            )}
+
+            {/* Texto da mensagem ou tipo de mídia */}
+            <p className="text-muted-foreground flex-1 truncate text-sm">
+              {messageType === "image" ? "Foto" : messageType === "video" ? "Vídeo" : message}
+            </p>
           </div>
         )}
         {shouldShowBadge && <ChatSidebarItemBadge count={debouncedUnreadCount} />}

@@ -6,6 +6,7 @@ import {
   chatTag,
   tag,
   user,
+  message,
   eq,
   and,
   or,
@@ -18,7 +19,7 @@ import {
   desc,
   count,
   sql
-  
+
 } from "@manylead/db";
 import type {SQL} from "@manylead/db";
 import type { TenantDB, Chat, Contact, Agent, ChatParticipant } from "@manylead/db";
@@ -32,6 +33,8 @@ export interface ChatListItem {
   participant: ChatParticipant | null;
   tags: { id: string; name: string; color: string }[];
   assignedAgentName: string | null;
+  lastMessageIsDeleted: boolean;
+  lastMessageType: string | null;
 }
 
 export interface ChatListResult {
@@ -248,6 +251,8 @@ export class ChatQueryBuilderService {
       contact: Contact | null;
       assignedAgent: Agent | null;
       participant: ChatParticipant | null;
+      lastMessageIsDeleted: boolean;
+      lastMessageType: string | null;
     }[]
   > {
     let query = tenantDb
@@ -256,6 +261,8 @@ export class ChatQueryBuilderService {
         contact,
         assignedAgent: agent,
         participant: chatParticipant,
+        lastMessageIsDeleted: message.isDeleted,
+        lastMessageType: message.messageType,
       })
       .from(chat)
       .leftJoin(contact, eq(chat.contactId, contact.id))
@@ -269,6 +276,13 @@ export class ChatQueryBuilderService {
               eq(chatParticipant.agentId, currentAgent.id),
             )
           : undefined,
+      )
+      .leftJoin(
+        message,
+        and(
+          eq(message.chatId, chat.id),
+          eq(message.timestamp, chat.lastMessageAt),
+        ),
       );
 
     if (where) {
@@ -283,6 +297,8 @@ export class ChatQueryBuilderService {
     // Cast role para o tipo correto
     return result.map((item) => ({
       ...item,
+      lastMessageIsDeleted: item.lastMessageIsDeleted ?? false,
+      lastMessageType: item.lastMessageType ?? "text",
       assignedAgent: item.assignedAgent
         ? {
             ...item.assignedAgent,
@@ -345,6 +361,8 @@ export class ChatQueryBuilderService {
       contact: Contact | null;
       assignedAgent: Agent | null;
       participant: ChatParticipant | null;
+      lastMessageIsDeleted: boolean;
+      lastMessageType: string | null;
     }[],
   ): Promise<
     {
@@ -352,6 +370,8 @@ export class ChatQueryBuilderService {
       contact: Contact | null;
       assignedAgent: Agent | null;
       participant: ChatParticipant | null;
+      lastMessageIsDeleted: boolean;
+      lastMessageType: string | null;
       tags: { id: string; name: string; color: string }[];
     }[]
   > {
@@ -415,6 +435,8 @@ export class ChatQueryBuilderService {
       contact: Contact | null;
       assignedAgent: Agent | null;
       participant: ChatParticipant | null;
+      lastMessageIsDeleted: boolean;
+      lastMessageType: string | null;
       tags: { id: string; name: string; color: string }[];
     }[],
   ): Promise<ChatListItem[]> {

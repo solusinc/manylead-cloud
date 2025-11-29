@@ -22,6 +22,17 @@ const config = {
   /** We already do linting and typechecking as separate tasks in CI */
   typescript: { ignoreBuildErrors: true },
 
+  /** Allow images from R2 (Cloudflare) */
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "pub-26b7a682bad8401ab3d46decbd79c89f.r2.dev",
+        pathname: "/**",
+      },
+    ],
+  },
+
   /** Security headers */
   async headers() {
     return [

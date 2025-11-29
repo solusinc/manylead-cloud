@@ -15,6 +15,17 @@ export interface CreateMessageInput {
   agentName: string;
   repliedToMessageId?: string;
   tempId?: string;
+  attachmentData?: {
+    fileName: string;
+    mimeType: string;
+    mediaType: string;
+    storagePath: string;
+    storageUrl: string;
+    fileSize?: number | null;
+    width?: number | null;
+    height?: number | null;
+    duration?: number | null;
+  };
 }
 
 export interface UpdateMessageInput {
