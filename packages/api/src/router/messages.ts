@@ -1404,7 +1404,9 @@ export const messagesRouter = createTRPCRouter({
           chatId: input.chatId,
           messageId: input.id,
           senderId: currentAgent.id,
-          data: {},
+          data: {
+            message: existingMessage as unknown as Record<string, unknown>,
+          },
         },
         env.REDIS_URL,
       );

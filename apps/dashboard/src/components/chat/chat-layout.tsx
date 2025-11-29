@@ -7,6 +7,7 @@ import { cn } from "@manylead/ui";
 import { ChatSocketProvider, useChatSocketContext } from "~/components/providers/chat-socket-provider";
 import { useServerSession } from "~/components/providers/session-provider";
 import { useMessageDeduplication } from "~/hooks/use-message-deduplication";
+import { useSocketListener } from "~/hooks/chat/use-socket-listener";
 import { ChatSidebar } from "./sidebar";
 import { ChatWindowEmpty } from "./window";
 
@@ -50,11 +51,12 @@ function ChatLayoutInner({
   }, [session.session.activeOrganizationId]);
 
   // Escutar eventos de chat
-  useEffect(() => {
-    if (!socket.isConnected) return;
 
-    // Quando um novo chat é criado ou uma nova mensagem chega
-    const unsubscribeNewMessage = socket.onMessageNew((event) => {
+  // 1. Quando uma nova mensagem chega - atualizar cache
+  useSocketListener(
+    socket,
+    'onMessageNew',
+    (event) => {
       // HYBRID APPROACH: Triple deduplication (dedup store + cache + tempId)
       // REMOVED setTimeout - instant processing with robust deduplication
 
@@ -155,16 +157,28 @@ function ChatLayoutInner({
       void queryClient.invalidateQueries({
         queryKey: [["chats", "list"]],
       });
-    });
+    },
+    [queryClient, register, isAnyProcessed]
+  );
 
-    const unsubscribeChatCreated = socket.onChatCreated(() => {
+  // 2. Quando um novo chat é criado - invalidar queries
+  useSocketListener(
+    socket,
+    'onChatCreated',
+    () => {
       void queryClient.invalidateQueries({
         queryKey: [["chats"]],
         refetchType: "active",
       });
-    });
+    },
+    [queryClient]
+  );
 
-    const unsubscribeChatUpdated = socket.onChatUpdated(() => {
+  // 3. Quando um chat é atualizado (assign/transfer) - invalidar queries
+  useSocketListener(
+    socket,
+    'onChatUpdated',
+    () => {
       // Forçar refetch imediato quando chat é atualizado (assign/transfer)
       void queryClient.invalidateQueries({
         queryKey: [["chats"]],
@@ -176,14 +190,9 @@ function ChatLayoutInner({
         queryKey: [["messages"]],
         refetchType: "active",
       });
-    });
-
-    return () => {
-      unsubscribeNewMessage();
-      unsubscribeChatCreated();
-      unsubscribeChatUpdated();
-    };
-  }, [socket, socket.isConnected, queryClient, register, isAnyProcessed]);
+    },
+    [queryClient]
+  );
 
   return (
     <div className={cn("flex h-full overflow-hidden", className)} {...props}>

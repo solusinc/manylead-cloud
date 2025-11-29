@@ -2,16 +2,16 @@
 
 import { cn } from "@manylead/ui";
 import { Skeleton } from "@manylead/ui/skeleton";
-import { useRef, useState, useEffect } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ChatSidebarItem } from "./chat-sidebar-item";
 import { useTRPC } from "~/lib/trpc/react";
 import { useChatSocketContext } from "~/components/providers/chat-socket-provider";
-import { useServerSession } from "~/components/providers/session-provider";
 import { useChatSearchStore, useIsSearchActive } from "~/stores/use-chat-search-store";
 import { useChatFiltersStore } from "~/stores/use-chat-filters-store";
+import { useCurrentAgent } from "~/hooks/chat/use-current-agent";
 
 type FilterType = "all" | "pending" | "open" | "mine";
 
@@ -27,7 +27,6 @@ export function ChatSidebarList({
   const activeChatId = params.chatId as string | undefined;
   const trpc = useTRPC();
   const socket = useChatSocketContext();
-  const session = useServerSession();
   const isSearchActive = useIsSearchActive();
   const searchTerm = useChatSearchStore((state) => state.searchTerm);
   const showUnreadOnly = useChatFiltersStore((state) => state.showUnreadOnly);
@@ -37,9 +36,7 @@ export function ChatSidebarList({
   const [typingChats, setTypingChats] = useState<Set<string>>(new Set());
 
   // Buscar agent atual para obter o ID quando o filtro for "mine"
-  const { data: currentAgent } = useQuery(
-    trpc.agents.getByUserId.queryOptions({ userId: session.user.id })
-  );
+  const { data: currentAgent } = useCurrentAgent();
 
   // Determinar os parâmetros do filtro baseado em headerFilters (prioridade) ou activeFilter
   const filterParams = (() => {
@@ -103,27 +100,33 @@ export function ChatSidebarList({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket.isConnected]);
 
-  const chats = chatsData?.items.map((item) => ({
-    id: item.chat.id,
-    contact: {
-      name: item.contact?.customName ?? item.contact?.name ?? "Sem nome",
-      avatar: item.contact?.avatar ?? null,
-    },
-    lastMessage: item.chat.lastMessageContent ?? "",
-    lastMessageAt: item.chat.lastMessageAt ?? item.chat.createdAt,
-    unreadCount: item.chat.unreadCount,
-    status: item.chat.status as "open" | "closed" | "pending",
-    messageSource: item.chat.messageSource as "whatsapp" | "internal",
-    tags: item.tags,
-    assignedAgentName: item.assignedAgentName,
-    assignedTo: item.chat.assignedTo,
-  })) ?? [];
+  // Memoize chat list transformation to prevent unnecessary recalculations
+  const chats = useMemo(
+    () =>
+      chatsData?.items.map((item) => ({
+        id: item.chat.id,
+        contact: {
+          name: item.contact?.customName ?? item.contact?.name ?? "Sem nome",
+          avatar: item.contact?.avatar ?? null,
+        },
+        lastMessage: item.chat.lastMessageContent ?? "",
+        lastMessageAt: item.chat.lastMessageAt ?? item.chat.createdAt,
+        unreadCount: item.chat.unreadCount,
+        status: item.chat.status as "open" | "closed" | "pending",
+        messageSource: item.chat.messageSource as "whatsapp" | "internal",
+        tags: item.tags,
+        assignedAgentName: item.assignedAgentName,
+        assignedTo: item.chat.assignedTo,
+      })) ?? [],
+    [chatsData?.items]
+  );
 
+  // Memoize virtualizer configuration
   const virtualizer = useVirtualizer({
     count: chats.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 96,
-    overscan: 5,
+    estimateSize: () => 96, // Altura estimada de cada item
+    overscan: 10, // Renderizar 10 itens extras acima/abaixo do viewport para scroll suave
   });
 
   if (isLoading) {

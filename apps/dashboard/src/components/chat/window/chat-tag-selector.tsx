@@ -4,6 +4,7 @@ import { useState, useRef } from "react";
 import { Check, Tag } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { useDisclosure } from "~/hooks/use-disclosure";
 
 import { cn } from "@manylead/ui";
 import { Button } from "@manylead/ui/button";
@@ -35,7 +36,7 @@ interface ChatTagSelectorProps {
 
 export function ChatTagSelector({ chatId, chatCreatedAt }: ChatTagSelectorProps) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [open, setOpen] = useState(false);
+  const { isOpen, setIsOpen } = useDisclosure();
   const [inputValue, setInputValue] = useState("");
 
   const trpc = useTRPC();
@@ -102,7 +103,7 @@ export function ChatTagSelector({ chatId, chatCreatedAt }: ChatTagSelectorProps)
 
   const handleOpenChange = (value: boolean) => {
     inputRef.current?.blur();
-    setOpen(value);
+    setIsOpen(value);
     if (!value) {
       setInputValue("");
     }
@@ -114,7 +115,7 @@ export function ChatTagSelector({ chatId, chatCreatedAt }: ChatTagSelectorProps)
   );
 
   return (
-    <Popover open={open} onOpenChange={handleOpenChange}>
+    <Popover open={isOpen} onOpenChange={handleOpenChange}>
       <Tooltip>
         <TooltipTrigger asChild>
           <PopoverTrigger asChild>

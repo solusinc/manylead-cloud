@@ -94,7 +94,7 @@ export function NavUser() {
     );
   }
 
-  if (!activeOrg || !session.user) {
+  if (!activeOrg) {
     return null;
   }
 

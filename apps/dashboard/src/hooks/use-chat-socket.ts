@@ -27,6 +27,7 @@ export interface MessageUpdatedEvent {
 }
 
 export interface MessageDeletedEvent {
+  message: Record<string, unknown>;
   messageId: string;
   timestamp: string;
 }

@@ -1,6 +1,6 @@
 import type { Worker } from "bullmq";
 import { createWorker } from "@manylead/clients/queue";
-import { createLogger } from "@manylead/clients/logger";
+import { createLogger } from "~/libs/utils/logger";
 import type { TenantProvisioningJobData } from "~/workers/tenant-provisioning";
 import type { ChannelSyncJobData } from "~/workers/channel-sync";
 import type { MediaDownloadJobData } from "~/workers/media-download";
@@ -12,7 +12,7 @@ import { processChannelSync } from "~/workers/channel-sync";
 import { processMediaDownload } from "~/workers/media-download";
 import { processAttachmentCleanup } from "~/workers/attachment-cleanup";
 
-const logger = createLogger({ component: "Worker:Queue" });
+const logger = createLogger("Worker:Queue");
 
 /**
  * Worker event listeners configuration

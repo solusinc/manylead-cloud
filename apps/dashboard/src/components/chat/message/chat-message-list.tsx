@@ -7,6 +7,7 @@ import {
   useContext,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -21,8 +22,10 @@ import { Skeleton } from "@manylead/ui/skeleton";
 import { useChatSocketContext } from "~/components/providers/chat-socket-provider";
 import { useTRPC } from "~/lib/trpc/react";
 import { useMessageFocusStore } from "~/stores/use-message-focus-store";
-import { ChatMessage, ChatMessageSystem, ChatMessageComment } from "./chat-message";
+import { useSocketListener } from "~/hooks/chat/use-socket-listener";
+import { ChatMessage } from "./chat-message";
 import { ChatMessageDateDivider } from "./chat-message-date";
+import { ChatMessageSystem, ChatMessageComment } from "./chat-message-system";
 
 // Context to expose refetch function to parent components
 const ChatMessageRefetchContext = createContext<(() => void) | null>(null);
@@ -101,33 +104,36 @@ export function ChatMessageList({
     });
 
   // Flatten pages - backend returns ASC, we reverse pages to get chronological order
-  const messages = (
-    data?.pages ? [...data.pages].reverse().flatMap((page) => page.items) : []
-  ).map((item) => ({
-    id: item.message.id,
-    content: item.message.content,
-    sender: item.message.sender === "system"
-      ? ("system" as const)
-      : item.isOwnMessage
-        ? ("agent" as const)
-        : ("contact" as const),
-    timestamp: item.message.timestamp,
-    status: item.message.status as
-      | "pending"
-      | "sent"
-      | "delivered"
-      | "read"
-      | undefined,
-    messageType: item.message.messageType as string | undefined,
-    isStarred: item.message.isStarred,
-    isDeleted: item.message.isDeleted,
-    isEdited: item.message.isEdited,
-    editedAt: item.message.editedAt as Date | null | undefined,
-    readAt: item.message.readAt as Date | null | undefined,
-    repliedToMessageId: item.message.repliedToMessageId as string | null | undefined,
-    metadata: item.message.metadata as Record<string, unknown> | undefined,
-    chatId,
-  }));
+  // Memoized to prevent unnecessary array operations on every render
+  const messages = useMemo(() =>
+    (data?.pages ? [...data.pages].reverse().flatMap((page) => page.items) : [])
+      .map((item) => ({
+        id: item.message.id,
+        content: item.message.content,
+        sender: item.message.sender === "system"
+          ? ("system" as const)
+          : item.isOwnMessage
+            ? ("agent" as const)
+            : ("contact" as const),
+        timestamp: item.message.timestamp,
+        status: item.message.status as
+          | "pending"
+          | "sent"
+          | "delivered"
+          | "read"
+          | undefined,
+        messageType: item.message.messageType as string | undefined,
+        isStarred: item.message.isStarred,
+        isDeleted: item.message.isDeleted,
+        isEdited: item.message.isEdited,
+        editedAt: item.message.editedAt as Date | null | undefined,
+        readAt: item.message.readAt as Date | null | undefined,
+        repliedToMessageId: item.message.repliedToMessageId as string | null | undefined,
+        metadata: item.message.metadata as Record<string, unknown> | undefined,
+        chatId,
+      })),
+    [data?.pages, chatId]
+  );
 
   // Query para buscar mensagens ao redor de uma mensagem específica (navegação de busca)
   const { data: contextData, isLoading: _isLoadingContext } = useQuery({
@@ -272,32 +278,33 @@ export function ChatMessageList({
   }, [hasNextPage, isFetchingNextPage, fetchNextPage, messages.length]);
 
   // Escutar eventos de typing para este chat
-  useEffect(() => {
-    if (!socket.isConnected) return;
-
-    const unsubscribeTypingStart = socket.onTypingStart((data) => {
+  useSocketListener(
+    socket,
+    'onTypingStart',
+    (data) => {
       if (data.chatId === chatId) {
         setIsTyping(true);
       }
-    });
+    },
+    [chatId]
+  );
 
-    const unsubscribeTypingStop = socket.onTypingStop((data) => {
+  useSocketListener(
+    socket,
+    'onTypingStop',
+    (data) => {
       if (data.chatId === chatId) {
         setIsTyping(false);
       }
-    });
-
-    return () => {
-      unsubscribeTypingStart();
-      unsubscribeTypingStop();
-    };
-  }, [socket.isConnected, chatId, socket]);
+    },
+    [chatId]
+  );
 
   // Escutar eventos de message:updated para atualizar mensagens (star toggle, read status)
-  useEffect(() => {
-    if (!socket.isConnected) return;
-
-    const unsubscribeMessageUpdated = socket.onMessageUpdated((event) => {
+  useSocketListener(
+    socket,
+    'onMessageUpdated',
+    (event) => {
       const messageChatId = event.message.chatId as string;
       if (messageChatId === chatId) {
         const updatedMessage = event.message;
@@ -360,19 +367,16 @@ export function ChatMessageList({
           });
         });
       }
-    });
-
-    return () => {
-      unsubscribeMessageUpdated();
-    };
-  }, [socket.isConnected, chatId, socket, queryClient]);
+    },
+    [chatId, queryClient]
+  );
 
   // Escutar eventos de message:deleted para remover mensagens deletadas
-  useEffect(() => {
-    if (!socket.isConnected) return;
-
-    const unsubscribeMessageDeleted = socket.onMessageDeleted((event) => {
-      const messageId = event.messageId;
+  useSocketListener(
+    socket,
+    'onMessageDeleted',
+    (event) => {
+      const messageId = event.message.id as string;
 
       // Remover mensagem do cache
       const queries = queryClient.getQueryCache().findAll({
@@ -414,12 +418,9 @@ export function ChatMessageList({
           refetchType: "none",
         });
       });
-    });
-
-    return () => {
-      unsubscribeMessageDeleted();
-    };
-  }, [socket.isConnected, socket, queryClient]);
+    },
+    [queryClient]
+  );
 
   // Auto-scroll: ALWAYS when YOU send, only if near bottom when receiving
   const previousMessagesLengthRef = useRef(messages.length);

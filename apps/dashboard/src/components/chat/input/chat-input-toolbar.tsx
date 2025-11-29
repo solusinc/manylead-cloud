@@ -6,6 +6,7 @@ import EmojiPicker from "emoji-picker-react";
 import { Smile, Plus, MessageSquareText, FileText, Image as ImageIcon } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { useDisclosure } from "~/hooks/use-disclosure";
 
 import { cn } from "@manylead/ui";
 import { Button } from "@manylead/ui/button";
@@ -48,15 +49,15 @@ export function ChatInputEmojiButton({
 }: {
   onEmojiSelect?: (emoji: string) => void;
 } & React.ComponentProps<typeof Button>) {
-  const [open, setOpen] = useState(false);
+  const { isOpen, setIsOpen, onClose } = useDisclosure();
 
   const handleEmojiClick = (emojiData: EmojiClickData) => {
     onEmojiSelect?.(emojiData.emoji);
-    setOpen(false);
+    onClose();
   };
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
         <Button
           variant="ghost"
@@ -89,14 +90,14 @@ export function ChatInputAttachButton({
   chatId: string;
   onFileSelect?: (file: File) => void;
 } & React.ComponentProps<typeof Button>) {
-  const [open, setOpen] = useState(false);
-  const [commentDialogOpen, setCommentDialogOpen] = useState(false);
+  const { isOpen, setIsOpen, onClose } = useDisclosure();
+  const commentDialog = useDisclosure();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, _type: string) => {
     const file = e.target.files?.[0];
     if (file) {
       onFileSelect?.(file);
-      setOpen(false);
+      onClose();
     }
   };
 
@@ -105,11 +106,11 @@ export function ChatInputAttachButton({
       {/* Dialog inline para comentários */}
       <CommentDialogInline
         chatId={chatId}
-        open={commentDialogOpen}
-        onOpenChange={setCommentDialogOpen}
+        open={commentDialog.isOpen}
+        onOpenChange={commentDialog.setIsOpen}
       />
 
-      <Popover open={open} onOpenChange={setOpen}>
+      <Popover open={isOpen} onOpenChange={setIsOpen}>
         <PopoverTrigger asChild>
           <Button
             variant="ghost"
@@ -127,8 +128,8 @@ export function ChatInputAttachButton({
               icon={MessageSquareText}
               label="Comentário"
               onClick={() => {
-                setOpen(false);
-                setCommentDialogOpen(true);
+                onClose();
+                commentDialog.onOpen();
               }}
             />
             <AttachMenuOption

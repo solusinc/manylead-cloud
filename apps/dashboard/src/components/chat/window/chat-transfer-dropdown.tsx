@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Search, ArrowRightLeft } from "lucide-react";
+import { useDisclosure } from "~/hooks/use-disclosure";
 import { cn } from "@manylead/ui";
 import { Button } from "@manylead/ui/button";
 import { Input } from "@manylead/ui/input";
@@ -14,6 +15,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useTRPC } from "~/lib/trpc/react";
 import { toast } from "sonner";
+import { useCurrentAgent } from "~/hooks/chat/use-current-agent";
 
 interface ChatTransferDropdownProps {
   chatId: string;
@@ -26,9 +28,12 @@ export function ChatTransferDropdown({
 }: ChatTransferDropdownProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"users" | "departments">("users");
-  const [open, setOpen] = useState(false);
+  const { isOpen, setIsOpen, onClose } = useDisclosure();
   const trpc = useTRPC();
   const queryClient = useQueryClient();
+
+  // Buscar agente atual
+  const { data: currentAgent } = useCurrentAgent();
 
   // Buscar usuários/agentes
   const { data: agents } = useQuery(trpc.agents.list.queryOptions());
@@ -43,7 +48,7 @@ export function ChatTransferDropdown({
         // Invalidar queries para atualizar a lista
         void queryClient.invalidateQueries({ queryKey: [["chats", "list"]] });
         toast.success("Chat transferido com sucesso!");
-        setOpen(false);
+        onClose();
       },
       onError: (error) => {
         toast.error(error.message || "Erro ao transferir chat");
@@ -51,8 +56,9 @@ export function ChatTransferDropdown({
     })
   );
 
-  // Filtrar usuários baseado na busca
+  // Filtrar usuários baseado na busca (excluir agente atual)
   const filteredAgents = agents?.filter((agent) =>
+    agent.id !== currentAgent?.id &&
     agent.user?.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -78,7 +84,7 @@ export function ChatTransferDropdown({
   };
 
   return (
-    <DropdownMenu open={open} onOpenChange={setOpen}>
+    <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="icon" aria-label="Transferir">
           <ArrowRightLeft className="size-5" />

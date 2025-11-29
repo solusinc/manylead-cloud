@@ -728,7 +728,7 @@ importers:
         specifier: 'catalog:'
         version: 3.6.2
       react:
-        specifier: 19.2.0
+        specifier: catalog:react19
         version: 19.2.0
       typescript:
         specifier: 'catalog:'

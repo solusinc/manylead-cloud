@@ -42,7 +42,7 @@
     "@types/react": "catalog:react19",
     "eslint": "catalog:",
     "prettier": "catalog:",
-    "react": "19.2.0",
+    "react": "catalog:react19",
     "typescript": "catalog:"
   },
   "prettier": "@manylead/prettier-config"

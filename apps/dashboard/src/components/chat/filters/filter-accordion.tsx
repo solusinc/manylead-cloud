@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
 import { ChevronDown, ChevronUp } from "lucide-react";
 
 import { cn } from "@manylead/ui";
+import { useDisclosure } from "~/hooks/use-disclosure";
 
 interface FilterAccordionProps {
   title: string;
@@ -20,13 +20,13 @@ export function FilterAccordion({
   badge,
   children,
 }: FilterAccordionProps) {
-  const [isOpen, setIsOpen] = useState(defaultOpen);
+  const { isOpen, onToggle } = useDisclosure(defaultOpen);
 
   return (
     <div className="border-b">
       <button
         type="button"
-        onClick={() => !disabled && setIsOpen(!isOpen)}
+        onClick={() => !disabled && onToggle()}
         disabled={disabled}
         className={cn(
           "flex w-full items-center justify-between py-4 text-left",

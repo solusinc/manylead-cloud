@@ -1,9 +1,9 @@
 import type Redis from "ioredis";
 import { createRedisClient } from "@manylead/clients/redis";
-import { createLogger } from "@manylead/clients/logger";
+import { createLogger } from "~/libs/utils/logger";
 import { env } from "~/env";
 
-const logger = createLogger({ component: "Worker:Redis" });
+const logger = createLogger("Worker:Redis");
 
 let redisClient: Redis | null = null;
 

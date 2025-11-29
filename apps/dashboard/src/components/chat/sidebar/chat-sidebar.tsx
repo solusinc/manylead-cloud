@@ -8,6 +8,7 @@ import { ChatSidebarFilters } from "./chat-sidebar-filters";
 import { ChatSidebarList } from "./chat-sidebar-list";
 import { ChatSidebarContactsList } from "./chat-sidebar-contacts-list";
 import { ChatFiltersSheet } from "../chat-filters-sheet";
+// import { ChatErrorBoundaryCompact } from "../providers/chat-error-boundary";
 import { useChatSearchStore, useIsSearchActive } from "~/stores/use-chat-search-store";
 
 type FilterType = "all" | "pending" | "open" | "mine";
@@ -32,11 +33,13 @@ export function ChatSidebar({
           onFilterChange={setActiveFilter}
         />
         <ScrollArea className="flex-1">
-          {isSearchActive && searchMode === "contacts" ? (
-            <ChatSidebarContactsList />
-          ) : (
-            <ChatSidebarList activeFilter={activeFilter} />
-          )}
+          {/* <ChatErrorBoundaryCompact> */}
+            {isSearchActive && searchMode === "contacts" ? (
+              <ChatSidebarContactsList />
+            ) : (
+              <ChatSidebarList activeFilter={activeFilter} />
+            )}
+          {/* </ChatErrorBoundaryCompact> */}
         </ScrollArea>
         <ChatFiltersSheet />
       </div>

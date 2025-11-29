@@ -4,6 +4,7 @@ import { useState, useRef } from "react";
 import { CheckCircle } from "lucide-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { useDisclosure } from "~/hooks/use-disclosure";
 
 import { Button } from "@manylead/ui/button";
 import {
@@ -34,7 +35,7 @@ interface ChatEndingSelectorProps {
 
 export function ChatEndingSelector({ chatId, chatCreatedAt }: ChatEndingSelectorProps) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const [open, setOpen] = useState(false);
+  const { isOpen, setIsOpen, onClose } = useDisclosure();
   const [inputValue, setInputValue] = useState("");
 
   const trpc = useTRPC();
@@ -50,7 +51,7 @@ export function ChatEndingSelector({ chatId, chatCreatedAt }: ChatEndingSelector
         void queryClient.invalidateQueries({ queryKey: [["chats"]] });
         void queryClient.invalidateQueries({ queryKey: [["messages"]] });
         toast.success("Atendimento finalizado com sucesso!");
-        setOpen(false);
+        onClose();
       },
       onError: (error) => {
         toast.error(error.message || "Erro ao finalizar atendimento");
@@ -68,7 +69,7 @@ export function ChatEndingSelector({ chatId, chatCreatedAt }: ChatEndingSelector
 
   const handleOpenChange = (value: boolean) => {
     inputRef.current?.blur();
-    setOpen(value);
+    setIsOpen(value);
     if (!value) {
       setInputValue("");
     }
@@ -80,7 +81,7 @@ export function ChatEndingSelector({ chatId, chatCreatedAt }: ChatEndingSelector
   );
 
   return (
-    <Popover open={open} onOpenChange={handleOpenChange}>
+    <Popover open={isOpen} onOpenChange={handleOpenChange}>
       <Tooltip>
         <TooltipTrigger asChild>
           <PopoverTrigger asChild>
