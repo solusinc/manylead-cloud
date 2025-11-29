@@ -8,6 +8,7 @@ import { toast } from "sonner";
 
 import { cn } from "@manylead/ui";
 import { Button } from "@manylead/ui/button";
+import { MEDIA_LIMITS } from "@manylead/shared/constants";
 
 import { useSession } from "~/lib/auth/client";
 import { useTRPC } from "~/lib/trpc/react";
@@ -121,13 +122,15 @@ export function AvatarUpload({
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: {
-      "image/jpeg": [".jpg", ".jpeg"],
-      "image/png": [".png"],
-      "image/webp": [".webp"],
-    },
+    accept: MEDIA_LIMITS.IMAGE.ALLOWED_TYPES.reduce(
+      (acc, type) => {
+        acc[type] = [];
+        return acc;
+      },
+      {} as Record<string, string[]>,
+    ),
     maxFiles: 1,
-    maxSize: 5 * 1024 * 1024, // 5MB
+    maxSize: MEDIA_LIMITS.IMAGE.MAX_SIZE_BYTES,
     disabled: isUploading,
   });
 

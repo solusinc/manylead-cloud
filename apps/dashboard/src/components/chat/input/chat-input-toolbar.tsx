@@ -20,6 +20,7 @@ import {
   DialogTitle,
 } from "@manylead/ui/dialog";
 import { Textarea } from "@manylead/ui/textarea";
+import { MEDIA_LIMITS, formatFileSize, isValidMediaFile } from "@manylead/shared/constants";
 
 import { useTRPC } from "~/lib/trpc/react";
 
@@ -102,21 +103,34 @@ export function ChatInputAttachButton({
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validar tipo
+    // Validar mídia (foto/vídeo)
     if (type === "media") {
-      const isValid = file.type.startsWith("image/") || file.type.startsWith("video/");
-      if (!isValid) {
+      const isImage = file.type.startsWith("image/");
+      const isVideo = file.type.startsWith("video/");
+
+      if (!isImage && !isVideo) {
         toast.error("Arquivo inválido", {
           description: "Selecione apenas fotos ou vídeos",
         });
         return;
       }
 
-      // Validar tamanho
-      const maxSize = file.type.startsWith("video/") ? 50 * 1024 * 1024 : 10 * 1024 * 1024;
-      if (file.size > maxSize) {
+      // Validar usando MEDIA_LIMITS
+      const mediaType = isImage ? "IMAGE" : "VIDEO";
+      if (!isValidMediaFile(file, mediaType)) {
+        const maxSize = MEDIA_LIMITS[mediaType].MAX_SIZE_BYTES;
         toast.error("Arquivo muito grande", {
-          description: `Máximo: ${Math.floor(maxSize / (1024 * 1024))}MB`,
+          description: `Máximo: ${formatFileSize(maxSize)}`,
+        });
+        return;
+      }
+    }
+
+    // Validar documento
+    if (type === "document") {
+      if (!isValidMediaFile(file, "DOCUMENT")) {
+        toast.error("Arquivo muito grande", {
+          description: `Máximo: ${formatFileSize(MEDIA_LIMITS.DOCUMENT.MAX_SIZE_BYTES)}`,
         });
         return;
       }
@@ -162,14 +176,14 @@ export function ChatInputAttachButton({
               icon={File}
               label="Documento"
               inputId="document-upload"
-              accept=".pdf,.doc,.docx,.xls,.xlsx,.txt"
+              accept={MEDIA_LIMITS.DOCUMENT.ALLOWED_TYPES.join(",")}
               onChange={(e) => handleFileChange(e, "document")}
             />
             <AttachMenuOption
               icon={ImageIcon}
               label="Foto e Vídeo"
               inputId="media-upload"
-              accept="image/*,video/*"
+              accept={[...MEDIA_LIMITS.IMAGE.ALLOWED_TYPES, ...MEDIA_LIMITS.VIDEO.ALLOWED_TYPES].join(",")}
               onChange={(e) => handleFileChange(e, "media")}
             />
           </div>

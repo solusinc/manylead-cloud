@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { db, eq, user } from "@manylead/db";
 import { extractKeyFromUrl, getPublicUrl, storage } from "@manylead/storage";
+import { MEDIA_LIMITS } from "@manylead/shared/constants";
 
 import { createTRPCRouter, protectedProcedure } from "../trpc";
 
@@ -23,8 +24,8 @@ export const userRouter = createTRPCRouter({
         mimeType: z
           .string()
           .refine(
-            (type) => type.startsWith("image/"),
-            "Apenas imagens são permitidas",
+            (type) => MEDIA_LIMITS.IMAGE.ALLOWED_TYPES.includes(type as never),
+            `Tipo de arquivo não permitido. Use: ${MEDIA_LIMITS.IMAGE.ALLOWED_TYPES.join(", ")}`,
           ),
         expiresIn: z.number().min(60).max(3600).default(300), // 5 minutos default
       }),

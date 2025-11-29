@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback } from "react";
 import Image from "next/image";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-import { Button } from "@manylead/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -37,7 +36,10 @@ export function ChatImageLightbox({
   // Reset index when dialog opens
   useEffect(() => {
     if (open) {
-      setCurrentIndex(initialIndex);
+      const timer = setTimeout(() => {
+        setCurrentIndex(initialIndex);
+      }, 0);
+      return () => clearTimeout(timer);
     }
   }, [open, initialIndex]);
 

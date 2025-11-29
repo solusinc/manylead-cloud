@@ -4,6 +4,7 @@ import { z } from "zod";
 import { and, attachment, count, desc, eq, sql } from "@manylead/db";
 import { storage, getPublicUrl } from "@manylead/storage";
 import { generateMediaPath } from "@manylead/storage/utils";
+import { MEDIA_LIMITS } from "@manylead/shared/constants";
 
 import { createTRPCRouter, ownerProcedure } from "../trpc";
 
@@ -219,7 +220,21 @@ export const attachmentsRouter = createTRPCRouter({
     .input(
       z.object({
         fileName: z.string().min(1),
-        mimeType: z.string().min(1),
+        mimeType: z
+          .string()
+          .min(1)
+          .refine(
+            (type) => {
+              const allAllowedTypes = [
+                ...MEDIA_LIMITS.IMAGE.ALLOWED_TYPES,
+                ...MEDIA_LIMITS.VIDEO.ALLOWED_TYPES,
+                ...MEDIA_LIMITS.AUDIO.ALLOWED_TYPES,
+                ...MEDIA_LIMITS.DOCUMENT.ALLOWED_TYPES,
+              ];
+              return allAllowedTypes.includes(type as never);
+            },
+            "Tipo de arquivo não permitido",
+          ),
         expiresIn: z.number().min(60).max(3600).default(300), // 5 minutos default
       }),
     )
