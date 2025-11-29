@@ -1,8 +1,8 @@
 "use client";
 
-import type { EmojiClickData } from "emoji-picker-react";
 import { useState } from "react";
-import EmojiPicker from "emoji-picker-react";
+import data from "@emoji-mart/data";
+import Picker from "@emoji-mart/react";
 import { Smile, Plus, MessageSquareText, FileText, Image as ImageIcon } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -51,8 +51,8 @@ export function ChatInputEmojiButton({
 } & React.ComponentProps<typeof Button>) {
   const { isOpen, setIsOpen, onClose } = useDisclosure();
 
-  const handleEmojiClick = (emojiData: EmojiClickData) => {
-    onEmojiSelect?.(emojiData.emoji);
+  const handleEmojiClick = (emoji: { native: string }) => {
+    onEmojiSelect?.(emoji.native);
     onClose();
   };
 
@@ -69,13 +69,18 @@ export function ChatInputEmojiButton({
           <Smile className="size-5" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-full border-0 p-0" side="top" align="start">
-        <EmojiPicker
-          onEmojiClick={handleEmojiClick}
-          width="100%"
-          height={400}
-          previewConfig={{ showPreview: false }}
-        />
+      <PopoverContent className="w-full border-0 p-0 bg-transparent" side="top" align="start">
+        <div className="overflow-hidden rounded-lg">
+          <Picker
+            data={data}
+            onEmojiSelect={handleEmojiClick}
+            theme="dark"
+            previewPosition="bottom"
+            emojiSize={20}
+            emojiButtonSize={36}
+            maxFrequentRows={2}
+          />
+        </div>
       </PopoverContent>
     </Popover>
   );
