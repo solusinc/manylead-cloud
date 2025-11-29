@@ -45,12 +45,14 @@ export const agent = pgTable(
           canDelete: boolean;
         };
         accessFinishedChats: boolean;
+        notificationSoundsEnabled: boolean;
       }>()
       .default({
         departments: { type: "all" },
         channels: { type: "all" },
         messages: { canEdit: false, canDelete: false },
         accessFinishedChats: false,
+        notificationSoundsEnabled: true,
       })
       .notNull(),
 

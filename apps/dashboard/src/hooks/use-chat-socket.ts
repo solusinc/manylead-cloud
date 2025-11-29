@@ -98,7 +98,6 @@ export function useChatSocket(): UseChatSocketReturn {
     const token = result.data?.session.token;
 
     if (!token) {
-      console.warn("[Socket] No token available, cannot connect");
       return;
     }
 
@@ -120,7 +119,6 @@ export function useChatSocket(): UseChatSocketReturn {
 
     // Handlers de conexão
     socket.on("connect", () => {
-      console.log("[Socket] Connected successfully");
       setIsConnected(true);
 
       // CRITICAL: Re-join organization room after reconnect
@@ -130,7 +128,6 @@ export function useChatSocket(): UseChatSocketReturn {
     });
 
     socket.on("disconnect", (reason) => {
-      console.log("[Socket] Disconnected:", reason);
       setIsConnected(false);
 
       // If disconnected by server, try to reconnect manually
@@ -139,17 +136,15 @@ export function useChatSocket(): UseChatSocketReturn {
       }
     });
 
-    socket.on("connect_error", (error) => {
-      console.error("[Socket] Connection error:", error.message);
+    socket.on("connect_error", () => {
       setIsConnected(false);
     });
 
-    socket.on("reconnect_attempt", (attemptNumber) => {
-      console.log(`[Socket] Reconnection attempt #${attemptNumber}`);
+    socket.on("reconnect_attempt", () => {
+      // Silent reconnection attempt
     });
 
-    socket.on("reconnect", (attemptNumber) => {
-      console.log(`[Socket] Reconnected after ${attemptNumber} attempts`);
+    socket.on("reconnect", () => {
       setIsConnected(true);
 
       // Re-join organization room
@@ -158,12 +153,11 @@ export function useChatSocket(): UseChatSocketReturn {
       }
     });
 
-    socket.on("reconnect_error", (error: Error) => {
-      console.error("[Socket] Reconnection error:", error.message);
+    socket.on("reconnect_error", () => {
+      // Silent reconnection error
     });
 
     socket.on("reconnect_failed", () => {
-      console.error("[Socket] Reconnection failed after all attempts");
       // This will never happen with Infinity attempts, but kept for safety
     });
   };

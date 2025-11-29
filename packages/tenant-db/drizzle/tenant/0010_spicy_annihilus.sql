@@ -1,0 +1,1 @@
+ALTER TABLE "agent" ALTER COLUMN "permissions" SET DEFAULT '{"departments":{"type":"all"},"channels":{"type":"all"},"messages":{"canEdit":false,"canDelete":false},"accessFinishedChats":false,"notificationSoundsEnabled":true}'::jsonb;

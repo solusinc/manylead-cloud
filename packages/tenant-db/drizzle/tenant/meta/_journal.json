@@ -71,6 +71,13 @@
       "when": 1764377473008,
       "tag": "0009_odd_living_lightning",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1764424791461,
+      "tag": "0010_spicy_annihilus",
+      "breakpoints": true
     }
   ]
 }

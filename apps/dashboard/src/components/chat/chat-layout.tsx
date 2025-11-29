@@ -9,6 +9,7 @@ import { useServerSession } from "~/components/providers/session-provider";
 import { useMessageDeduplication } from "~/hooks/use-message-deduplication";
 import { useSocketListener } from "~/hooks/chat/use-socket-listener";
 import { useNotificationSound } from "~/hooks/use-notification-sound";
+import { useCurrentAgent } from "~/hooks/chat/use-current-agent";
 import { ChatSidebar } from "./sidebar";
 import { ChatWindowEmpty } from "./window";
 
@@ -38,6 +39,7 @@ function ChatLayoutInner({
   const socket = useChatSocketContext();
   const { register, isAnyProcessed } = useMessageDeduplication();
   const { playNotificationSound } = useNotificationSound();
+  const { data: currentAgent } = useCurrentAgent();
 
   // Conectar ao Socket.io quando o layout montar
   useEffect(() => {
@@ -69,7 +71,6 @@ function ChatLayoutInner({
       // === LAYER 1: Dedup Store (Primary) ===
       // Check if serverId OR tempId was already processed
       if (isAnyProcessed([serverId, tempId])) {
-        console.log("[Dedup] Message already processed:", { serverId, tempId });
         return;
       }
 
@@ -114,7 +115,6 @@ function ChatLayoutInner({
         );
 
         if (messageExists) {
-          console.log("[Dedup] Message exists in cache:", { serverId, tempId });
           return;
         }
 
@@ -160,10 +160,13 @@ function ChatLayoutInner({
         queryKey: [["chats", "list"]],
       });
 
-      // Play notification sound for incoming message
-      playNotificationSound();
+      // Play notification sound only for messages NOT from current agent
+      // Own messages already play sound in use-send-message.ts
+      if (currentAgent && messageData.senderId !== currentAgent.id) {
+        playNotificationSound();
+      }
     },
-    [queryClient, register, isAnyProcessed, playNotificationSound]
+    [queryClient, register, isAnyProcessed, playNotificationSound, currentAgent?.id]
   );
 
   // 2. Quando um novo chat é criado - invalidar queries
@@ -212,13 +215,6 @@ function ChatLayoutInner({
         sender: string;
       };
 
-      console.log('📨 Message status updated:', {
-        messageId: message.id,
-        chatId: message.chatId,
-        status: message.status,
-        sender: message.sender,
-      });
-
       // Atualizar o lastMessageStatus no cache do chat sidebar
       // Buscar todas as queries de chats e atualizar a que tem esse chat
       const queries = queryClient.getQueryCache().findAll({
@@ -255,8 +251,6 @@ function ChatLayoutInner({
           new Date(message.timestamp).getTime() >= new Date(chat.chat.lastMessageAt).getTime();
 
         if (isLastMessage) {
-          console.log('✅ Updating lastMessageStatus in sidebar:', message.chatId, message.status);
-
           const newItems = [...queryState.items];
           newItems[chatIndex] = {
             ...chat,

@@ -3,8 +3,10 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  Bell,
+  BellOff,
   Check,
   ChevronsUpDown,
   Copy,
@@ -15,6 +17,7 @@ import {
   Sun,
   User,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@manylead/ui/avatar";
 import { Button } from "@manylead/ui/button";
@@ -45,6 +48,7 @@ import { authClient, useSession } from "~/lib/auth/client";
 import { usePermissions } from "~/lib/permissions";
 import { useServerSession } from "~/components/providers/session-provider";
 import { useTRPC } from "~/lib/trpc/react";
+import { useCurrentAgent } from "~/hooks/chat/use-current-agent";
 
 export function NavUser() {
   const { isMobile, setOpenMobile } = useSidebar();
@@ -61,8 +65,21 @@ export function NavUser() {
 
   const router = useRouter();
   const trpc = useTRPC();
+  const queryClient = useQueryClient();
   const { can } = usePermissions();
   const [copied, setCopied] = useState(false);
+
+  const { data: currentAgent } = useCurrentAgent();
+
+  const updatePreferences = useMutation(
+    trpc.agents.updatePreferences.mutationOptions({
+      onSuccess: () => {
+        void queryClient.invalidateQueries({
+          queryKey: [["agents", "getByUserId"]],
+        });
+      },
+    }),
+  );
 
   const { data: organization, isLoading: isLoadingOrg } = useQuery(
     trpc.organization.getCurrent.queryOptions(),
@@ -109,6 +126,30 @@ export function NavUser() {
         },
       },
     });
+  }
+
+  const notificationSoundsEnabled =
+    currentAgent?.permissions.notificationSoundsEnabled ?? true;
+
+  async function handleToggleNotificationSounds() {
+    try {
+      const promise = updatePreferences.mutateAsync({
+        notificationSoundsEnabled: !notificationSoundsEnabled,
+      });
+
+      toast.promise(promise, {
+        loading: "Salvando...",
+        success: notificationSoundsEnabled
+          ? "Sons de notificação desativados"
+          : "Sons de notificação ativados",
+        error: "Erro ao atualizar preferência",
+      });
+
+      await promise;
+    } catch (error) {
+      // Error already handled by toast.promise
+      console.error(error);
+    }
   }
 
   return (
@@ -246,6 +287,16 @@ export function NavUser() {
                   </DropdownMenuSubContent>
                 </DropdownMenuPortal>
               </DropdownMenuSub>
+              <DropdownMenuItem
+                onClick={() => void handleToggleNotificationSounds()}
+                disabled={updatePreferences.isPending}
+              >
+                {notificationSoundsEnabled ? <Bell /> : <BellOff />}
+                Sons de notificação
+                {notificationSoundsEnabled && (
+                  <Check className="ml-auto h-4 w-4" />
+                )}
+              </DropdownMenuItem>
               {can("read", "Billing") && (
                 <DropdownMenuItem asChild>
                   <Link

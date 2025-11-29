@@ -158,6 +158,7 @@ export const invitationRouter = createTRPCRouter({
               canDelete: canManageMessages,
             },
             accessFinishedChats,
+            notificationSoundsEnabled: true,
           },
           isActive: true,
         });

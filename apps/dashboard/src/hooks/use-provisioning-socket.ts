@@ -50,18 +50,14 @@ export function useProvisioningSocket(): UseProvisioningSocketReturn {
   const connect = async (organizationId: string) => {
     // Se já estiver conectado, não reconectar
     if (socketRef.current?.connected) {
-      console.log("[Socket.io] Already connected, skipping reconnection");
       return;
     }
-
-    console.log("[Socket.io] Connecting to:", env.NEXT_PUBLIC_SOCKET_URL);
 
     // Get session token for authentication
     const result = await authClient.getSession();
     const token = result.data?.session.token;
 
     if (!token) {
-      console.error("[Socket.io] No authentication token available");
       setError({
         error: "Authentication required",
         message: "Please log in to connect",
@@ -84,41 +80,35 @@ export function useProvisioningSocket(): UseProvisioningSocketReturn {
 
     // Handlers de conexão
     socket.on("connect", () => {
-      console.log("[Socket.io] Connected:", socket.id);
       setIsConnected(true);
 
       // Entrar na room da organização
       socket.emit("join:organization", organizationId);
-      console.log("[Socket.io] Joined room:", `org:${organizationId}`);
     });
 
     socket.on("disconnect", () => {
-      console.log("[Socket.io] Disconnected");
       setIsConnected(false);
     });
 
-    socket.on("connect_error", (err) => {
-      console.error("[Socket.io] Connection error:", err);
+    socket.on("connect_error", () => {
       setIsConnected(false);
     });
 
     // Handler de confirmação de entrada na room
     socket.on(
       "joined",
-      ({ room }: { room: string; organizationId: string }) => {
-        console.log("[Socket.io] Successfully joined room:", room);
+      () => {
+        // Silent join confirmation
       },
     );
 
     // Handlers de eventos de provisioning
     socket.on("provisioning:progress", (data: ProvisioningProgress) => {
-      console.log("[Socket.io] Progress:", data);
       setProgress(data);
       setError(null);
     });
 
     socket.on("provisioning:complete", (data: ProvisioningComplete) => {
-      console.log("[Socket.io] Complete:", data);
       setProgress({
         progress: data.progress,
         currentStep: data.currentStep,
@@ -129,7 +119,6 @@ export function useProvisioningSocket(): UseProvisioningSocketReturn {
     });
 
     socket.on("provisioning:error", (data: ProvisioningError) => {
-      console.error("[Socket.io] Error:", data);
       setError(data);
       setIsComplete(false);
     });
@@ -137,7 +126,6 @@ export function useProvisioningSocket(): UseProvisioningSocketReturn {
 
   const disconnect = () => {
     if (socketRef.current) {
-      console.log("[Socket.io] Disconnecting...");
       socketRef.current.disconnect();
       socketRef.current = null;
     }

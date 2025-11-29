@@ -218,6 +218,58 @@ export const agentsRouter = createTRPCRouter({
     }),
 
   /**
+   * Update agent preferences (notification sounds, etc.)
+   * Users can only update their own preferences
+   */
+  updatePreferences: protectedProcedure
+    .input(
+      z.object({
+        notificationSoundsEnabled: z.boolean(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const organizationId = ctx.session.session.activeOrganizationId;
+
+      if (!organizationId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Nenhuma organização ativa",
+        });
+      }
+
+      const tenantDb = await tenantManager.getConnection(organizationId);
+
+      // Get current agent
+      const [existing] = await tenantDb
+        .select()
+        .from(agent)
+        .where(eq(agent.userId, ctx.session.user.id))
+        .limit(1);
+
+      if (!existing) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Agent não encontrado",
+        });
+      }
+
+      // Update only the notificationSoundsEnabled field in permissions JSONB
+      const [updated] = await tenantDb
+        .update(agent)
+        .set({
+          permissions: {
+            ...existing.permissions,
+            notificationSoundsEnabled: input.notificationSoundsEnabled,
+          },
+          updatedAt: new Date(),
+        })
+        .where(eq(agent.id, existing.id))
+        .returning();
+
+      return updated;
+    }),
+
+  /**
    * Create a new agent
    * Only admins and owners can create agents (enforced by ownerProcedure)
    */

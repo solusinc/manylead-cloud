@@ -33,6 +33,7 @@ const permissionsSchema = z.object({
   channels: channelsPermissionSchema,
   messages: messagesPermissionSchema.default({ canEdit: false, canDelete: false }),
   accessFinishedChats: z.boolean().default(false),
+  notificationSoundsEnabled: z.boolean().default(true),
 });
 
 /**
@@ -54,6 +55,7 @@ export const insertAgentSchema = createInsertSchema(agent, {
     channels: { type: "all" },
     messages: { canEdit: false, canDelete: false },
     accessFinishedChats: false,
+    notificationSoundsEnabled: true,
   }),
 });
 
