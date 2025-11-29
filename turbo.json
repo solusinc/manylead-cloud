@@ -79,6 +79,8 @@
     "NODE_ENV",
     "CI",
     "npm_lifecycle_event",
-    "SKIP_ENV_VALIDATION"
+    "SKIP_ENV_VALIDATION",
+    "ENABLE_TEST_CRON",
+    "ENABLE_DRY_RUN"
   ]
 }

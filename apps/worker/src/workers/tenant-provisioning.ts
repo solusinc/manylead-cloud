@@ -154,6 +154,7 @@ export async function processTenantProvisioning(
         channels: { type: "all" },
         messages: { canEdit: false, canDelete: false },
         accessFinishedChats: false,
+        notificationSoundsEnabled: true,
       },
       isActive: true,
     });

@@ -4,6 +4,7 @@ import {
   DeleteObjectCommand,
   GetObjectCommand,
   HeadObjectCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
@@ -11,6 +12,7 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { createStorageClient } from "@manylead/clients/storage";
 
 import type {
+  StorageObject,
   StorageProvider,
   UploadParams,
   UploadResult,
@@ -124,6 +126,27 @@ export class R2StorageProvider implements StorageProvider {
       }
       throw error;
     }
+  }
+
+  async list(prefix: string, limit = 1000): Promise<StorageObject[]> {
+    const command = new ListObjectsV2Command({
+      Bucket: this.bucketName,
+      Prefix: prefix,
+      MaxKeys: limit,
+    });
+
+    const response = await this.client.send(command);
+
+    if (!response.Contents) {
+      return [];
+    }
+
+    return response.Contents.filter((obj) => obj.Key).map((obj) => ({
+      key: obj.Key ?? "",
+      size: obj.Size ?? 0,
+      lastModified: obj.LastModified ?? new Date(),
+      etag: obj.ETag,
+    }));
   }
 
   getPublicUrl(key: string): string {

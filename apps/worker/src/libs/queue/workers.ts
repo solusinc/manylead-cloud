@@ -5,12 +5,14 @@ import type { TenantProvisioningJobData } from "~/workers/tenant-provisioning";
 import type { ChannelSyncJobData } from "~/workers/channel-sync";
 import type { MediaDownloadJobData } from "~/workers/media-download";
 import type { AttachmentCleanupJobData } from "~/workers/attachment-cleanup";
+import type { AttachmentOrphanCleanupJobData } from "~/workers/attachment-orphan-cleanup";
 import { env } from "~/env";
 import { getRedisClient } from "~/libs/cache/redis";
 import { processTenantProvisioning } from "~/workers/tenant-provisioning";
 import { processChannelSync } from "~/workers/channel-sync";
 import { processMediaDownload } from "~/workers/media-download";
 import { processAttachmentCleanup } from "~/workers/attachment-cleanup";
+import { processAttachmentOrphanCleanup } from "~/workers/attachment-orphan-cleanup";
 
 const logger = createLogger("Worker:Queue");
 
@@ -178,6 +180,29 @@ export function createWorkers(): Worker[] {
 
   logger.info(`Worker created for queue: ${env.QUEUE_ATTACHMENT_CLEANUP}`);
   workers.push(attachmentCleanupWorker);
+
+  /**
+   * Attachment Orphan Cleanup Worker (Cron)
+   * Limpa arquivos órfãos no R2 e sincroniza com DB:
+   * - Deleta arquivos do R2 sem registro no DB
+   * - Marca registros do DB como expired se arquivo foi deletado
+   */
+  logger.info("Creating worker for queue: attachment-orphan-cleanup");
+
+  const attachmentOrphanCleanupWorker = createWorker<AttachmentOrphanCleanupJobData>({
+    name: "attachment-orphan-cleanup",
+    processor: processAttachmentOrphanCleanup,
+    connection,
+    concurrency: 1, // Process one organization at a time
+    logger,
+  });
+
+  attachEventListeners(attachmentOrphanCleanupWorker, {
+    queueName: "attachment-orphan-cleanup",
+  });
+
+  logger.info("Worker created for queue: attachment-orphan-cleanup");
+  workers.push(attachmentOrphanCleanupWorker);
 
   /**
    * TODO (FASE 4): Add Tenant Migration Worker

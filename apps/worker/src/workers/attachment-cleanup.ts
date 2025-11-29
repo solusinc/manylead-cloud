@@ -1,5 +1,6 @@
 import type { Job } from "bullmq";
 import { and, attachment, eq, lte, sql } from "@manylead/db";
+import { db, organization } from "@manylead/db";
 import { logger } from "~/libs/utils/logger";
 import { tenantManager } from "~/libs/tenant-manager";
 
@@ -7,7 +8,7 @@ import { tenantManager } from "~/libs/tenant-manager";
  * Attachment cleanup job data schema
  */
 export interface AttachmentCleanupJobData {
-  organizationId: string;
+  organizationId?: string; // Optional: if not provided, process all orgs
 }
 
 /**
@@ -25,10 +26,45 @@ export async function processAttachmentCleanup(
 ): Promise<void> {
   const { organizationId } = job.data;
 
-  logger.info(
-    { jobId: job.id, organizationId },
-    "Starting attachment cleanup",
-  );
+  // If no organizationId provided, process all organizations
+  if (!organizationId || organizationId === "system") {
+    logger.info({ jobId: job.id }, "Starting attachment cleanup for all organizations");
+
+    const organizations = await db.select({ id: organization.id }).from(organization);
+
+    logger.info({ count: organizations.length }, "Found organizations to process");
+
+    for (const org of organizations) {
+      try {
+        await processOrganizationCleanup(job.id, org.id);
+      } catch (error) {
+        logger.error(
+          {
+            jobId: job.id,
+            organizationId: org.id,
+            error: error instanceof Error ? error.message : String(error),
+          },
+          "Failed to cleanup organization",
+        );
+        // Continue processing other organizations
+      }
+    }
+
+    return;
+  }
+
+  // Process single organization
+  await processOrganizationCleanup(job.id, organizationId);
+}
+
+/**
+ * Process cleanup for a single organization
+ */
+async function processOrganizationCleanup(
+  jobId: string | undefined,
+  organizationId: string,
+): Promise<void> {
+  logger.info({ jobId, organizationId }, "Starting attachment cleanup for organization");
 
   const tenantDb = await tenantManager.getConnection(organizationId);
 
@@ -96,7 +132,7 @@ export async function processAttachmentCleanup(
 
     logger.info(
       {
-        jobId: job.id,
+        jobId,
         organizationId,
         totalExpired: expiredVideosCount + expiredMediaCount,
         expiredVideos: expiredVideosCount,
@@ -107,7 +143,7 @@ export async function processAttachmentCleanup(
   } catch (error) {
     logger.error(
       {
-        jobId: job.id,
+        jobId,
         organizationId,
         error: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : undefined,

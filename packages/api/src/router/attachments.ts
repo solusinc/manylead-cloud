@@ -5,8 +5,11 @@ import { and, attachment, count, desc, eq, sql } from "@manylead/db";
 import { storage, getPublicUrl } from "@manylead/storage";
 import { generateMediaPath } from "@manylead/storage/utils";
 import { MEDIA_LIMITS } from "@manylead/shared/constants";
+import { createQueue } from "@manylead/clients/queue";
+import { getRedisClient } from "@manylead/clients/redis";
 
 import { createTRPCRouter, ownerProcedure } from "../trpc";
+import { env } from "../env";
 
 /**
  * Attachments Router
@@ -211,6 +214,44 @@ export const attachmentsRouter = createTRPCRouter({
 
     return stats;
   }),
+
+  /**
+   * Trigger orphan cleanup job
+   * Enfileira job para limpar arquivos órfãos no R2
+   */
+  triggerOrphanCleanup: ownerProcedure
+    .input(
+      z.object({
+        dryRun: z.boolean().default(false),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const organizationId = ctx.session.session.activeOrganizationId;
+      if (!organizationId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Nenhuma organização ativa",
+        });
+      }
+
+      // Enfileirar job no BullMQ
+      const connection = getRedisClient(env.REDIS_URL);
+      const queue = createQueue({
+        name: "attachment-orphan-cleanup",
+        connection,
+      });
+
+      const job = await queue.add("orphan-cleanup", {
+        organizationId,
+        dryRun: input.dryRun,
+      });
+
+      return {
+        success: true,
+        jobId: job.id,
+        dryRun: input.dryRun,
+      };
+    }),
 
   /**
    * Gerar pre-signed URL para upload de arquivo

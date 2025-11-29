@@ -15,6 +15,13 @@ export interface UploadResult {
   etag: string;
 }
 
+export interface StorageObject {
+  key: string;
+  size: number;
+  lastModified: Date;
+  etag?: string;
+}
+
 export interface StorageProvider {
   /**
    * Upload a file to storage
@@ -35,6 +42,11 @@ export interface StorageProvider {
    * Check if a file exists in storage
    */
   exists(key: string): Promise<boolean>;
+
+  /**
+   * List objects with a given prefix
+   */
+  list(prefix: string, limit?: number): Promise<StorageObject[]>;
 
   /**
    * Get public URL for a file

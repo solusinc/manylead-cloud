@@ -3,12 +3,13 @@ import { env } from "~/env";
 import { closeRedis } from "~/libs/cache/redis";
 import { eventPublisher } from "~/libs/cache/event-publisher";
 import { createWorkers } from "~/libs/queue/workers";
+import { setupCronJobs } from "~/libs/queue/scheduler";
 import { logger } from "~/libs/utils/logger";
 
 /**
  * Worker entry point
  */
-function startWorker() {
+async function startWorker() {
   logger.info("🚀 Starting BullMQ Worker...");
   logger.info(`Environment: ${env.NODE_ENV}`);
   logger.info(`Concurrency: ${env.WORKER_CONCURRENCY}`);
@@ -27,6 +28,11 @@ function startWorker() {
       },
       "Workers started successfully",
     );
+
+    // Setup cron jobs
+    logger.info("Setting up cron jobs...");
+    await setupCronJobs();
+    logger.info("Cron jobs setup completed");
 
     // Keep process alive
     process.on("SIGTERM", () => {

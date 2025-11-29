@@ -3,7 +3,7 @@
 import { memo, useEffect } from "react";
 import Image from "next/image";
 import { format } from "date-fns";
-import { BanIcon, Check, CheckCheck, Clock, FileVideo, Star } from "lucide-react";
+import { BanIcon, Check, CheckCheck, Clock, FileVideo, Star, FileX } from "lucide-react";
 import type { Attachment } from "@manylead/db";
 
 import { cn } from "@manylead/ui";
@@ -78,7 +78,32 @@ export function ChatMessageAttachment({
     }
   }, [isImage, attachment.storageUrl, attachment.fileName, messageId, registerImage]);
 
-  if (!attachment.storageUrl) return null;
+  // Se a mídia expirou, mostrar placeholder visual
+  if (!attachment.storageUrl) {
+    const mediaTypeLabel = isImage ? "Imagem" : isVideo ? "Vídeo" : "Arquivo";
+
+    return (
+      <div className="mb-2 overflow-hidden rounded-lg border border-muted-foreground/20">
+        <div className="flex min-h-[120px] flex-col items-center justify-center gap-2 bg-muted/30 p-4">
+          <FileX className="size-8 text-muted-foreground/50" />
+          <div className="text-center">
+            <p className="text-sm font-medium text-muted-foreground">
+              Esta mídia expirou
+            </p>
+            <p className="text-xs text-muted-foreground/70">
+              Arquivos são mantidos temporariamente
+            </p>
+          </div>
+        </div>
+        <div className="border-t border-muted-foreground/10 bg-muted/20 px-3 py-2">
+          <p className="truncate text-xs text-muted-foreground/80">
+            {mediaTypeLabel} • {attachment.fileName}
+            {attachment.fileSize && ` • ${formatFileSize(attachment.fileSize)}`}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mb-2 overflow-hidden rounded-lg">
@@ -195,11 +220,14 @@ export function ChatMessageBubble({
         />
       )}
 
-      <ChatMessageContent
-        content={message.content}
-        isOutgoing={isOutgoing}
-        isDeleted={message.isDeleted}
-      />
+      {/* Não mostrar caption se mídia expirou */}
+      {!(message.attachment && !message.attachment.storageUrl) && (
+        <ChatMessageContent
+          content={message.content}
+          isOutgoing={isOutgoing}
+          isDeleted={message.isDeleted}
+        />
+      )}
       <ChatMessageFooter
         timestamp={message.timestamp}
         status={message.status}
@@ -207,15 +235,6 @@ export function ChatMessageBubble({
         isStarred={message.isStarred}
         isEdited={message.isEdited}
         isDeleted={message.isDeleted}
-        mediaMetadata={
-          message.attachment
-            ? {
-                fileSize: message.attachment.fileSize ?? undefined,
-                duration: message.attachment.duration ?? undefined,
-                mediaType: message.attachment.mediaType as "image" | "video",
-              }
-            : undefined
-        }
       />
     </div>
   );
