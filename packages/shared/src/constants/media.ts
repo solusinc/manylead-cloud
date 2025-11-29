@@ -129,3 +129,21 @@ export function formatFileSize(bytes: number): string {
 
   return `${Math.round(bytes / Math.pow(k, i))} ${sizes[i]}`;
 }
+
+/**
+ * Formats duration in seconds to MM:SS format
+ *
+ * @param seconds - Duration in seconds
+ * @returns Formatted string (e.g., "3:45", "12:03")
+ *
+ * @example
+ * ```ts
+ * formatDuration(185); // "3:05"
+ * formatDuration(62); // "1:02"
+ * ```
+ */
+export function formatDuration(seconds: number): string {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins}:${secs.toString().padStart(2, "0")}`;
+}

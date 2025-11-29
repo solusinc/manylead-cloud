@@ -136,6 +136,7 @@ export function ChatInputAttachButton({
       }
     }
 
+    // Enviar arquivo (mídia ou documento) para preview
     onFileSelect?.(file);
     onClose();
     e.target.value = "";
@@ -249,7 +250,6 @@ function CommentDialogInline({
   const addCommentMutation = useMutation(
     trpc.messages.addComment.mutationOptions({
       onSuccess: () => {
-        toast.success("Comentário adicionado");
         setComment("");
         onOpenChange(false);
         void queryClient.invalidateQueries({ queryKey: [["messages", "list"]] });

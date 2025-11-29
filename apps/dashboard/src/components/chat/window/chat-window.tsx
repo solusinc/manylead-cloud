@@ -252,7 +252,7 @@ function ChatWindowContent({
       <div
         className={cn(
           "min-h-14 items-center bg-background",
-          chat.status === "open" && "px-4 py-4"
+          chat.status === "open" && !mediaPreview && "px-4 py-4"
         )}
       >
         <ChatInput

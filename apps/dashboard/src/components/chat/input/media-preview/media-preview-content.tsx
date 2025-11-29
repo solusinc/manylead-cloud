@@ -2,17 +2,20 @@
 
 import { useEffect, useRef, useState } from "react";
 import { FileVideo } from "lucide-react";
+import { formatFileSize } from "@manylead/shared/constants";
+import { getDocumentType } from "~/lib/document-type-map";
 
 interface MediaPreviewContentProps {
   file: File;
 }
 
 /**
- * Renderiza o preview da mídia (imagem ou vídeo)
+ * Renderiza o preview da mídia (imagem, vídeo ou documento)
  */
 export function MediaPreviewContent({ file }: MediaPreviewContentProps) {
   const isImage = file.type.startsWith("image/");
   const isVideo = file.type.startsWith("video/");
+  const isDocument = !isImage && !isVideo;
   const [previewUrl, setPreviewUrl] = useState<string>("");
   const urlRef = useRef<string | null>(null);
 
@@ -94,14 +97,37 @@ export function MediaPreviewContent({ file }: MediaPreviewContentProps) {
     );
   }
 
-  // Fallback para outros tipos de arquivo
+  // Preview de documento
+  if (isDocument) {
+    const docType = getDocumentType(file.type);
+    const Icon = docType.icon;
+
+    return (
+      <div className="flex flex-col items-center justify-center gap-8">
+        <div className="flex items-center justify-center">
+          <Icon className="h-48 w-48" />
+        </div>
+
+        <div className="text-center w-full max-w-md px-4">
+          <p className="text-lg font-medium text-white truncate">
+            {file.name}
+          </p>
+          <p className="text-sm text-white/70 mt-1">
+            {docType.label} • {formatFileSize(file.size)}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Fallback
   return (
     <div className="flex flex-col items-center gap-4 rounded-lg bg-muted p-8">
       <FileVideo className="h-16 w-16 text-muted-foreground" />
       <div className="text-center">
         <p className="font-medium">{file.name}</p>
         <p className="text-sm text-muted-foreground">
-          {(file.size / 1024 / 1024).toFixed(2)} MB
+          {formatFileSize(file.size)}
         </p>
       </div>
     </div>

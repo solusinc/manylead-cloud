@@ -30,6 +30,12 @@ export function MediaPreviewDialog({
   const [caption, setCaption] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const isImage = file.type.startsWith("image/");
+  const isVideo = file.type.startsWith("video/");
+  const isDocument = !isImage && !isVideo;
+
+  const headerTitle = isDocument ? "Enviar Documento" : "Enviar Mídia";
+
   // Auto-focus no input quando o dialog abrir
   useEffect(() => {
     inputRef.current?.focus();
@@ -61,11 +67,11 @@ export function MediaPreviewDialog({
   };
 
   return (
-    <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+    <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-xs dark:bg-black/70">
       <div className="flex h-full w-full flex-col">
         {/* Header */}
-        <div className="flex items-center justify-between bg-white px-6 py-4 dark:bg-black">
-          <h2 className="text-lg font-semibold">Enviar Mídia</h2>
+        <div className="flex h-14 items-center justify-between bg-white px-6 shadow-md dark:bg-black">
+          <h2 className="text-lg font-semibold">{headerTitle}</h2>
           <Button
             variant="ghost"
             size="icon"
@@ -82,7 +88,7 @@ export function MediaPreviewDialog({
         </div>
 
         {/* Footer */}
-        <div className="bg-white px-6 py-4 dark:bg-black">
+        <div className="border-t bg-white px-6 py-4 dark:bg-black">
           {/* Upload Progress */}
           {isLoading && (
             <div className="mb-3 space-y-2">
@@ -108,12 +114,13 @@ export function MediaPreviewDialog({
               onChange={(e) => setCaption(e.target.value)}
               onKeyDown={handleKeyDown}
               disabled={isLoading}
-              className="flex-1"
+              className="flex-1 shadow-none"
             />
             <Button
               onClick={handleSend}
               disabled={isLoading}
               size="icon"
+              className="shadow-none"
             >
               <Send className="h-4 w-4" />
             </Button>

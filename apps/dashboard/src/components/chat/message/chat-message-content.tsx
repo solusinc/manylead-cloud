@@ -8,6 +8,9 @@ import type { Attachment } from "@manylead/db";
 
 import { cn } from "@manylead/ui";
 
+import { getDocumentType } from "~/lib/document-type-map";
+import { formatFileSize, formatDuration } from "@manylead/shared/constants";
+
 import { useChatReply } from "../providers/chat-reply-provider";
 import { ChatMessageActions } from "./chat-message-actions";
 import { useChatImages } from "./chat-images-context";
@@ -32,26 +35,6 @@ function scrollToMessage(messageId: string) {
 }
 
 /**
- * Formata tamanho de arquivo
- */
-function formatFileSize(bytes: number): string {
-  if (bytes === 0) return "0 Bytes";
-  const k = 1024;
-  const sizes = ["Bytes", "KB", "MB", "GB"];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${Math.round(bytes / Math.pow(k, i))} ${sizes[i]}`;
-}
-
-/**
- * Formata duração em segundos
- */
-function formatDuration(seconds: number): string {
-  const mins = Math.floor(seconds / 60);
-  const secs = seconds % 60;
-  return `${mins}:${secs.toString().padStart(2, "0")}`;
-}
-
-/**
  * Renderiza attachment de mensagem (foto/vídeo)
  */
 export function ChatMessageAttachment({
@@ -66,6 +49,7 @@ export function ChatMessageAttachment({
   const { registerImage, openLightbox } = useChatImages();
   const isImage = attachment.mediaType === "image";
   const isVideo = attachment.mediaType === "video";
+  const isDocument = attachment.mediaType === "document";
 
   // Registrar imagem no context quando o componente montar
   useEffect(() => {
@@ -136,7 +120,55 @@ export function ChatMessageAttachment({
           </video>
         </div>
       )}
+
+      {isDocument && attachment.mimeType && (
+        <a
+          href={attachment.storageUrl}
+          download={attachment.fileName}
+          className="flex items-center gap-3 rounded-lg border border-muted-foreground/20 bg-muted/10 p-3 transition-colors hover:bg-muted/20"
+        >
+          <DocumentIcon
+            mimeType={attachment.mimeType}
+            fileName={attachment.fileName}
+            fileSize={attachment.fileSize}
+          />
+        </a>
+      )}
     </div>
+  );
+}
+
+/**
+ * Renderiza ícone de documento com info
+ */
+function DocumentIcon({
+  mimeType,
+  fileName,
+  fileSize,
+}: {
+  mimeType: string;
+  fileName: string;
+  fileSize?: number | null;
+}) {
+  const docType = getDocumentType(mimeType);
+  const Icon = docType.icon;
+
+  return (
+    <>
+      {/* SVG Icon */}
+      <div className="flex shrink-0 items-center justify-center">
+        <Icon className="h-12 w-12" />
+      </div>
+
+      {/* File info */}
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <p className="truncate text-sm font-medium">{fileName}</p>
+        <p className="text-xs text-muted-foreground">
+          {docType.label}
+          {fileSize && ` • ${formatFileSize(fileSize)}`}
+        </p>
+      </div>
+    </>
   );
 }
 

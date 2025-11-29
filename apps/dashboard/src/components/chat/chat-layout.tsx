@@ -136,7 +136,7 @@ function ChatLayoutInner({
               {
                 message: messageData,
                 attachment: null,
-                isOwnMessage: false, // Socket messages are from other users
+                isOwnMessage: currentAgent ? messageData.senderId === currentAgent.id : false,
               },
             ],
           };
@@ -162,7 +162,8 @@ function ChatLayoutInner({
 
       // Play notification sound only for messages NOT from current agent
       // Own messages already play sound in use-send-message.ts
-      if (currentAgent && messageData.senderId !== currentAgent.id) {
+      // Don't play sound for comments (internal notes)
+      if (currentAgent && messageData.senderId !== currentAgent.id && messageData.messageType !== "comment") {
         playNotificationSound();
       }
     },

@@ -1,0 +1,82 @@
+"use client";
+
+import { BanIcon, FileText, Image as ImageIcon, Video } from "lucide-react";
+
+import { cn } from "@manylead/ui";
+
+import type { MessageStatus } from "../message/message-status-icon";
+import { MessageStatusIcon } from "../message/message-status-icon";
+
+/**
+ * Renderiza a última mensagem do chat na sidebar
+ */
+export function ChatSidebarItemLastMessage({
+  isTyping = false,
+  lastMessageIsDeleted = false,
+  messageSender,
+  messageStatus,
+  messageType = "text",
+  message,
+  className,
+}: {
+  isTyping?: boolean;
+  lastMessageIsDeleted?: boolean;
+  messageSender?: "agent" | "contact" | "system";
+  messageStatus?: MessageStatus;
+  messageType?: "text" | "image" | "video" | "audio" | "document" | "system";
+  message: string;
+  className?: string;
+}) {
+  // Caso 1: Usuário está digitando
+  if (isTyping) {
+    return (
+      <span className="text-primary flex-1 truncate text-sm font-semibold">
+        digitando...
+      </span>
+    );
+  }
+
+  // Caso 2: Mensagem foi deletada
+  if (lastMessageIsDeleted) {
+    return (
+      <div className={cn("flex min-w-0 flex-1 items-center gap-1.5", className)}>
+        <BanIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+        <p className="text-muted-foreground flex-1 truncate text-sm italic">
+          Esta mensagem foi excluída
+        </p>
+      </div>
+    );
+  }
+
+  // Caso 3: Mensagem normal (texto ou mídia)
+  return (
+    <div className={cn("flex min-w-0 flex-1 items-center gap-1.5", className)}>
+      {/* Status icon - SOMENTE se última mensagem foi enviada pelo agent */}
+      {messageSender === "agent" && messageStatus && (
+        <MessageStatusIcon status={messageStatus} size={14} className="shrink-0" />
+      )}
+
+      {/* Ícone de mídia (imagem/vídeo/documento) */}
+      {messageType === "image" && (
+        <ImageIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+      )}
+      {messageType === "video" && (
+        <Video className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+      )}
+      {messageType === "document" && (
+        <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+      )}
+
+      {/* Texto da mensagem ou label do tipo de mídia */}
+      <p className="text-muted-foreground flex-1 truncate text-sm">
+        {messageType === "image"
+          ? "Foto"
+          : messageType === "video"
+          ? "Vídeo"
+          : messageType === "document"
+          ? "Documento"
+          : message}
+      </p>
+    </div>
+  );
+}

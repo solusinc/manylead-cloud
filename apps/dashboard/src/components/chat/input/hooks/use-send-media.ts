@@ -83,13 +83,16 @@ export function useSendMedia(_chatId: string) {
       setUploadProgress(100);
       playNotificationSound();
 
-      // Invalidar cache de mensagens e chats
-      await queryClient.invalidateQueries({
-        queryKey: ["messages"],
-      });
-      await queryClient.invalidateQueries({
-        queryKey: ["chats"],
-      });
+      // NÃO invalidar queries - deixar socket trazer a mensagem completa
+      // Invalidar queries causava a mensagem aparecer duas vezes:
+      // 1. Primeiro só o caption (refetch)
+      // 2. Depois completa com attachment (socket)
+      // await queryClient.invalidateQueries({
+      //   queryKey: ["messages"],
+      // });
+      // await queryClient.invalidateQueries({
+      //   queryKey: ["chats"],
+      // });
 
     } catch (error) {
       toast.error("Erro ao enviar mídia");

@@ -5,7 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { format, isToday, isYesterday, isThisWeek } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { BanIcon, Clock, Image as ImageIcon, User, Video } from "lucide-react";
+import { Clock, User } from "lucide-react";
 import { FaUser, FaWhatsapp } from "react-icons/fa";
 
 import type { Tag } from "@manylead/db";
@@ -14,7 +14,7 @@ import { Avatar, AvatarFallback } from "@manylead/ui/avatar";
 import { Badge } from "@manylead/ui/badge";
 import { useDebouncedValue } from "~/hooks/use-debounced-value";
 import type { MessageStatus } from "../message/message-status-icon";
-import { MessageStatusIcon } from "../message/message-status-icon";
+import { ChatSidebarItemLastMessage } from "./chat-sidebar-item-last-message";
 
 // Calcula se o texto deve ser branco ou preto baseado na luminosidade do fundo
 function getContrastTextColor(hexColor: string): string {
@@ -221,35 +221,14 @@ export function ChatSidebarItemContent({
       </div>
 
       <div className="flex items-center justify-between gap-2">
-        {isTyping ? (
-          <TypingIndicator />
-        ) : lastMessageIsDeleted ? (
-          // Mensagem deletada: mostrar ícone + texto
-          <div className="flex min-w-0 flex-1 items-center gap-1.5">
-            <BanIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-            <p className="text-muted-foreground flex-1 truncate text-sm italic">Esta mensagem foi excluída</p>
-          </div>
-        ) : (
-          <div className="flex min-w-0 flex-1 items-center gap-1.5">
-            {/* Mostrar status icon SOMENTE se última mensagem foi enviada pelo agent */}
-            {messageSender === "agent" && messageStatus && (
-              <MessageStatusIcon status={messageStatus} size={14} className="shrink-0" />
-            )}
-
-            {/* Ícone de mídia se for imagem/vídeo */}
-            {messageType === "image" && (
-              <ImageIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-            )}
-            {messageType === "video" && (
-              <Video className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-            )}
-
-            {/* Texto da mensagem ou tipo de mídia */}
-            <p className="text-muted-foreground flex-1 truncate text-sm">
-              {messageType === "image" ? "Foto" : messageType === "video" ? "Vídeo" : message}
-            </p>
-          </div>
-        )}
+        <ChatSidebarItemLastMessage
+          isTyping={isTyping}
+          lastMessageIsDeleted={lastMessageIsDeleted}
+          messageSender={messageSender}
+          messageStatus={messageStatus}
+          messageType={messageType}
+          message={message}
+        />
         {shouldShowBadge && <ChatSidebarItemBadge count={debouncedUnreadCount} />}
       </div>
 
@@ -275,52 +254,6 @@ export function ChatSidebarItemContent({
         </div>
       )}
     </div>
-  );
-}
-
-// Versão antiga (comentada para referência)
-// function TypingIndicatorOld() {
-//   return (
-//     <div className="flex items-center gap-1">
-//       <span className="text-primary text-sm font-medium">digitando</span>
-//       <div className="flex gap-0.5">
-//         <span className="animate-bounce text-primary" style={{ animationDelay: "0ms" }}>.</span>
-//         <span className="animate-bounce text-primary" style={{ animationDelay: "150ms" }}>.</span>
-//         <span className="animate-bounce text-primary" style={{ animationDelay: "300ms" }}>.</span>
-//       </div>
-//     </div>
-//   );
-// }
-
-// Versão com bolinhas (comentada)
-// function TypingIndicatorDots() {
-//   return (
-//     <div className="flex items-center gap-1.5">
-//       <div className="flex gap-1">
-//         <span
-//           className="bg-primary h-1.5 w-1.5 rounded-full animate-bounce"
-//           style={{ animationDelay: "0ms", animationDuration: "1s" }}
-//         />
-//         <span
-//           className="bg-primary h-1.5 w-1.5 rounded-full animate-bounce"
-//           style={{ animationDelay: "200ms", animationDuration: "1s" }}
-//         />
-//         <span
-//           className="bg-primary h-1.5 w-1.5 rounded-full animate-bounce"
-//           style={{ animationDelay: "400ms", animationDuration: "1s" }}
-//         />
-//       </div>
-//       <span className="text-primary text-xs font-medium">digitando</span>
-//     </div>
-//   );
-// }
-
-// Versão WhatsApp - apenas texto em negrito
-function TypingIndicator() {
-  return (
-    <span className="text-primary flex-1 truncate text-sm font-semibold">
-      digitando...
-    </span>
   );
 }
 

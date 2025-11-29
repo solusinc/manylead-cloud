@@ -168,7 +168,13 @@ export class CrossOrgMirrorService {
         messageSource: "internal",
         sender: "agent",
         senderId: null,
-        messageType: attachmentData?.mediaType === "image" ? "image" : attachmentData?.mediaType === "video" ? "video" : "text",
+        messageType: attachmentData?.mediaType === "image"
+          ? "image"
+          : attachmentData?.mediaType === "video"
+          ? "video"
+          : attachmentData?.mediaType === "document"
+          ? "document"
+          : "text",
         content: messageContent,
         metadata: {
           ...metadata,
@@ -306,7 +312,13 @@ export class CrossOrgMirrorService {
         messageSource: "internal",
         sender: "agent",
         senderId: null,
-        messageType: attachmentData?.mediaType === "image" ? "image" : attachmentData?.mediaType === "video" ? "video" : "text",
+        messageType: attachmentData?.mediaType === "image"
+          ? "image"
+          : attachmentData?.mediaType === "video"
+          ? "video"
+          : attachmentData?.mediaType === "document"
+          ? "document"
+          : "text",
         content: messageContent,
         metadata: {
           ...metadata,

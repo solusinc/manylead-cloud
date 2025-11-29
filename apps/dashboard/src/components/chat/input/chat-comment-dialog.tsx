@@ -37,7 +37,6 @@ export function ChatCommentDialog({ chatId, open: controlledOpen, onOpenChange }
   const addCommentMutation = useMutation(
     trpc.messages.addComment.mutationOptions({
       onSuccess: () => {
-        toast.success("Comentário adicionado");
         setComment("");
         setOpen(false);
         // Invalidar lista de mensagens para mostrar o comentário
