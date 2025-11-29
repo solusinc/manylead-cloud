@@ -72,6 +72,8 @@ export const chat = pgTable(
     lastMessageContent: text("last_message_content"),
     lastMessageSender: varchar("last_message_sender", { length: 20 }),
     // "contact" | "agent" | "system"
+    lastMessageStatus: varchar("last_message_status", { length: 20 }),
+    // "pending" | "sent" | "delivered" | "read" | "failed"
 
     // Contadores
     unreadCount: integer("unread_count").notNull().default(0),

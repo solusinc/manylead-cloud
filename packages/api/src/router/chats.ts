@@ -242,6 +242,7 @@ export const chatsRouter = createTRPCRouter({
           lastMessageAt: newChat.createdAt,
           lastMessageContent: "Nova sessão criada",
           lastMessageSender: "system",
+          lastMessageStatus: "sent",
         })
         .where(and(eq(chat.id, newChat.id), eq(chat.createdAt, newChat.createdAt)));
 
@@ -413,6 +414,7 @@ export const chatsRouter = createTRPCRouter({
           lastMessageAt: newChat.createdAt,
           lastMessageContent: "Nova sessão criada",
           lastMessageSender: "system",
+          lastMessageStatus: "sent",
         })
         .where(and(eq(chat.id, newChat.id), eq(chat.createdAt, newChat.createdAt)));
 
@@ -891,6 +893,7 @@ export const chatsRouter = createTRPCRouter({
         updated.createdAt,
         "Nova sessão criada",
         "system",
+        "sent",
       );
 
       return updated;

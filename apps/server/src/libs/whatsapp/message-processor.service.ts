@@ -328,6 +328,7 @@ export class WhatsAppMessageProcessor {
         lastMessageAt: timestamp,
         lastMessageContent: content,
         lastMessageSender: "customer",
+        lastMessageStatus: "delivered",
         unreadCount: sql`COALESCE(${chat.unreadCount}, 0) + 1`,
         updatedAt: new Date(),
       })

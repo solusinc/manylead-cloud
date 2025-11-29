@@ -13,6 +13,8 @@ import { cn } from "@manylead/ui";
 import { Avatar, AvatarFallback } from "@manylead/ui/avatar";
 import { Badge } from "@manylead/ui/badge";
 import { useDebouncedValue } from "~/hooks/use-debounced-value";
+import type { MessageStatus } from "../message/message-status-icon";
+import { MessageStatusIcon } from "../message/message-status-icon";
 
 // Calcula se o texto deve ser branco ou preto baseado na luminosidade do fundo
 function getContrastTextColor(hexColor: string): string {
@@ -34,6 +36,8 @@ interface ChatSidebarItemProps {
     };
     lastMessage: string;
     lastMessageAt: Date;
+    lastMessageStatus?: "pending" | "sent" | "delivered" | "read" | "failed";
+    lastMessageSender?: "agent" | "contact" | "system";
     unreadCount: number;
     status: "open" | "closed" | "pending";
     messageSource?: "whatsapp" | "internal";
@@ -80,6 +84,8 @@ export function ChatSidebarItem({
           name={chat.contact.name}
           message={chat.lastMessage}
           timestamp={chat.lastMessageAt}
+          messageStatus={chat.lastMessageStatus}
+          messageSender={chat.lastMessageSender}
           unreadCount={chat.unreadCount}
           isTyping={isTyping}
           isActive={isActive}
@@ -163,6 +169,8 @@ export function ChatSidebarItemContent({
   name,
   message,
   timestamp,
+  messageStatus,
+  messageSender,
   unreadCount,
   isTyping = false,
   isActive = false,
@@ -174,6 +182,8 @@ export function ChatSidebarItemContent({
   name: string;
   message: string;
   timestamp: Date;
+  messageStatus?: MessageStatus;
+  messageSender?: "agent" | "contact" | "system";
   unreadCount: number;
   isTyping?: boolean;
   isActive?: boolean;
@@ -206,9 +216,13 @@ export function ChatSidebarItemContent({
         {isTyping ? (
           <TypingIndicator />
         ) : (
-          <p className="text-muted-foreground flex-1 truncate text-sm">
-            {message}
-          </p>
+          <div className="flex min-w-0 flex-1 items-center gap-1.5">
+            {/* Mostrar status icon SOMENTE se última mensagem foi enviada pelo agent */}
+            {messageSender === "agent" && messageStatus && (
+              <MessageStatusIcon status={messageStatus} size={14} className="shrink-0" />
+            )}
+            <p className="text-muted-foreground flex-1 truncate text-sm">{message}</p>
+          </div>
         )}
         {shouldShowBadge && <ChatSidebarItemBadge count={debouncedUnreadCount} />}
       </div>

@@ -111,6 +111,16 @@ export function ChatSidebarList({
         },
         lastMessage: item.chat.lastMessageContent ?? "",
         lastMessageAt: item.chat.lastMessageAt ?? item.chat.createdAt,
+        lastMessageStatus: ((item.chat as { lastMessageStatus?: string }).lastMessageStatus ?? "delivered") as
+          | "pending"
+          | "sent"
+          | "delivered"
+          | "read"
+          | "failed",
+        lastMessageSender: ((item.chat as { lastMessageSender?: string }).lastMessageSender ?? "contact") as
+          | "agent"
+          | "contact"
+          | "system",
         unreadCount: item.chat.unreadCount,
         status: item.chat.status as "open" | "closed" | "pending",
         messageSource: item.chat.messageSource as "whatsapp" | "internal",

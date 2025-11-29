@@ -1,4 +1,4 @@
-import { and, eq, message } from "@manylead/db";
+import { and, eq, message, chat } from "@manylead/db";
 
 import { getSocketManager } from "~/socket";
 import { tenantManager } from "~/libs/tenant-manager";
@@ -96,11 +96,42 @@ export async function handleMessagesUpdate(
           ),
         );
 
+      // Buscar chat para verificar se essa é a última mensagem
+      const [chatRecord] = await tenantDb
+        .select()
+        .from(chat)
+        .where(eq(chat.id, existingMessage.chatId))
+        .limit(1);
+
+      if (chatRecord) {
+        // Verificar se essa mensagem é a última do chat (comparar timestamps)
+        const isLastMessage =
+          chatRecord.lastMessageAt &&
+          existingMessage.timestamp.getTime() === chatRecord.lastMessageAt.getTime();
+
+        if (isLastMessage) {
+          // Atualizar lastMessageStatus no chat
+          await tenantDb
+            .update(chat)
+            .set({
+              lastMessageStatus: newStatus,
+            })
+            .where(eq(chat.id, existingMessage.chatId));
+
+          logger.info("Updated chat lastMessageStatus", {
+            chatId: existingMessage.chatId,
+            status: newStatus,
+          });
+        }
+      }
+
       // Emitir evento Socket.io
       socketManager.emitToRoom(`org:${ch.organizationId}`, "message:status", {
         messageId: existingMessage.id,
         chatId: existingMessage.chatId,
         status: newStatus,
+        sender: existingMessage.sender,
+        timestamp: existingMessage.timestamp.toISOString(),
       });
 
       logger.info("Status updated successfully", { id: msg.key.id });

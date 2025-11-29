@@ -371,6 +371,23 @@ export function ChatMessageList({
     [chatId, queryClient]
   );
 
+  // Escutar eventos de chat:updated para fazer scroll após transferir/finalizar/assign
+  useSocketListener(
+    socket,
+    'onChatUpdated',
+    (event) => {
+      const updatedChatId = event.chat.id as string;
+
+      // Se for o chat atual, fazer scroll to bottom após um delay para garantir que mensagens foram carregadas
+      if (updatedChatId === chatId) {
+        setTimeout(() => {
+          scrollToBottom("smooth");
+        }, 300);
+      }
+    },
+    [chatId, scrollToBottom]
+  );
+
   // Escutar eventos de message:deleted para remover mensagens deletadas
   useSocketListener(
     socket,
@@ -457,9 +474,10 @@ export function ChatMessageList({
         // Check if this is a NEW message we haven't seen before (at the bottom)
         if (lastMessage && lastMessage.id !== lastMessageIdRef.current) {
           const isOwnMessage = lastMessage.sender === "agent";
+          const isSystemMessage = lastMessage.sender === "system";
 
-          // WhatsApp behavior: ALWAYS scroll when YOU send
-          if (isOwnMessage) {
+          // ALWAYS scroll when YOU send OR when system messages (transfer, assign, close)
+          if (isOwnMessage || isSystemMessage) {
             scrollToBottom("instant");
           } else {
             // Only scroll if near bottom for received messages
@@ -621,7 +639,7 @@ export function ChatMessageList({
         {isTyping && <ChatMessageTypingIndicator />}
 
         {/* Anchor for scroll-to-bottom */}
-        <div ref={messagesEndRef} className="h-4" />
+        <div ref={messagesEndRef} className="h-6" />
       </div>
 
       {/* Scroll to bottom button - Fixed position */}

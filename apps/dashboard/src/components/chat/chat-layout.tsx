@@ -194,6 +194,90 @@ function ChatLayoutInner({
     [queryClient]
   );
 
+  // 4. Quando uma mensagem é atualizada (status read/delivered) - atualizar sidebar
+  useSocketListener(
+    socket,
+    'onMessageUpdated',
+    (event) => {
+      const message = event.message as {
+        id: string;
+        chatId: string;
+        timestamp: string;
+        status: string;
+        sender: string;
+      };
+
+      console.log('📨 Message status updated:', {
+        messageId: message.id,
+        chatId: message.chatId,
+        status: message.status,
+        sender: message.sender,
+      });
+
+      // Atualizar o lastMessageStatus no cache do chat sidebar
+      // Buscar todas as queries de chats e atualizar a que tem esse chat
+      const queries = queryClient.getQueryCache().findAll({
+        queryKey: [["chats", "list"]],
+        exact: false,
+      });
+
+      queries.forEach((query) => {
+        const queryState = query.state.data as {
+          items: {
+            chat: {
+              id: string;
+              lastMessageAt?: Date;
+              lastMessageContent?: string;
+              lastMessageStatus?: string;
+              lastMessageSender?: string;
+            };
+          }[];
+        } | undefined;
+
+        if (!queryState?.items) return;
+
+        // Procurar o chat que contém essa mensagem
+        const chatIndex = queryState.items.findIndex((item) => item.chat.id === message.chatId);
+        if (chatIndex === -1) return;
+
+        const chat = queryState.items[chatIndex];
+        if (!chat) return;
+
+        // Atualizar SOMENTE se essa é a última mensagem do chat
+        // (comparar timestamp)
+        const isLastMessage =
+          !chat.chat.lastMessageAt ||
+          new Date(message.timestamp).getTime() >= new Date(chat.chat.lastMessageAt).getTime();
+
+        if (isLastMessage) {
+          console.log('✅ Updating lastMessageStatus in sidebar:', message.chatId, message.status);
+
+          const newItems = [...queryState.items];
+          newItems[chatIndex] = {
+            ...chat,
+            chat: {
+              ...chat.chat,
+              lastMessageStatus: message.status,
+              lastMessageSender: message.sender,
+            },
+          };
+
+          queryClient.setQueryData(query.queryKey, {
+            ...queryState,
+            items: newItems,
+          });
+
+          // Force re-render
+          void queryClient.invalidateQueries({
+            queryKey: query.queryKey,
+            refetchType: "none",
+          });
+        }
+      });
+    },
+    [queryClient]
+  );
+
   return (
     <div className={cn("flex h-full overflow-hidden", className)} {...props}>
       <ChatLayoutSidebar hasChatSelected={hasChatSelected} />

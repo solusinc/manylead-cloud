@@ -922,6 +922,7 @@ export const messagesRouter = createTRPCRouter({
             lastMessageAt: now,
             lastMessageContent: input.content,
             lastMessageSender: "agent",
+            lastMessageStatus: "pending",
             totalMessages: sql`${chat.totalMessages} + 1`,
             updatedAt: now,
           })
@@ -1136,6 +1137,7 @@ export const messagesRouter = createTRPCRouter({
             lastMessageAt: now,
             lastMessageContent: input.caption ?? `[${messageType}]`,
             lastMessageSender: "agent",
+            lastMessageStatus: "pending",
             totalMessages: sql`${chat.totalMessages} + 1`,
             updatedAt: now,
           })

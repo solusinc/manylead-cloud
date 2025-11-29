@@ -330,6 +330,7 @@ Duração: ${duration}`;
       updated.createdAt,
       "Sessão transferida",
       "system",
+      "sent",
     );
 
     // 6. Zerar unreadCount do chat
@@ -387,6 +388,7 @@ Duração: ${duration}`;
     createdAt: Date,
     content: string,
     sender: "agent" | "customer" | "system",
+    status?: "pending" | "sent" | "delivered" | "read" | "failed",
   ): Promise<void> {
     await ctx.tenantDb
       .update(chat)
@@ -394,6 +396,7 @@ Duração: ${duration}`;
         lastMessageAt: new Date(),
         lastMessageContent: content,
         lastMessageSender: sender,
+        lastMessageStatus: status,
         updatedAt: new Date(),
       })
       .where(and(eq(chat.id, id), eq(chat.createdAt, createdAt)));
@@ -513,6 +516,7 @@ Duração: ${duration}`;
       updated.createdAt,
       "Sessão transferida",
       "system",
+      "sent",
     );
 
     // 8. Publicar evento
@@ -560,6 +564,7 @@ Duração: ${duration}`;
       updated.createdAt,
       "Sessão transferida",
       "system",
+      "sent",
     );
 
     // Publicar evento

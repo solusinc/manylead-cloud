@@ -132,6 +132,7 @@ export class CrossOrgMirrorService {
           lastMessageAt: now,
           lastMessageContent: messageContent.replace(/^\*\*.*?\*\*\n/, ""), // Remove signature
           lastMessageSender: "agent",
+          lastMessageStatus: "sent",
           totalMessages: 0,
           unreadCount: 0,
         })
@@ -161,9 +162,10 @@ export class CrossOrgMirrorService {
           ...metadata,
           originalMessageId: messageId,
         },
-        status: "sent",
+        status: "delivered",
         timestamp: messageTimestamp,
         sentAt: messageTimestamp,
+        deliveredAt: messageTimestamp,
       })
       .returning();
 
@@ -171,7 +173,7 @@ export class CrossOrgMirrorService {
     await this.updateMirroredChatAfterMessage(
       targetTenantDb,
       mirroredChat,
-      messageContent.replace(/^\*\*.*?\*\*\n/, ""), // Remove signature
+      messageContent,
       messageTimestamp,
     );
 
@@ -269,9 +271,10 @@ export class CrossOrgMirrorService {
           ...metadata,
           originalMessageId: messageId,
         },
-        status: "sent",
+        status: "delivered",
         timestamp: messageTimestamp,
         sentAt: messageTimestamp,
+        deliveredAt: messageTimestamp,
       })
       .returning();
 
@@ -358,6 +361,24 @@ export class CrossOrgMirrorService {
         ),
       )
       .returning();
+
+    // Verificar se alguma mensagem atualizada é a última do chat
+    if (updatedMessages.length > 0 && targetChat.lastMessageAt) {
+      const lastMessageTimestamp = targetChat.lastMessageAt.getTime();
+      const hasLastMessage = updatedMessages.some(
+        (msg) => msg.timestamp.getTime() === lastMessageTimestamp,
+      );
+
+      if (hasLastMessage) {
+        // Atualizar lastMessageStatus no chat
+        await targetTenantDb
+          .update(chat)
+          .set({
+            lastMessageStatus: "read",
+          })
+          .where(eq(chat.id, targetChat.id));
+      }
+    }
 
     // Emitir eventos message:updated para cada mensagem
     for (const msg of updatedMessages) {
@@ -656,6 +677,7 @@ export class CrossOrgMirrorService {
           lastMessageAt: timestamp,
           lastMessageContent: messageContent,
           lastMessageSender: "agent",
+          lastMessageStatus: "delivered",
           totalMessages: sql`${chat.totalMessages} + 1`,
           updatedAt: timestamp,
         })
@@ -699,6 +721,7 @@ export class CrossOrgMirrorService {
           lastMessageAt: timestamp,
           lastMessageContent: messageContent,
           lastMessageSender: "agent",
+          lastMessageStatus: "delivered",
           totalMessages: sql`${chat.totalMessages} + 1`,
           unreadCount: sql`${chat.unreadCount} + 1`,
           updatedAt: timestamp,

@@ -84,26 +84,28 @@ export class MessageService {
       chatRecord,
       input.content,
       now,
-    );
-
-    // Emitir evento local
-    await this.eventPublisher.messageCreated(
-      organizationId,
-      chatRecord.id,
-      newMessage,
-      { senderId: input.agentId },
+      "sent",
     );
 
     // Espelhamento cross-org (se aplicável)
+    // Fazer ANTES de emitir evento para evitar flickering de status
     if (this.crossOrgMirror.shouldMirror(chatRecord)) {
       await this.handleCrossOrgMirroring(
         organizationId,
         tenantDb,
-        chatRecord,
+        updatedChat, // Usar updatedChat ao invés de chatRecord
         newMessage.id,
         newMessage.timestamp,
         formattedContent,
         input.metadata,
+      );
+    } else {
+      // Se NÃO é cross-org, emitir evento normalmente
+      await this.eventPublisher.messageCreated(
+        organizationId,
+        chatRecord.id,
+        newMessage,
+        { senderId: input.agentId },
       );
     }
 
@@ -346,6 +348,24 @@ export class MessageService {
       )
       .returning();
 
+    // Verificar se alguma mensagem atualizada é a última do chat
+    if (updatedMessages.length > 0 && chatRecord.lastMessageAt) {
+      const lastMessageTimestamp = chatRecord.lastMessageAt.getTime();
+      const hasLastMessage = updatedMessages.some(
+        (msg) => msg.timestamp.getTime() === lastMessageTimestamp,
+      );
+
+      if (hasLastMessage) {
+        // Atualizar lastMessageStatus no chat atual
+        await tenantDb
+          .update(chat)
+          .set({
+            lastMessageStatus: "read",
+          })
+          .where(eq(chat.id, chatId));
+      }
+    }
+
     // Emitir eventos para cada mensagem atualizada
     for (const msg of updatedMessages) {
       await this.eventPublisher.messageUpdated(organizationId, chatId, msg);
@@ -371,6 +391,7 @@ export class MessageService {
     chatRecord: Chat,
     messageContent: string,
     timestamp: Date,
+    messageStatus?: "pending" | "sent" | "delivered" | "read" | "failed",
   ): Promise<Chat> {
     const [updatedChat] = await tenantDb
       .update(chat)
@@ -378,6 +399,7 @@ export class MessageService {
         lastMessageAt: timestamp,
         lastMessageContent: messageContent,
         lastMessageSender: "agent",
+        lastMessageStatus: messageStatus ?? "sent",
         totalMessages: sql`${chat.totalMessages} + 1`,
         updatedAt: timestamp,
       })
@@ -412,6 +434,9 @@ export class MessageService {
 
     const isFirstTextMessage = Number(textMessagesCount[0]?.count ?? 0) === 1;
 
+    // Remover assinatura do agente antes de espelhar
+    const contentWithoutSignature = messageContent.replace(/^\*\*.*?\*\*\n/, "");
+
     if (isFirstTextMessage) {
       // Primeira mensagem: criar contact e chat na org target
       await this.crossOrgMirror.mirrorFirstMessage(
@@ -420,7 +445,7 @@ export class MessageService {
         chatRecord,
         messageId,
         messageTimestamp,
-        messageContent,
+        contentWithoutSignature,
         metadata,
       );
     } else {
@@ -431,8 +456,44 @@ export class MessageService {
         chatRecord,
         messageId,
         messageTimestamp,
-        messageContent,
+        contentWithoutSignature,
         metadata,
+      );
+    }
+
+    // Após espelhar, atualizar mensagem original para "delivered"
+    const now = new Date();
+    const [updatedMessage] = await tenantDb
+      .update(message)
+      .set({
+        status: "delivered",
+        deliveredAt: now,
+      })
+      .where(
+        and(
+          eq(message.id, messageId),
+          eq(message.timestamp, messageTimestamp),
+        ),
+      )
+      .returning();
+
+    // Atualizar lastMessageStatus do chat se essa for a última mensagem
+    if (updatedMessage && chatRecord.lastMessageAt?.getTime() === messageTimestamp.getTime()) {
+      await tenantDb
+        .update(chat)
+        .set({
+          lastMessageStatus: "delivered",
+        })
+        .where(eq(chat.id, chatRecord.id));
+    }
+
+    // Emitir evento messageCreated com status já atualizado (delivered)
+    // Isso evita flickering de sent -> delivered
+    if (updatedMessage) {
+      await this.eventPublisher.messageCreated(
+        organizationId,
+        chatRecord.id,
+        updatedMessage,
       );
     }
   }
