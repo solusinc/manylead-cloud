@@ -10,7 +10,6 @@ export const QUICK_REPLY_CONTENT_TYPES = [
   "image",
   "audio",
   "document",
-  "location",
 ] as const;
 
 export type QuickReplyContentType = (typeof QUICK_REPLY_CONTENT_TYPES)[number];
@@ -47,10 +46,9 @@ export const QUICK_REPLY_VISIBILITY_LABELS: Record<QuickReplyVisibility, string>
  */
 export const QUICK_REPLY_CONTENT_TYPE_LABELS: Record<QuickReplyContentType, string> = {
   text: "Texto",
-  image: "Imagem",
+  image: "Mídia (Imagem/Vídeo)",
   audio: "Áudio",
   document: "Documento",
-  location: "Localização",
 };
 
 /**
@@ -64,10 +62,4 @@ export interface QuickReplyMessage {
   mediaUrl?: string | null;
   mediaName?: string | null;
   mediaMimeType?: string | null;
-
-  // Campos para localização
-  latitude?: number | null;
-  longitude?: number | null;
-  locationName?: string | null; // Nome do local (ex: "Escritório XYZ")
-  locationAddress?: string | null; // Endereço completo
 }

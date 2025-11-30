@@ -1,127 +1,84 @@
 "use client";
 
-import { useQueryClient } from "@tanstack/react-query";
-import { v7 as uuidv7 } from "uuid";
+import { useQueryClient, useMutation, useQuery } from "@tanstack/react-query";
 
 import type { QuickReplySelection } from "../quick-reply-dropdown";
-import { useMessageDeduplication } from "~/hooks/use-message-deduplication";
 import { useServerSession } from "~/components/providers/session-provider";
-import { useSendMessage } from "./use-send-message";
+import { useTRPC } from "~/lib/trpc/react";
+import { useChatReply } from "../../providers/chat-reply-provider";
+import { useNotificationSound } from "~/hooks/use-notification-sound";
 
 /**
- * Handles quick reply selection and sending multiple messages in sequence
- * Extracted from chat-input.tsx (lines 472-586)
+ * Handles quick reply selection and sending via backend
  */
 export function useQuickReplySelect(chatId: string) {
   const queryClient = useQueryClient();
-  const { register } = useMessageDeduplication();
   const session = useServerSession();
-  const { sendMessage } = useSendMessage(chatId);
+  const trpc = useTRPC();
+  const { contactName } = useChatReply();
+  const { playNotificationSound } = useNotificationSound();
+
+  // Buscar organização atual
+  const { data: currentOrganization } = useQuery(
+    trpc.organization.getCurrent.queryOptions(),
+  );
+
+  const sendQuickReplyMutation = useMutation(
+    trpc.quickReplies.send.mutationOptions(),
+  );
 
   /**
    * Handle quick reply selection
-   * - Single message: Returns content to be placed in input
-   * - Multiple messages: Sends all messages in sequence
+   * - Single text message without media: Returns content to be placed in input
+   * - Multiple messages or with media: Sends via backend
    */
   const handleQuickReplySelect = async (selection: QuickReplySelection): Promise<string | null> => {
-    // Filtrar apenas mensagens de texto (por enquanto)
-    const textMessages = selection.messages.filter((m) => m.type === "text");
+    const { messages } = selection;
 
-    if (textMessages.length === 0) {
+    if (messages.length === 0) {
       return null;
     }
 
-    // Se tem apenas uma mensagem, retornar conteúdo para o input
-    if (textMessages.length === 1) {
-      const firstMessage = textMessages[0];
-      return firstMessage?.content ?? null;
+    // Se tem apenas uma mensagem de texto SEM mídia, retornar para o input
+    const firstMessage = messages[0];
+    if (
+      messages.length === 1 &&
+      firstMessage?.type === "text" &&
+      !firstMessage.mediaUrl
+    ) {
+      // Processar variáveis localmente para preview
+      const content = firstMessage.content
+        .replace(/\{\{contact\.name\}\}/g, contactName)
+        .replace(/\{\{agent\.name\}\}/g, session.user.name)
+        .replace(/\{\{organization\.name\}\}/g, currentOrganization?.name ?? "");
+
+      return content;
     }
 
-    // Múltiplas mensagens: enviar em sequência
-    for (const message of textMessages) {
-      const tempId = uuidv7();
-      const userName = session.user.name;
-      const formattedContent = `**${userName}**\n${message.content}`;
-
-      // Optimistic update
-      const tempMessage = {
-        id: tempId,
+    // Múltiplas mensagens OU com mídia: enviar via backend
+    try {
+      await sendQuickReplyMutation.mutateAsync({
+        quickReplyId: selection.id,
         chatId,
-        content: formattedContent,
-        timestamp: new Date(),
-        status: "pending" as const,
-        sender: "agent" as const,
-        senderId: null as string | null,
-        messageType: "text" as const,
-        isOwnMessage: true,
-        _isOptimistic: true,
-      };
-
-      const queries = queryClient.getQueryCache().findAll({
-        queryKey: [["messages", "list"]],
-        exact: false,
+        variables: {
+          contactName,
+          agentName: session.user.name,
+          organizationName: currentOrganization?.name ?? "",
+        },
       });
 
-      queries.forEach((query) => {
-        const queryState = query.state.data as {
-          pages: {
-            items: {
-              message: Record<string, unknown>;
-              attachment: Record<string, unknown> | null;
-              isOwnMessage: boolean;
-            }[];
-            nextCursor: string | undefined;
-            hasMore: boolean;
-          }[];
-          pageParams: unknown[];
-        } | undefined;
+      // Tocar som de notificação
+      playNotificationSound();
 
-        if (!queryState?.pages) return;
+      // Invalidate queries para atualizar lista de chats
+      void queryClient.invalidateQueries({ queryKey: [["chats", "list"]] });
 
-        const newPages = [...queryState.pages];
-        const firstPage = newPages[0];
-
-        if (firstPage) {
-          newPages[0] = {
-            ...firstPage,
-            items: [
-              ...firstPage.items,
-              {
-                message: tempMessage as unknown as Record<string, unknown>,
-                attachment: null,
-                isOwnMessage: true,
-              },
-            ],
-          };
-
-          queryClient.setQueryData(query.queryKey, {
-            ...queryState,
-            pages: newPages,
-            pageParams: queryState.pageParams,
-          });
-        }
-      });
-
-      register(tempId);
-
-      try {
-        await sendMessage({
-          chatId,
-          content: message.content,
-        });
-      } catch (error) {
-        console.error("Failed to send quick reply message:", error);
-      }
-
-      // Pequeno delay entre mensagens para não sobrecarregar
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      // Return null para limpar o input
+      return null;
+    } catch (error) {
+      console.error("Failed to send quick reply:", error);
+      throw error;
     }
-
-    // Invalidate chats list after sending multiple messages
-    void queryClient.invalidateQueries({ queryKey: [["chats", "list"]] });
-
-    // Return null to clear input (multiple messages were sent)
-    return null;
   };
 
   return {

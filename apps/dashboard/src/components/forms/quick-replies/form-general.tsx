@@ -1,6 +1,7 @@
 "use client";
 
 import { useTransition, useState, useRef, useCallback } from "react";
+import Image from "next/image";
 import { useForm } from "@tanstack/react-form";
 import { isTRPCClientError } from "@trpc/client";
 import { toast } from "sonner";
@@ -9,12 +10,13 @@ import {
   ChevronDown,
   ChevronUp,
   FileText,
-  Image,
-  MapPin,
+  Image as ImageIcon,
   MessageSquare,
   Mic,
   Plus,
   Trash2,
+  Upload,
+  X,
 } from "lucide-react";
 
 import {
@@ -47,18 +49,31 @@ import {
   QUICK_REPLY_CONTENT_TYPES,
   QUICK_REPLY_CONTENT_TYPE_LABELS,
 } from "@manylead/db/schema";
+import { useMutation } from "@tanstack/react-query";
+
+import { useUploadQuickReplyMedia } from "./hooks/use-upload-quick-reply-media";
+import { useTRPC } from "~/lib/trpc/react";
 
 const messageSchema = z.object({
   type: z.enum(QUICK_REPLY_CONTENT_TYPES),
-  content: z.string().min(1, "Conteúdo é obrigatório"),
-  mediaUrl: z.string().url().optional().nullable(),
+  content: z.string(),
+  mediaUrl: z.string().optional().nullable(),
   mediaName: z.string().optional().nullable(),
   mediaMimeType: z.string().optional().nullable(),
-  latitude: z.number().optional().nullable(),
-  longitude: z.number().optional().nullable(),
-  locationName: z.string().optional().nullable(),
-  locationAddress: z.string().optional().nullable(),
-});
+}).refine(
+  (data) => {
+    // Para texto, content é obrigatório
+    if (data.type === "text") {
+      return data.content.trim().length > 0;
+    }
+    // Para mídia, ou tem content ou tem mediaUrl
+    return data.content.trim().length > 0 || data.mediaUrl;
+  },
+  {
+    message: "Adicione um conteúdo ou selecione um arquivo",
+    path: ["content"],
+  }
+);
 
 const schema = z.object({
   shortcut: z
@@ -81,10 +96,9 @@ type FormValues = z.infer<typeof schema>;
 
 const CONTENT_TYPE_ICONS: Record<QuickReplyContentType, React.ElementType> = {
   text: MessageSquare,
-  image: Image,
+  image: ImageIcon,
   audio: Mic,
   document: FileText,
-  location: MapPin,
 };
 
 function MessageItem({
@@ -110,6 +124,52 @@ function MessageItem({
 }) {
   const Icon = CONTENT_TYPE_ICONS[message.type];
   const typeLabel = QUICK_REPLY_CONTENT_TYPE_LABELS[message.type];
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const trpc = useTRPC();
+
+  // Mutation para deletar mídia do R2
+  const deleteMediaMutation = useMutation(
+    trpc.quickReplies.deleteMedia.mutationOptions(),
+  );
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // TODO: Upload to storage and get URL
+    // Por enquanto, vamos criar uma URL temporária
+    const reader = new FileReader();
+    reader.onload = () => {
+      onUpdate({
+        ...message,
+        mediaUrl: reader.result as string,
+        mediaName: file.name,
+        mediaMimeType: file.type,
+      });
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleRemoveFile = () => {
+    // Opção 1: Deletar do R2 ao remover do form
+    if (message.mediaUrl?.startsWith("http")) {
+      // Deletar do R2 em background (não esperar)
+      deleteMediaMutation.mutate({ publicUrl: message.mediaUrl });
+    }
+
+    // Remover do form
+    onUpdate({
+      ...message,
+      mediaUrl: null,
+      mediaName: null,
+      mediaMimeType: null,
+    });
+  };
+
+  const isImage = message.type === "image";
+  const isDocument = message.type === "document";
+  const isAudio = message.type === "audio";
+  const hasMedia = isImage || isDocument || isAudio;
 
   return (
     <div className="relative rounded-lg border bg-muted/30 p-4">
@@ -156,15 +216,86 @@ function MessageItem({
         </div>
       </div>
 
-      {/* Content - apenas texto por enquanto */}
-      <Textarea
-        ref={onTextareaRef}
-        value={message.content}
-        onChange={(e) => onUpdate({ ...message, content: e.target.value })}
-        onFocus={onFocus}
-        placeholder="Olá {{contact.name}}, como posso ajudar?"
-        rows={3}
-      />
+      {/* Content area */}
+      <div className="space-y-3">
+        {/* File upload for media types */}
+        {hasMedia && (
+          <div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              className="hidden"
+              accept={
+                isImage
+                  ? "image/*"
+                  : isAudio
+                    ? "audio/*"
+                    : ".pdf,.doc,.docx,.xls,.xlsx,.txt"
+              }
+              onChange={handleFileChange}
+            />
+            {message.mediaUrl ? (
+              <div className="relative rounded-lg border bg-background p-3">
+                <div className="flex items-start gap-3">
+                  {isImage && (
+                    <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded">
+                      <Image
+                        src={message.mediaUrl}
+                        alt={message.mediaName ?? "Preview"}
+                        fill
+                        className="object-cover"
+                      />
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">
+                      {message.mediaName ?? "Arquivo"}
+                    </p>
+                    {message.mediaMimeType && (
+                      <p className="text-xs text-muted-foreground">
+                        {message.mediaMimeType}
+                      </p>
+                    )}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 shrink-0"
+                    onClick={handleRemoveFile}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-1/2"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Upload className="mr-2 h-4 w-4" />
+                Selecionar {isImage ? "imagem" : isAudio ? "áudio" : "documento"}
+              </Button>
+            )}
+          </div>
+        )}
+
+        {/* Caption/content textarea */}
+        <Textarea
+          ref={onTextareaRef}
+          value={message.content}
+          onChange={(e) => onUpdate({ ...message, content: e.target.value })}
+          onFocus={onFocus}
+          placeholder={
+            hasMedia
+              ? "Legenda (opcional)"
+              : "Olá {{contact.name}}, como posso ajudar?"
+          }
+          rows={hasMedia ? 2 : 3}
+        />
+      </div>
     </div>
   );
 }
@@ -186,6 +317,7 @@ export function FormGeneral({
   const [newMessageType, setNewMessageType] = useState<QuickReplyContentType>("text");
   const [lastFocusedMessageIndex, setLastFocusedMessageIndex] = useState<number | null>(null);
   const textareaRefs = useRef<Map<number, HTMLTextAreaElement>>(new Map());
+  const { uploadMessages, isUploading, progress } = useUploadQuickReplyMedia();
 
   const form = useForm({
     defaultValues: {
@@ -195,7 +327,7 @@ export function FormGeneral({
       visibility: defaultValues?.visibility ?? "organization",
     },
     onSubmit: ({ value }) => {
-      if (isPending) return;
+      if (isPending || isUploading) return;
 
       // Validar mensagens
       if (value.messages.length === 0) {
@@ -205,10 +337,26 @@ export function FormGeneral({
 
       startTransition(async () => {
         try {
+          // 1. Fazer upload de todas as mídias primeiro
+          let uploadedMessages = value.messages;
+          try {
+            uploadedMessages = await uploadMessages(value.messages);
+          } catch (error) {
+            if (error instanceof Error) {
+              toast.error(error.message);
+            } else {
+              toast.error("Erro ao fazer upload das mídias");
+            }
+            return; // Não submeter o form se upload falhar
+          }
+
+          // 2. Submeter com as URLs do R2
           const submitValues = {
             ...value,
+            messages: uploadedMessages,
             shortcut: `/${value.shortcut}`,
           };
+
           const promise = onSubmitAction(submitValues);
           toast.promise(promise, {
             loading: "Salvando...",
@@ -235,10 +383,6 @@ export function FormGeneral({
       mediaUrl: null,
       mediaName: null,
       mediaMimeType: null,
-      latitude: null,
-      longitude: null,
-      locationName: null,
-      locationAddress: null,
     };
     form.setFieldValue("messages", [...form.getFieldValue("messages"), newMessage]);
   };
@@ -278,10 +422,6 @@ export function FormGeneral({
         mediaUrl: null,
         mediaName: null,
         mediaMimeType: null,
-        latitude: null,
-        longitude: null,
-        locationName: null,
-        locationAddress: null,
       };
       form.setFieldValue("messages", [newMessage]);
       setLastFocusedMessageIndex(0);
@@ -528,13 +668,11 @@ export function FormGeneral({
                   <SelectContent>
                     {QUICK_REPLY_CONTENT_TYPES.map((type) => {
                       const Icon = CONTENT_TYPE_ICONS[type];
-                      const isDisabled = type !== "text";
                       return (
-                        <SelectItem key={type} value={type} disabled={isDisabled}>
+                        <SelectItem key={type} value={type}>
                           <div className="flex items-center gap-2">
                             <Icon className="h-4 w-4" />
                             {QUICK_REPLY_CONTENT_TYPE_LABELS[type]}
-                            {isDisabled && <span className="text-xs text-muted-foreground">(em breve)</span>}
                           </div>
                         </SelectItem>
                       );
@@ -550,8 +688,18 @@ export function FormGeneral({
           </div>
         </FormCardContent>
         <FormCardFooter>
-          <Button type="submit" size="sm" disabled={isPending}>
-            {isPending ? "Salvando..." : "Salvar"}
+          {isUploading && progress.total > 0 && (
+            <div className="flex-1 text-sm text-muted-foreground">
+              Fazendo upload: {progress.completed + progress.failed}/{progress.total}
+              {progress.current && <span className="ml-2">({progress.current})</span>}
+            </div>
+          )}
+          <Button type="submit" size="sm" disabled={isPending || isUploading}>
+            {isUploading
+              ? `Uploading... ${progress.completed}/${progress.total}`
+              : isPending
+                ? "Salvando..."
+                : "Salvar"}
           </Button>
         </FormCardFooter>
       </FormCard>

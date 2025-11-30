@@ -9,19 +9,26 @@ import { QUICK_REPLY_CONTENT_TYPES, QUICK_REPLY_VISIBILITY } from "./constants";
  */
 export const quickReplyMessageSchema = z.object({
   type: z.enum(QUICK_REPLY_CONTENT_TYPES),
-  content: z.string().min(1, "Conteúdo é obrigatório"),
+  content: z.string(),
 
   // Campos para mídia (image, audio, document)
   mediaUrl: z.string().url("URL inválida").optional().nullable(),
   mediaName: z.string().max(255).optional().nullable(),
   mediaMimeType: z.string().max(100).optional().nullable(),
-
-  // Campos para localização
-  latitude: z.number().min(-90).max(90).optional().nullable(),
-  longitude: z.number().min(-180).max(180).optional().nullable(),
-  locationName: z.string().max(255).optional().nullable(),
-  locationAddress: z.string().max(500).optional().nullable(),
-});
+}).refine(
+  (data) => {
+    // Para texto, content é obrigatório
+    if (data.type === "text") {
+      return data.content.trim().length > 0;
+    }
+    // Para mídia, ou tem content ou tem mediaUrl
+    return data.content.trim().length > 0 || (data.mediaUrl && data.mediaUrl.length > 0);
+  },
+  {
+    message: "Adicione um conteúdo ou selecione um arquivo",
+    path: ["content"],
+  }
+);
 
 /**
  * QuickReply Schemas

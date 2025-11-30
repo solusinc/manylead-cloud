@@ -6,6 +6,7 @@ import type { ChannelSyncJobData } from "~/workers/channel-sync";
 import type { MediaDownloadJobData } from "~/workers/media-download";
 import type { AttachmentCleanupJobData } from "~/workers/attachment-cleanup";
 import type { AttachmentOrphanCleanupJobData } from "~/workers/attachment-orphan-cleanup";
+import type { QuickReplyOrphanCleanupJobData } from "~/workers/quick-reply-orphan-cleanup";
 import type { CrossOrgLogoSyncJobData } from "~/workers/cross-org-logo-sync";
 import { env } from "~/env";
 import { getRedisClient } from "~/libs/cache/redis";
@@ -14,6 +15,7 @@ import { processChannelSync } from "~/workers/channel-sync";
 import { processMediaDownload } from "~/workers/media-download";
 import { processAttachmentCleanup } from "~/workers/attachment-cleanup";
 import { processAttachmentOrphanCleanup } from "~/workers/attachment-orphan-cleanup";
+import { processQuickReplyOrphanCleanup } from "~/workers/quick-reply-orphan-cleanup";
 import { processCrossOrgLogoSync } from "~/workers/cross-org-logo-sync";
 
 const logger = createLogger("Worker:Queue");
@@ -207,6 +209,28 @@ export function createWorkers(): Worker[] {
   workers.push(attachmentOrphanCleanupWorker);
 
   /**
+   * Quick Reply Orphan Cleanup Worker (Cron)
+   * Limpa arquivos órfãos de quick replies no R2:
+   * - Deleta arquivos do R2 sem registro no DB (messages JSONB)
+   */
+  logger.info("Creating worker for queue: quick-reply-orphan-cleanup");
+
+  const quickReplyOrphanCleanupWorker = createWorker<QuickReplyOrphanCleanupJobData>({
+    name: "quick-reply-orphan-cleanup",
+    processor: processQuickReplyOrphanCleanup,
+    connection,
+    concurrency: 1, // Process one organization at a time
+    logger,
+  });
+
+  attachEventListeners(quickReplyOrphanCleanupWorker, {
+    queueName: "quick-reply-orphan-cleanup",
+  });
+
+  logger.info("Worker created for queue: quick-reply-orphan-cleanup");
+  workers.push(quickReplyOrphanCleanupWorker);
+
+  /**
    * Cross-Org Logo Sync Worker
    * Sincroniza logos cross-org quando uma organização atualiza seu logo
    */
@@ -262,6 +286,10 @@ export function createQueuesForMonitoring(): { name: string; queue: Queue }[] {
     {
       name: "attachment-orphan-cleanup",
       queue: createQueue({ name: "attachment-orphan-cleanup", connection }),
+    },
+    {
+      name: "quick-reply-orphan-cleanup",
+      queue: createQueue({ name: "quick-reply-orphan-cleanup", connection }),
     },
     {
       name: "cross-org-logo-sync",

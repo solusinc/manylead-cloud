@@ -11,6 +11,7 @@ const logger = createLogger("Worker:Scheduler");
  * Jobs configurados:
  * - attachment-cleanup: Diário às 3h (marca registros como expired)
  * - attachment-orphan-cleanup: Semanal aos domingos às 4h (deleta órfãos)
+ * - quick-reply-orphan-cleanup: Semanal aos sábados às 4h (deleta órfãos de quick replies)
  */
 export async function setupCronJobs() {
   const connection = getRedisClient();
@@ -85,6 +86,40 @@ export async function setupCronJobs() {
       `Cron job configured: attachment-orphan-cleanup (${isTestMode ? `every 30s (TEST MODE${dryRun ? " - DRY RUN" : ""})` : "weekly sundays at 4am"})`
     );
 
+    // 3. Quick Reply Orphan Cleanup
+    const quickReplyOrphanQueue = createQueue({
+      name: "quick-reply-orphan-cleanup",
+      connection,
+    });
+
+    // Remove existing repeatable jobs to prevent duplicates
+    const existingQuickReplyOrphanJobs = await quickReplyOrphanQueue.getRepeatableJobs();
+    for (const job of existingQuickReplyOrphanJobs) {
+      await quickReplyOrphanQueue.removeRepeatableByKey(job.key);
+      logger.info(
+        { jobKey: job.key, jobName: job.name },
+        "Removed existing repeatable job before creating new one"
+      );
+    }
+
+    await quickReplyOrphanQueue.add(
+      "weekly-quick-reply-orphan-cleanup",
+      {
+        organizationId: "system",
+        dryRun, // Control via ENABLE_DRY_RUN env var
+      },
+      {
+        repeat: {
+          pattern: isTestMode ? "*/30 * * * * *" : "0 4 * * 6", // Test: 30s | Prod: Saturday 4am
+        },
+        jobId: "quick-reply-orphan-cleanup-weekly",
+      }
+    );
+
+    logger.info(
+      `Cron job configured: quick-reply-orphan-cleanup (${isTestMode ? `every 30s (TEST MODE${dryRun ? " - DRY RUN" : ""})` : "weekly saturdays at 4am"})`
+    );
+
     if (isTestMode) {
       logger.warn(`⚠️  TEST MODE ENABLED - Cron jobs running every 30 seconds${dryRun ? " with dry-run" : ""}`);
     }
@@ -119,12 +154,21 @@ export async function removeCronJobs() {
       connection,
     });
 
+    const quickReplyOrphanQueue = createQueue({
+      name: "quick-reply-orphan-cleanup",
+      connection,
+    });
+
     await cleanupQueue.removeRepeatable("daily-cleanup", {
       pattern: "0 3 * * *",
     });
 
     await orphanQueue.removeRepeatable("weekly-orphan-cleanup", {
       pattern: "0 4 * * 0",
+    });
+
+    await quickReplyOrphanQueue.removeRepeatable("weekly-quick-reply-orphan-cleanup", {
+      pattern: "0 4 * * 6",
     });
 
     logger.info("Cron jobs removed successfully");

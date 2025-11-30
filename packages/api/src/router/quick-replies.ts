@@ -2,7 +2,9 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import {
+  agent,
   and,
+  db,
   desc,
   eq,
   ilike,
@@ -14,6 +16,7 @@ import {
   updateQuickReplySchema,
 } from "@manylead/db";
 import type { QuickReplyMessage } from "@manylead/db";
+import { extractKeyFromUrl, storage } from "@manylead/storage";
 
 /**
  * Extrai o conteúdo de preview da primeira mensagem de texto
@@ -22,6 +25,11 @@ function getContentPreview(messages: QuickReplyMessage[]): string {
   const firstTextMessage = messages.find((m) => m.type === "text");
   return firstTextMessage?.content ?? "";
 }
+
+import { createQueue } from "@manylead/clients/queue";
+import { getRedisClient } from "@manylead/clients/redis";
+import { env } from "../env";
+import { getMessageService } from "../services";
 
 import { createTRPCRouter, memberProcedure, ownerProcedure, tenantManager } from "../trpc";
 
@@ -264,6 +272,34 @@ export const quickRepliesRouter = createTRPCRouter({
         }
       }
 
+      // Opção 2: Deletar mídias removidas do R2 ao salvar
+      if (input.data.messages) {
+        const oldMediaUrls = new Set(
+          existing.messages
+            .map((m) => m.mediaUrl)
+            .filter((url): url is string => !!url && url.startsWith("http"))
+        );
+
+        const newMediaUrls = new Set(
+          input.data.messages
+            .map((m) => m.mediaUrl)
+            .filter((url): url is string => !!url && url.startsWith("http"))
+        );
+
+        // URLs que foram removidas
+        const removedUrls = [...oldMediaUrls].filter((url) => !newMediaUrls.has(url));
+
+        // Deletar do R2 em background
+        for (const url of removedUrls) {
+          const key = extractKeyFromUrl(url);
+          if (key) {
+            storage.delete(key).catch((error) => {
+              console.error("Erro ao deletar mídia do R2:", error);
+            });
+          }
+        }
+      }
+
       // Gerar content automaticamente se messages foi atualizado
       const updateData = {
         ...input.data,
@@ -323,6 +359,20 @@ export const quickRepliesRouter = createTRPCRouter({
           code: "FORBIDDEN",
           message: "Você não tem permissão para deletar esta resposta rápida",
         });
+      }
+
+      // Deletar todas as mídias do R2 antes de deletar a quick reply
+      const mediaUrls = existing.messages
+        .map((m) => m.mediaUrl)
+        .filter((url): url is string => !!url && url.startsWith("http"));
+
+      for (const url of mediaUrls) {
+        const key = extractKeyFromUrl(url);
+        if (key) {
+          storage.delete(key).catch((error) => {
+            console.error("Erro ao deletar mídia do R2:", error);
+          });
+        }
       }
 
       await tenantDb.delete(quickReply).where(eq(quickReply.id, input.id));
@@ -388,6 +438,59 @@ export const quickRepliesRouter = createTRPCRouter({
     }),
 
   /**
+   * Deletar mídia de quick reply do R2
+   * Usado quando o usuário remove uma mídia do form ou ao salvar
+   */
+  deleteMedia: memberProcedure
+    .input(
+      z.object({
+        publicUrl: z.string().url(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const organizationId = ctx.session.session.activeOrganizationId;
+
+      if (!organizationId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Nenhuma organização ativa",
+        });
+      }
+
+      try {
+        // Extrair key da URL pública
+        const key = extractKeyFromUrl(input.publicUrl);
+
+        if (!key) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "URL inválida",
+          });
+        }
+
+        // Verificar se o path pertence à organização
+        if (!key.startsWith(`${organizationId}/`)) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Você não tem permissão para deletar este arquivo",
+          });
+        }
+
+        // Deletar do R2
+        await storage.delete(key);
+
+        return { success: true };
+      } catch (error) {
+        if (error instanceof TRPCError) throw error;
+
+        console.error("Erro ao deletar mídia do R2:", error);
+
+        // Não falhar se arquivo não existir
+        return { success: true };
+      }
+    }),
+
+  /**
    * Search quick replies by shortcut (for autocomplete in chat input)
    */
   search: memberProcedure
@@ -435,5 +538,194 @@ export const quickRepliesRouter = createTRPCRouter({
         .limit(input.limit);
 
       return quickReplies.map((qr) => selectQuickReplySchema.parse(qr));
+    }),
+
+  /**
+   * Send quick reply messages
+   * Processa e envia todas as mensagens de uma quick reply (texto + mídia)
+   */
+  send: memberProcedure
+    .input(
+      z.object({
+        quickReplyId: z.string().uuid(),
+        chatId: z.string().uuid(),
+        variables: z.object({
+          contactName: z.string(),
+          agentName: z.string(),
+          organizationName: z.string(),
+        }),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const organizationId = ctx.session.session.activeOrganizationId;
+      const userId = ctx.session.user.id;
+
+      if (!organizationId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Nenhuma organização ativa",
+        });
+      }
+
+      const tenantDb = await tenantManager.getConnection(organizationId);
+
+      // Buscar quick reply
+      const [quickReplyData] = await tenantDb
+        .select()
+        .from(quickReply)
+        .where(
+          and(
+            eq(quickReply.id, input.quickReplyId),
+            eq(quickReply.organizationId, organizationId),
+            eq(quickReply.isActive, true),
+            or(
+              eq(quickReply.visibility, "organization"),
+              and(eq(quickReply.visibility, "private"), eq(quickReply.createdBy, userId)),
+            ),
+          ),
+        )
+        .limit(1);
+
+      if (!quickReplyData) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Resposta rápida não encontrada",
+        });
+      }
+
+      // Buscar agent do usuário
+      const [currentAgent] = await tenantDb
+        .select()
+        .from(agent)
+        .where(eq(agent.userId, userId))
+        .limit(1);
+
+      if (!currentAgent) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Agent não encontrado",
+        });
+      }
+
+      const messages = quickReplyData.messages;
+
+      // Processar variáveis em cada mensagem
+      const processedMessages = messages.map((msg) => ({
+        ...msg,
+        content: msg.content
+          .replace(/\{\{contact\.name\}\}/g, input.variables.contactName)
+          .replace(/\{\{agent\.name\}\}/g, input.variables.agentName)
+          .replace(/\{\{organization\.name\}\}/g, input.variables.organizationName),
+      }));
+
+      // Inicializar MessageService
+      const messageService = getMessageService({
+        redisUrl: env.REDIS_URL,
+        getTenantConnection: tenantManager.getConnection.bind(tenantManager),
+        getCatalogDb: () => db,
+      });
+
+      const messageContext = {
+        organizationId,
+        tenantDb,
+        agentId: currentAgent.id,
+        agentName: input.variables.agentName,
+      };
+
+      // Enviar cada mensagem
+      for (const message of processedMessages) {
+        if (message.mediaUrl?.startsWith("http")) {
+          // Mensagem com mídia
+          const storagePath = extractKeyFromUrl(message.mediaUrl);
+
+          if (!storagePath) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message: "URL de mídia inválida",
+            });
+          }
+
+          // Determinar messageType
+          let messageType: "image" | "video" | "audio" | "document" = "document";
+          if (message.mediaMimeType?.startsWith("image/")) messageType = "image";
+          else if (message.mediaMimeType?.startsWith("video/")) messageType = "video";
+          else if (message.mediaMimeType?.startsWith("audio/")) messageType = "audio";
+
+          await messageService.createTextMessage(messageContext, {
+            chatId: input.chatId,
+            content: message.content,
+            messageType,
+            agentId: currentAgent.id,
+            agentName: input.variables.agentName,
+            attachmentData: {
+              fileName: message.mediaName ?? "file",
+              mimeType: message.mediaMimeType ?? "application/octet-stream",
+              mediaType: messageType,
+              storagePath,
+              storageUrl: message.mediaUrl,
+            },
+          });
+        } else {
+          // Mensagem de texto
+          await messageService.createTextMessage(messageContext, {
+            chatId: input.chatId,
+            content: message.content,
+            agentId: currentAgent.id,
+            agentName: input.variables.agentName,
+          });
+        }
+
+        // Delay entre mensagens
+        await new Promise((resolve) => setTimeout(resolve, 150));
+      }
+
+      // Incrementar contador de uso
+      await tenantDb
+        .update(quickReply)
+        .set({
+          usageCount: sql`${quickReply.usageCount} + 1`,
+          lastUsedAt: new Date(),
+        })
+        .where(eq(quickReply.id, input.quickReplyId));
+
+      return { success: true, messageCount: messages.length };
+    }),
+
+  /**
+   * Trigger orphan cleanup job for quick reply media
+   * Enfileira job para limpar arquivos órfãos de quick replies no R2
+   */
+  triggerOrphanCleanup: ownerProcedure
+    .input(
+      z.object({
+        dryRun: z.boolean().default(false),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const organizationId = ctx.session.session.activeOrganizationId;
+      if (!organizationId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Nenhuma organização ativa",
+        });
+      }
+
+      // Enfileirar job no BullMQ
+      const connection = getRedisClient(env.REDIS_URL);
+      const queue = createQueue({
+        name: "quick-reply-orphan-cleanup",
+        connection,
+      });
+
+      const job = await queue.add("quick-reply-orphan-cleanup", {
+        organizationId,
+        dryRun: input.dryRun,
+      });
+
+      return {
+        success: true,
+        jobId: job.id,
+        dryRun: input.dryRun,
+      };
     }),
 });
