@@ -1,6 +1,7 @@
 "use client";
 
 import { Button } from "@manylead/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@manylead/ui/tooltip";
 import { Mic, Pause, Play, Send, Trash2 } from "lucide-react";
 
 interface AudioRecorderControlsProps {
@@ -24,15 +25,22 @@ export function AudioRecorderControls({
 }: AudioRecorderControlsProps) {
   if (state === "recording") {
     return (
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        onClick={onPause}
-        className="h-8 w-8 shrink-0"
-      >
-        <Pause className="h-4 w-4" />
-      </Button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={onPause}
+            className="h-8 w-8 shrink-0"
+          >
+            <Pause className="h-4 w-4" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>Pausar gravação</p>
+        </TooltipContent>
+      </Tooltip>
     );
   }
 
@@ -40,35 +48,56 @@ export function AudioRecorderControls({
   if (state === "previewing") {
     return (
       <div className="flex shrink-0 items-center gap-0.5">
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={onDelete}
-          className="h-8 w-8 shrink-0 text-destructive hover:text-destructive"
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={onDelete}
+              className="h-8 w-8 shrink-0 text-destructive hover:text-destructive"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Descartar áudio</p>
+          </TooltipContent>
+        </Tooltip>
 
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={onPausePreview}
-          className="h-8 w-8 shrink-0"
-        >
-          <Pause className="h-4 w-4" />
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={onPausePreview}
+              className="h-8 w-8 shrink-0"
+            >
+              <Pause className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Pausar preview</p>
+          </TooltipContent>
+        </Tooltip>
 
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={onSend}
-          className="h-8 w-8 shrink-0 text-primary"
-        >
-          <Send className="h-4 w-4" />
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={onSend}
+              className="h-8 w-8 shrink-0 text-primary"
+            >
+              <Send className="h-4 w-4" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Enviar áudio</p>
+          </TooltipContent>
+        </Tooltip>
       </div>
     );
   }
@@ -76,45 +105,73 @@ export function AudioRecorderControls({
   // Paused state
   return (
     <div className="flex shrink-0 items-center gap-0.5">
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        onClick={onDelete}
-        className="h-8 w-8 shrink-0 text-destructive hover:text-destructive"
-      >
-        <Trash2 className="h-4 w-4" />
-      </Button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={onDelete}
+            className="h-8 w-8 shrink-0 text-destructive hover:text-destructive"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>Descartar áudio</p>
+        </TooltipContent>
+      </Tooltip>
 
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        onClick={onRestart}
-        className="h-8 w-8 shrink-0"
-      >
-        <Mic className="h-4 w-4" />
-      </Button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={onRestart}
+            className="h-8 w-8 shrink-0"
+          >
+            <Mic className="h-4 w-4" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>Continuar gravação</p>
+        </TooltipContent>
+      </Tooltip>
 
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        onClick={onPlayPreview}
-        className="h-8 w-8 shrink-0"
-      >
-        <Play className="h-4 w-4" />
-      </Button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={onPlayPreview}
+            className="h-8 w-8 shrink-0"
+          >
+            <Play className="h-4 w-4" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>Ouvir áudio</p>
+        </TooltipContent>
+      </Tooltip>
 
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        onClick={onSend}
-        className="h-8 w-8 shrink-0 text-primary"
-      >
-        <Send className="h-4 w-4" />
-      </Button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={onSend}
+            className="h-8 w-8 shrink-0 text-primary"
+          >
+            <Send className="h-4 w-4" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>Enviar áudio</p>
+        </TooltipContent>
+      </Tooltip>
     </div>
   );
 }

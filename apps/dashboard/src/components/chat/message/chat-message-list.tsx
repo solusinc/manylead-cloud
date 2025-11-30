@@ -11,6 +11,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, ChevronDown } from "lucide-react";
 import { isSameDay } from "date-fns";
@@ -63,9 +64,10 @@ export function ChatMessageList({
   const sentinelRef = useRef<HTMLDivElement>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
   const scrollViewportRef = useRef<HTMLElement | null>(null);
-  const previousScrollHeightRef = useRef<number>(0);
-  const previousScrollTopRef = useRef<number>(0);
+  const anchorMessageIdRef = useRef<string | null>(null);
+  const anchorOffsetFromTopRef = useRef<number>(0);
   const previousMessageCountRef = useRef<number>(0);
+  const isLoadingOlderMessagesRef = useRef<boolean>(false);
   const trpc = useTRPC();
   const socket = useChatSocketContext();
   const queryClient = useQueryClient();
@@ -213,6 +215,40 @@ export function ChatMessageList({
     isInitialLoadRef.current = true;
   }, [chatId]);
 
+  // Setup scroll listener ONCE for show/hide scroll-to-bottom button
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    let scrollViewport = container.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement;
+
+    if (!scrollViewport) {
+      // Try finding viewport by going up from container
+      let parent = container.parentElement;
+      while (parent && !scrollViewport) {
+        scrollViewport = parent.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement;
+        parent = parent.parentElement;
+      }
+    }
+
+    if (!scrollViewport) return;
+
+    scrollViewportRef.current = scrollViewport;
+
+    const handleScroll = () => {
+      const distanceFromBottom =
+        scrollViewport.scrollHeight - scrollViewport.scrollTop - scrollViewport.clientHeight;
+      setShowScrollButton(distanceFromBottom > 300);
+    };
+
+    handleScroll();
+    scrollViewport.addEventListener("scroll", handleScroll);
+
+    return () => {
+      scrollViewport.removeEventListener("scroll", handleScroll);
+    };
+  }, [chatId]);
+
   // INDUSTRY STANDARD: IntersectionObserver for loading older messages
   useEffect(() => {
     // Clean up previous observer
@@ -236,9 +272,6 @@ export function ChatMessageList({
 
     if (!scrollViewport) return;
 
-    // Store viewport ref for scroll restoration
-    scrollViewportRef.current = scrollViewport;
-
     // Create IntersectionObserver with the scroll viewport as root
     observerRef.current = new IntersectionObserver(
       (entries) => {
@@ -246,14 +279,26 @@ export function ChatMessageList({
         if (!entry) return;
 
         // When sentinel becomes visible AND we're not already fetching
-        // Note: hasNextPage is already checked before observer setup (line 92)
         if (entry.isIntersecting && !isFetchingNextPage) {
-          // CRITICAL: Store scroll height AND position BEFORE fetching
-          if (scrollViewportRef.current) {
-            previousScrollHeightRef.current =
-              scrollViewportRef.current.scrollHeight;
-            previousScrollTopRef.current =
-              scrollViewportRef.current.scrollTop;
+          // Mark that we're loading older messages - prevents auto-scroll
+          isLoadingOlderMessagesRef.current = true;
+
+          // CRITICAL: Find the first visible message and save its ID AND position relative to viewport top
+          if (scrollViewport) {
+            const viewportRect = scrollViewport.getBoundingClientRect();
+            const messageElements = scrollViewport.querySelectorAll('[data-message-id]');
+
+            // Find first message that's visible in viewport
+            for (const el of Array.from(messageElements)) {
+              const rect = el.getBoundingClientRect();
+              if (rect.top >= viewportRect.top && rect.top <= viewportRect.bottom) {
+                anchorMessageIdRef.current = el.getAttribute('data-message-id');
+                // Save the offset from the top of the viewport
+                anchorOffsetFromTopRef.current = rect.top - viewportRect.top;
+                break;
+              }
+            }
+
             previousMessageCountRef.current = messages.length;
           }
 
@@ -261,9 +306,9 @@ export function ChatMessageList({
         }
       },
       {
-        root: scrollViewport, // Watch within Radix ScrollArea viewport
-        rootMargin: "200px 0px 0px 0px", // Trigger 200px before sentinel is visible (smoother UX)
-        threshold: 0, // Fire as soon as any part is visible
+        root: scrollViewport,
+        rootMargin: "200px 0px 0px 0px",
+        threshold: 0,
       },
     );
 
@@ -449,15 +494,15 @@ export function ChatMessageList({
     const currentLength = messages.length;
     const previousLength = previousMessagesLengthRef.current;
 
-    // Skip auto-scroll if we're restoring scroll position after loading older messages
-    const isRestoringScroll = previousScrollHeightRef.current > 0;
+    // Skip auto-scroll if we're loading older messages (infinite scroll)
+    const isLoadingOlder = isLoadingOlderMessagesRef.current;
 
     // Only scroll if messages were ADDED (not initial load, not loading older messages)
     if (
       currentLength > previousLength &&
       !isInitialLoadRef.current &&
       !isFetchingNextPage &&
-      !isRestoringScroll
+      !isLoadingOlder
     ) {
       const firstMessage = messages[0];
       const lastMessage = messages[messages.length - 1];
@@ -518,53 +563,47 @@ export function ChatMessageList({
     }
   }, [isTyping, scrollToBottom]);
 
-  // Detectar scroll para mostrar/esconder botão
-  useEffect(() => {
-    const viewport = scrollViewportRef.current;
-    if (!viewport) return;
-
-    const handleScroll = () => {
-      const distanceFromBottom =
-        viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
-      setShowScrollButton(distanceFromBottom > 300);
-    };
-
-    // Verificar posição inicial
-    handleScroll();
-
-    viewport.addEventListener("scroll", handleScroll);
-    return () => viewport.removeEventListener("scroll", handleScroll);
-  }, []); // Remover messages.length da dependency para evitar conflitos
-
   // CRITICAL: Restore scroll position after loading older messages
   // useLayoutEffect executes SYNCHRONOUSLY before browser paint - prevents visual jump
   useLayoutEffect(() => {
-    // Skip if no viewport or no previous height stored
-    if (!scrollViewportRef.current || previousScrollHeightRef.current === 0) {
+    // Skip if no anchor message saved
+    if (!anchorMessageIdRef.current) {
       return;
     }
 
     // Only adjust if we loaded MORE messages (older messages were added)
     if (messages.length > previousMessageCountRef.current) {
       const viewport = scrollViewportRef.current;
+      const anchorMessageId = anchorMessageIdRef.current;
+      const savedOffsetFromTop = anchorOffsetFromTopRef.current;
 
-      // Use requestAnimationFrame to ensure DOM is fully updated
-      requestAnimationFrame(() => {
-        const currentScrollHeight = viewport.scrollHeight;
-        const heightDifference =
-          currentScrollHeight - previousScrollHeightRef.current;
+      if (!viewport) return;
 
-        // Adjust scroll position to maintain visual position
-        // Use the SAVED scrollTop, not the current one (which may have changed)
-        if (heightDifference > 0) {
-          viewport.scrollTop = previousScrollTopRef.current + heightDifference;
-        }
+      // Find the anchor message element
+      const anchorElement = viewport.querySelector(`[data-message-id="${anchorMessageId}"]`) as HTMLElement;
 
-        // Reset for next load
-        previousScrollHeightRef.current = 0;
-        previousScrollTopRef.current = 0;
-        previousMessageCountRef.current = messages.length;
-      });
+      if (anchorElement) {
+        // Get the anchor element's current position relative to the viewport
+        const viewportRect = viewport.getBoundingClientRect();
+        const anchorRect = anchorElement.getBoundingClientRect();
+
+        // Calculate the current offset from viewport top
+        const currentOffsetFromTop = anchorRect.top - viewportRect.top;
+
+        // Adjust scroll to restore the original offset
+        const scrollAdjustment = currentOffsetFromTop - savedOffsetFromTop;
+        viewport.scrollTop = viewport.scrollTop + scrollAdjustment;
+      }
+
+      // Reset anchor refs for next load (but keep isLoadingOlderMessagesRef until after auto-scroll check)
+      anchorMessageIdRef.current = null;
+      anchorOffsetFromTopRef.current = 0;
+      previousMessageCountRef.current = messages.length;
+
+      // Reset the loading flag after a small delay to ensure auto-scroll check has run
+      setTimeout(() => {
+        isLoadingOlderMessagesRef.current = false;
+      }, 100);
     }
   }, [messages.length]);
 
@@ -631,8 +670,15 @@ export function ChatMessageList({
                   canEditMessages={canEditMessages}
                   canDeleteMessages={canDeleteMessages}
                   onImageLoad={() => {
-                    // Scroll após imagem carregar (para mensagens com mídia)
-                    setTimeout(() => scrollToBottom("instant"), 100);
+                    // Scroll após imagem carregar - APENAS se estiver perto do bottom
+                    const viewport = scrollViewportRef.current;
+                    if (viewport) {
+                      const distanceFromBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+                      // Só faz scroll se estiver a menos de 300px do bottom
+                      if (distanceFromBottom < 300) {
+                        setTimeout(() => scrollToBottom("instant"), 100);
+                      }
+                    }
                   }}
                 />
               )}
@@ -647,8 +693,8 @@ export function ChatMessageList({
         <div ref={messagesEndRef} className="h-6" />
       </div>
 
-      {/* Scroll to bottom button - Fixed position */}
-      {showScrollButton && (
+      {/* Scroll to bottom button - Rendered via portal to escape ScrollArea overflow */}
+      {showScrollButton && typeof document !== 'undefined' && createPortal(
         <div className="fixed bottom-24 right-8 z-50 animate-in fade-in slide-in-from-bottom-2">
           <Button
             onClick={() => scrollToBottom("auto")}
@@ -659,7 +705,8 @@ export function ChatMessageList({
           >
             <ChevronDown className="h-5 w-5 text-foreground/70" />
           </Button>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
