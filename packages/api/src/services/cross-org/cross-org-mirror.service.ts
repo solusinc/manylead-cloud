@@ -174,6 +174,8 @@ export class CrossOrgMirrorService {
           ? "video"
           : attachmentData?.mediaType === "document"
           ? "document"
+          : attachmentData?.mediaType === "audio"
+          ? "audio"
           : "text",
         content: messageContent,
         metadata: {
@@ -318,6 +320,8 @@ export class CrossOrgMirrorService {
           ? "video"
           : attachmentData?.mediaType === "document"
           ? "document"
+          : attachmentData?.mediaType === "audio"
+          ? "audio"
           : "text",
         content: messageContent,
         metadata: {

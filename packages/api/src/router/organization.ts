@@ -12,8 +12,13 @@ import {
   tenant,
 } from "@manylead/db";
 import { ActivityLogger, TenantDatabaseManager } from "@manylead/tenant-db";
+import { extractKeyFromUrl, getPublicUrl, storage } from "@manylead/storage";
+import { MEDIA_LIMITS } from "@manylead/shared/constants";
+import { createQueue } from "@manylead/clients/queue";
+import { getRedisClient } from "@manylead/clients/redis";
 
 import { createTRPCRouter, ownerProcedure, protectedProcedure } from "../trpc";
+import { env } from "../env";
 
 const tenantManager = new TenantDatabaseManager();
 const activityLogger = new ActivityLogger();
@@ -641,5 +646,170 @@ export const organizationRouter = createTRPCRouter({
     }
 
     return { success: true };
+  }),
+
+  /**
+   * Gerar pre-signed URL para upload de logo
+   * Frontend usa isso para fazer upload direto para R2
+   */
+  getLogoUploadUrl: ownerProcedure
+    .input(
+      z.object({
+        fileName: z.string().min(1),
+        mimeType: z
+          .string()
+          .refine(
+            (type) => MEDIA_LIMITS.IMAGE.ALLOWED_TYPES.includes(type as never),
+            `Tipo de arquivo não permitido. Use: ${MEDIA_LIMITS.IMAGE.ALLOWED_TYPES.join(", ")}`,
+          ),
+        expiresIn: z.number().min(60).max(3600).default(300), // 5 minutos default
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const activeOrgId = ctx.session.session.activeOrganizationId;
+
+      if (!activeOrgId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Nenhuma organização ativa encontrada",
+        });
+      }
+
+      // Gerar path único para o logo
+      // Formato: logos/{organizationId}/{timestamp}{ext}
+      const ext = input.fileName.substring(input.fileName.lastIndexOf("."));
+      const storagePath = `logos/${activeOrgId}/${Date.now()}${ext}`;
+
+      // Gerar pre-signed URL
+      const signedUrl = await storage.getSignedUploadUrl(
+        storagePath,
+        input.expiresIn,
+      );
+
+      return {
+        uploadUrl: signedUrl,
+        storagePath,
+        publicUrl: `${getPublicUrl()}/${storagePath}`,
+        expiresIn: input.expiresIn,
+      };
+    }),
+
+  /**
+   * Atualizar logo da organização
+   * Chamado após upload direto para R2
+   */
+  updateLogo: ownerProcedure
+    .input(
+      z.object({
+        imageUrl: z.string().url("URL inválida"),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const activeOrgId = ctx.session.session.activeOrganizationId;
+
+      if (!activeOrgId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Nenhuma organização ativa encontrada",
+        });
+      }
+
+      // Atualizar logo da organização no banco
+      const [updated] = await ctx.db
+        .update(organization)
+        .set({
+          logo: input.imageUrl,
+        })
+        .where(eq(organization.id, activeOrgId))
+        .returning();
+
+      if (!updated) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Organização não encontrada",
+        });
+      }
+
+      // Enfileirar job para sincronizar logo cross-org
+      const connection = getRedisClient(env.REDIS_URL);
+      const queue = createQueue({
+        name: "cross-org-logo-sync",
+        connection,
+      });
+
+      await queue.add("sync-logo", {
+        organizationId: activeOrgId,
+        logoUrl: input.imageUrl,
+      });
+
+      return {
+        success: true,
+        imageUrl: updated.logo,
+      };
+    }),
+
+  /**
+   * Remover logo da organização
+   */
+  removeLogo: ownerProcedure.mutation(async ({ ctx }) => {
+    const activeOrgId = ctx.session.session.activeOrganizationId;
+
+    if (!activeOrgId) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Nenhuma organização ativa encontrada",
+      });
+    }
+
+    // Buscar logo atual para deletar do R2
+    const [currentOrg] = await ctx.db
+      .select({ logo: organization.logo })
+      .from(organization)
+      .where(eq(organization.id, activeOrgId))
+      .limit(1);
+
+    // Deletar do R2 se existir
+    if (currentOrg?.logo) {
+      const key = extractKeyFromUrl(currentOrg.logo);
+      if (key) {
+        try {
+          await storage.delete(key);
+        } catch (error) {
+          console.error("Erro ao deletar logo do R2:", error);
+        }
+      }
+    }
+
+    // Remover logo da organização no banco
+    const [updated] = await ctx.db
+      .update(organization)
+      .set({
+        logo: null,
+      })
+      .where(eq(organization.id, activeOrgId))
+      .returning();
+
+    if (!updated) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "Organização não encontrada",
+      });
+    }
+
+    // Enfileirar job para sincronizar remoção do logo cross-org
+    const connection = getRedisClient(env.REDIS_URL);
+    const queue = createQueue({
+      name: "cross-org-logo-sync",
+      connection,
+    });
+
+    await queue.add("sync-logo", {
+      organizationId: activeOrgId,
+      logoUrl: null,
+    });
+
+    return {
+      success: true,
+    };
   }),
 });

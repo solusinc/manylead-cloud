@@ -9,6 +9,7 @@ import type {
   MessageDeletedEvent,
   TypingStartEvent,
   TypingStopEvent,
+  ContactLogoUpdatedEvent,
   UseChatSocketReturn,
 } from "~/hooks/use-chat-socket";
 
@@ -24,6 +25,7 @@ interface SocketEventMap {
   onMessageDeleted: MessageDeletedEvent;
   onTypingStart: TypingStartEvent;
   onTypingStop: TypingStopEvent;
+  onContactLogoUpdated: ContactLogoUpdatedEvent;
 }
 
 /**

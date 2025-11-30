@@ -16,12 +16,14 @@ import { ChatCommentDialog } from "./chat-comment-dialog";
 import { ChatInputToolbar } from "./chat-input-toolbar";
 import { ChatReplyPreview } from "./chat-reply-preview";
 import { QuickReplyDropdown } from "./quick-reply-dropdown";
+import { AudioRecorder } from "./audio-recorder";
 import { useTRPC } from "~/lib/trpc/react";
 import { useChatReply } from "../providers/chat-reply-provider";
 import { useCurrentAgent } from "~/hooks/chat/use-current-agent";
 import { useSendMessage } from "./hooks/use-send-message";
 import { useInputContent } from "./hooks/use-input-content";
 import { useQuickReplySelect } from "./hooks/use-quick-reply-select";
+import { useSendAudio } from "./hooks/use-send-audio";
 
 export function ChatInput({
   chatId,
@@ -41,6 +43,7 @@ export function ChatInput({
   onTypingStop?: () => void;
 } & React.ComponentProps<"div">) {
   const [isSending, setIsSending] = useState(false);
+  const [mode, setMode] = useState<"text" | "recording">("text");
   const shouldFocusRef = useRef(false);
   const router = useRouter();
   const trpc = useTRPC();
@@ -50,6 +53,7 @@ export function ChatInput({
   // Custom hooks
   const { data: currentAgent } = useCurrentAgent();
   const { sendMessage } = useSendMessage(chatId);
+  const { sendAudio } = useSendAudio(chatId);
   const {
     content,
     handleContentChange,
@@ -294,6 +298,48 @@ export function ChatInput({
     [setMediaPreview]
   );
 
+  const handleAudioSend = useCallback(
+    async (audioBlob: Blob, duration: number) => {
+      try {
+        await sendAudio(audioBlob, duration);
+        setMode("text");
+      } catch (err) {
+        console.error("Failed to send audio:", err);
+      }
+    },
+    [sendAudio]
+  );
+
+  const handleAudioCancel = useCallback(() => {
+    setMode("text");
+  }, []);
+
+  const handleMicClick = useCallback(() => {
+    // Request permission SYNCHRONOUSLY in click handler (preserves user gesture)
+    navigator.mediaDevices.getUserMedia({ audio: true })
+      .then((stream) => {
+        // Stop the stream immediately - we just wanted permission
+        stream.getTracks().forEach(track => track.stop());
+        // Permission granted, now show recorder
+        setMode("recording");
+      })
+      .catch((err) => {
+        const error = err instanceof Error ? err : new Error("Unknown error");
+
+        if (error.name === "NotAllowedError") {
+          toast.error("Permissão de microfone negada", {
+            description: "Permita o acesso ao microfone nas configurações do navegador"
+          });
+        } else if (error.name === "NotFoundError") {
+          toast.error("Nenhum microfone encontrado");
+        } else {
+          toast.error("Erro ao acessar microfone", {
+            description: error.message
+          });
+        }
+      });
+  }, []);
+
   // Determina se deve usar rounded-full ou rounded-3xl (WhatsApp style)
   const isMultiLine = rows > 2;
 
@@ -423,25 +469,31 @@ export function ChatInput({
 
       {/* Input area */}
       <div className="flex w-full items-end">
-        <div
-          className={cn(
-            "border-input bg-background flex flex-1 items-center gap-1 border px-2 transition-all",
-            isMultiLine ? "rounded-3xl" : "rounded-full"
-          )}
-        >
-          <ChatInputToolbar chatId={chatId} onEmojiSelect={insertEmoji} onFileSelect={handleFileSelect} />
+        {mode === "text" ? (
+          <div
+            className={cn(
+              "border-input bg-background flex flex-1 items-center gap-1 border px-2 transition-all",
+              isMultiLine ? "rounded-3xl" : "rounded-full"
+            )}
+          >
+            <ChatInputToolbar chatId={chatId} onEmojiSelect={insertEmoji} onFileSelect={handleFileSelect} />
 
-          <ChatInputArea
-            ref={textareaRef}
-            value={content}
-            onChange={(e) => handleContentChange(e.target.value)}
-            onKeyDown={handleKeyDown}
-            disabled={isSending}
-            autoFocus
-          />
+            <ChatInputArea
+              ref={textareaRef}
+              value={content}
+              onChange={(e) => handleContentChange(e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={isSending}
+              autoFocus
+            />
 
-          <ChatInputMicButton />
-        </div>
+            <ChatInputMicButton onClick={handleMicClick} />
+          </div>
+        ) : (
+          <div className="border-input bg-background flex flex-1 items-center gap-1 border rounded-full px-2 transition-all">
+            <AudioRecorder onSend={handleAudioSend} onCancel={handleAudioCancel} />
+          </div>
+        )}
       </div>
     </div>
   );

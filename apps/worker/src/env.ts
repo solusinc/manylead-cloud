@@ -27,6 +27,7 @@ export const env = createEnv({
     QUEUE_CHANNEL_SYNC: z.string().default("channel-sync"),
     QUEUE_MEDIA_DOWNLOAD: z.string().default("media-download"),
     QUEUE_ATTACHMENT_CLEANUP: z.string().default("attachment-cleanup"),
+    QUEUE_CROSS_ORG_LOGO_SYNC: z.string().default("cross-org-logo-sync"),
 
     // Cloudflare R2 Storage
     R2_ACCOUNT_ID: z.string().min(1),

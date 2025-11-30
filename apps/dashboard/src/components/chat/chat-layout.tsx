@@ -291,6 +291,19 @@ function ChatLayoutInner({
     [queryClient]
   );
 
+  // 6. Quando logo de contato cross-org é atualizado - invalidar chats
+  useSocketListener(
+    socket,
+    'onContactLogoUpdated',
+    () => {
+      // Invalidar queries de chats para refetch e pegar logo atualizado
+      void queryClient.invalidateQueries({
+        queryKey: [["chats", "list"]],
+      });
+    },
+    [queryClient]
+  );
+
   return (
     <div className={cn("flex h-full overflow-hidden", className)} {...props}>
       <ChatLayoutSidebar hasChatSelected={hasChatSelected} />

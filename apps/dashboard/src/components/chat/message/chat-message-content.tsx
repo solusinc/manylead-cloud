@@ -1,9 +1,9 @@
 "use client";
 
-import { memo, useEffect } from "react";
+import { memo, useEffect, useState } from "react";
 import Image from "next/image";
 import { format } from "date-fns";
-import { BanIcon, Check, CheckCheck, Clock, FileVideo, Star, FileX } from "lucide-react";
+import { BanIcon, Check, CheckCheck, Clock, Star, FileX } from "lucide-react";
 import type { Attachment } from "@manylead/db";
 
 import { cn } from "@manylead/ui";
@@ -14,6 +14,7 @@ import { formatFileSize, formatDuration } from "@manylead/shared/constants";
 import { useChatReply } from "../providers/chat-reply-provider";
 import { ChatMessageActions } from "./chat-message-actions";
 import { useChatImages } from "./chat-images-context";
+import { AudioPlayer } from "./audio-player";
 import type { Message } from "./chat-message";
 
 /**
@@ -41,15 +42,20 @@ export function ChatMessageAttachment({
   attachment,
   messageId,
   onImageLoad,
+  onAudioTimeUpdate,
+  isOwnMessage = false,
 }: {
   attachment: Attachment;
   messageId: string;
   onImageLoad?: () => void;
+  onAudioTimeUpdate?: (currentTime: number, isPlaying: boolean) => void;
+  isOwnMessage?: boolean;
 }) {
   const { registerImage, openLightbox } = useChatImages();
   const isImage = attachment.mediaType === "image";
   const isVideo = attachment.mediaType === "video";
   const isDocument = attachment.mediaType === "document";
+  const isAudio = attachment.mediaType === "audio";
 
   // Registrar imagem no context quando o componente montar
   useEffect(() => {
@@ -64,7 +70,7 @@ export function ChatMessageAttachment({
 
   // Se a mídia expirou, mostrar placeholder visual
   if (!attachment.storageUrl) {
-    const mediaTypeLabel = isImage ? "Imagem" : isVideo ? "Vídeo" : "Arquivo";
+    const mediaTypeLabel = isImage ? "Imagem" : isVideo ? "Vídeo" : isAudio ? "Áudio" : "Arquivo";
 
     return (
       <div className="mb-2 overflow-hidden rounded-lg border border-muted-foreground/20">
@@ -134,6 +140,15 @@ export function ChatMessageAttachment({
           />
         </a>
       )}
+
+      {isAudio && (
+        <AudioPlayer
+          src={attachment.storageUrl}
+          duration={attachment.duration}
+          onTimeUpdate={onAudioTimeUpdate}
+          isOwnMessage={isOwnMessage}
+        />
+      )}
     </div>
   );
 }
@@ -194,6 +209,12 @@ export function ChatMessageBubble({
   onImageLoad?: () => void;
   className?: string;
 }) {
+  // Estado para playback de áudio
+  const [audioPlayback, setAudioPlayback] = useState<{
+    currentTime: number;
+    isPlaying: boolean;
+  }>({ currentTime: 0, isPlaying: false });
+
   // Extrair dados da mensagem respondida do metadata
   const repliedMessage =
     message.metadata && message.repliedToMessageId
@@ -249,6 +270,10 @@ export function ChatMessageBubble({
           attachment={message.attachment}
           messageId={message.id}
           onImageLoad={onImageLoad}
+          onAudioTimeUpdate={(currentTime, isPlaying) =>
+            setAudioPlayback({ currentTime, isPlaying })
+          }
+          isOwnMessage={isOutgoing}
         />
       )}
 
@@ -267,6 +292,17 @@ export function ChatMessageBubble({
         isStarred={message.isStarred}
         isEdited={message.isEdited}
         isDeleted={message.isDeleted}
+        mediaMetadata={
+          message.attachment
+            ? {
+                duration: audioPlayback.isPlaying && audioPlayback.currentTime > 0
+                  ? audioPlayback.currentTime
+                  : (message.attachment.duration ?? undefined),
+                fileSize: message.attachment.fileSize ?? undefined,
+                mediaType: message.attachment.mediaType as "image" | "video" | undefined,
+              }
+            : undefined
+        }
       />
     </div>
   );
@@ -465,15 +501,10 @@ export const ChatMessageFooter = memo(function ChatMessageFooter({
     <div className={cn("mt-1 flex items-center justify-between gap-2", className)}>
       {/* Info da mídia - lado esquerdo */}
       <div className="flex items-center gap-1.5">
-        {mediaMetadata && (mediaMetadata.fileSize ?? mediaMetadata.duration) && (
-          <>
-            <FileVideo className="h-3 w-3 opacity-70" />
-            <span className="text-xs opacity-70">
-              {mediaMetadata.fileSize && formatFileSize(mediaMetadata.fileSize)}
-              {mediaMetadata.fileSize && mediaMetadata.duration && " • "}
-              {mediaMetadata.duration && formatDuration(mediaMetadata.duration)}
-            </span>
-          </>
+        {mediaMetadata?.duration && (
+          <span className="text-xs opacity-70">
+            {formatDuration(mediaMetadata.duration)}
+          </span>
         )}
       </div>
 

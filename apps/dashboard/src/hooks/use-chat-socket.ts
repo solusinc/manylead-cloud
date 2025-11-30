@@ -43,6 +43,12 @@ export interface TypingStopEvent {
   agentId: string;
 }
 
+export interface ContactLogoUpdatedEvent {
+  sourceOrganizationId: string;
+  logoUrl: string | null;
+  contactsUpdated: number;
+}
+
 export interface UseChatSocketReturn {
   // Connection state
   isConnected: boolean;
@@ -60,6 +66,7 @@ export interface UseChatSocketReturn {
   onMessageDeleted: (callback: (data: MessageDeletedEvent) => void) => () => void;
   onTypingStart: (callback: (data: TypingStartEvent) => void) => () => void;
   onTypingStop: (callback: (data: TypingStopEvent) => void) => () => void;
+  onContactLogoUpdated: (callback: (data: ContactLogoUpdatedEvent) => void) => () => void;
 
   // Typing indicators
   emitTypingStart: (chatId: string) => void;
@@ -266,6 +273,18 @@ export function useChatSocket(): UseChatSocketReturn {
     };
   };
 
+  const onContactLogoUpdated = (callback: (data: ContactLogoUpdatedEvent) => void) => {
+    if (!socketRef.current) {
+      return () => {
+        // No-op
+      };
+    }
+    socketRef.current.on("contact:logo:updated", callback);
+    return () => {
+      socketRef.current?.off("contact:logo:updated", callback);
+    };
+  };
+
   // Emit typing events
   const emitTypingStart = (chatId: string) => {
     if (socketRef.current?.connected) {
@@ -298,6 +317,7 @@ export function useChatSocket(): UseChatSocketReturn {
     onMessageDeleted,
     onTypingStart,
     onTypingStop,
+    onContactLogoUpdated,
     emitTypingStart,
     emitTypingStop,
   };

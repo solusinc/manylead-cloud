@@ -15,6 +15,7 @@ import { ChatMessageList } from "../message";
 import { ChatWindowHeader } from "./chat-window-header";
 import { ChatReplyProvider, useChatReply } from "../providers/chat-reply-provider";
 import { ChatErrorBoundary } from "../providers/chat-error-boundary";
+import { ChatProvider } from "../providers/chat-context";
 import { useChatAccessControl } from "./hooks/use-chat-access-control";
 import { MediaPreviewDialog } from "../input/media-preview";
 import { useSendMedia } from "../input/hooks/use-send-media";
@@ -129,24 +130,26 @@ export function ChatWindow({
 
   return (
     <ChatErrorBoundary>
-      <ChatReplyProvider
-        contactName={chat.contact.customName ?? chat.contact.name}
-        messageSource={chat.source}
-        instanceCode={chat.contact.instanceCode}
-        organizationName={chat.contact.name}
-      >
-        <ScrollToBottomContext.Provider value={scrollToBottom}>
-          <ChatWindowContent
-            chat={chat}
-            chatItem={chatItem}
-            chatId={chatId}
-            scrollAreaRef={scrollAreaRef}
-            socket={socket}
-            className={className}
-            {...props}
-          />
-        </ScrollToBottomContext.Provider>
-      </ChatReplyProvider>
+      <ChatProvider chatId={chatId}>
+        <ChatReplyProvider
+          contactName={chat.contact.customName ?? chat.contact.name}
+          messageSource={chat.source}
+          instanceCode={chat.contact.instanceCode}
+          organizationName={chat.contact.name}
+        >
+          <ScrollToBottomContext.Provider value={scrollToBottom}>
+            <ChatWindowContent
+              chat={chat}
+              chatItem={chatItem}
+              chatId={chatId}
+              scrollAreaRef={scrollAreaRef}
+              socket={socket}
+              className={className}
+              {...props}
+            />
+          </ScrollToBottomContext.Provider>
+        </ChatReplyProvider>
+      </ChatProvider>
     </ChatErrorBoundary>
   );
 }

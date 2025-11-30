@@ -6,6 +6,7 @@ import type { ChannelSyncJobData } from "~/workers/channel-sync";
 import type { MediaDownloadJobData } from "~/workers/media-download";
 import type { AttachmentCleanupJobData } from "~/workers/attachment-cleanup";
 import type { AttachmentOrphanCleanupJobData } from "~/workers/attachment-orphan-cleanup";
+import type { CrossOrgLogoSyncJobData } from "~/workers/cross-org-logo-sync";
 import { env } from "~/env";
 import { getRedisClient } from "~/libs/cache/redis";
 import { processTenantProvisioning } from "~/workers/tenant-provisioning";
@@ -13,6 +14,7 @@ import { processChannelSync } from "~/workers/channel-sync";
 import { processMediaDownload } from "~/workers/media-download";
 import { processAttachmentCleanup } from "~/workers/attachment-cleanup";
 import { processAttachmentOrphanCleanup } from "~/workers/attachment-orphan-cleanup";
+import { processCrossOrgLogoSync } from "~/workers/cross-org-logo-sync";
 
 const logger = createLogger("Worker:Queue");
 
@@ -203,6 +205,27 @@ export function createWorkers(): Worker[] {
 
   logger.info("Worker created for queue: attachment-orphan-cleanup");
   workers.push(attachmentOrphanCleanupWorker);
+
+  /**
+   * Cross-Org Logo Sync Worker
+   * Sincroniza logos cross-org quando uma organização atualiza seu logo
+   */
+  logger.info(`Creating worker for queue: ${env.QUEUE_CROSS_ORG_LOGO_SYNC}`);
+
+  const crossOrgLogoSyncWorker = createWorker<CrossOrgLogoSyncJobData>({
+    name: env.QUEUE_CROSS_ORG_LOGO_SYNC,
+    processor: processCrossOrgLogoSync,
+    connection,
+    concurrency: 1, // Process one logo sync at a time to avoid DB pressure
+    logger,
+  });
+
+  attachEventListeners(crossOrgLogoSyncWorker, {
+    queueName: env.QUEUE_CROSS_ORG_LOGO_SYNC,
+  });
+
+  logger.info(`Worker created for queue: ${env.QUEUE_CROSS_ORG_LOGO_SYNC}`);
+  workers.push(crossOrgLogoSyncWorker);
 
   /**
    * TODO (FASE 4): Add Tenant Migration Worker

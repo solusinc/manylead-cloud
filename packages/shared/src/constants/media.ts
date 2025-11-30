@@ -38,6 +38,7 @@ export const MEDIA_LIMITS = {
       "audio/wav",
       "audio/mp4",
       "audio/aac",
+      "audio/webm",
     ] as const,
   },
 

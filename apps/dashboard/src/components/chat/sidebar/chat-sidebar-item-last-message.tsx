@@ -1,6 +1,6 @@
 "use client";
 
-import { BanIcon, FileText, Image as ImageIcon, Video } from "lucide-react";
+import { BanIcon, FileText, Image as ImageIcon, Video, Mic } from "lucide-react";
 
 import { cn } from "@manylead/ui";
 
@@ -56,7 +56,7 @@ export function ChatSidebarItemLastMessage({
         <MessageStatusIcon status={messageStatus} size={14} className="shrink-0" />
       )}
 
-      {/* Ícone de mídia (imagem/vídeo/documento) */}
+      {/* Ícone de mídia (imagem/vídeo/documento/áudio) */}
       {messageType === "image" && (
         <ImageIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
       )}
@@ -65,6 +65,9 @@ export function ChatSidebarItemLastMessage({
       )}
       {messageType === "document" && (
         <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+      )}
+      {messageType === "audio" && (
+        <Mic className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
       )}
 
       {/* Texto da mensagem ou label do tipo de mídia */}
@@ -75,6 +78,8 @@ export function ChatSidebarItemLastMessage({
           ? "Vídeo"
           : messageType === "document"
           ? "Documento"
+          : messageType === "audio"
+          ? "Áudio"
           : message}
       </p>
     </div>
