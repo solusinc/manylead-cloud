@@ -65,34 +65,51 @@ export function MediaPreviewContent({ file }: MediaPreviewContentProps) {
 
   if (isImage) {
     return (
-      <div className="flex items-center justify-center">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={previewUrl}
-          alt="Preview"
-          className="max-h-[70vh] max-w-full rounded-lg object-contain"
-          style={{ minHeight: "200px", minWidth: "200px" }}
-        />
+      <div className="flex flex-col items-center justify-center gap-4 w-full">
+        <div className="flex items-center justify-center w-full">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={previewUrl}
+            alt="Preview"
+            className="max-h-[60vh] max-w-full rounded-lg object-contain"
+            style={{ minHeight: "200px", minWidth: "200px" }}
+          />
+        </div>
+        <div className="text-center px-4">
+          <p className="text-sm font-medium text-muted-foreground">
+            {file.name}
+          </p>
+          <p className="text-xs text-muted-foreground/70 mt-1">
+            Imagem • {formatFileSize(file.size)}
+          </p>
+        </div>
       </div>
     );
   }
 
   if (isVideo) {
     return (
-      <div className="flex flex-col gap-2">
-        <div className="relative max-h-[60vh] max-w-full overflow-hidden rounded-lg">
+      <div className="flex flex-col items-center justify-center gap-4 w-full">
+        <div className="flex items-center justify-center w-full">
           <video
             src={previewUrl}
             controls
             autoPlay
             muted
             playsInline
-            className="h-auto max-h-[60vh] w-auto"
+            className="max-h-[60vh] max-w-full rounded-lg"
           >
             <track kind="captions" />
           </video>
         </div>
-        <p className="text-center text-sm text-white">{file.name}</p>
+        <div className="text-center px-4">
+          <p className="text-sm font-medium text-muted-foreground">
+            {file.name}
+          </p>
+          <p className="text-xs text-muted-foreground/70 mt-1">
+            Vídeo • {formatFileSize(file.size)}
+          </p>
+        </div>
       </div>
     );
   }
@@ -103,16 +120,16 @@ export function MediaPreviewContent({ file }: MediaPreviewContentProps) {
     const Icon = docType.icon;
 
     return (
-      <div className="flex flex-col items-center justify-center gap-8">
+      <div className="flex flex-col items-center justify-center gap-8 w-full">
         <div className="flex items-center justify-center">
           <Icon className="h-48 w-48" />
         </div>
 
-        <div className="text-center w-full max-w-md px-4">
-          <p className="text-lg font-medium text-white truncate">
+        <div className="text-center px-4">
+          <p className="text-lg font-medium text-muted-foreground">
             {file.name}
           </p>
-          <p className="text-sm text-white/70 mt-1">
+          <p className="text-sm text-muted-foreground/70 mt-1">
             {docType.label} • {formatFileSize(file.size)}
           </p>
         </div>

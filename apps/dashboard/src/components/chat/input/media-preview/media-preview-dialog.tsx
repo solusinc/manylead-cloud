@@ -67,7 +67,7 @@ export function MediaPreviewDialog({
   };
 
   return (
-    <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-xs dark:bg-black/70">
+    <div className="absolute inset-0 z-50 flex items-center justify-center bg-white dark:bg-black">
       <div className="flex h-full w-full flex-col">
         {/* Header */}
         <div className="flex h-14 items-center justify-between bg-white px-6 shadow-md dark:bg-black">

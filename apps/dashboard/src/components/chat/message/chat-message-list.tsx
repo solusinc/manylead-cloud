@@ -37,10 +37,12 @@ function shouldShowDateDivider(
 
 export function ChatMessageList({
   chatId,
+  hideScrollButton = false,
   className,
   ...props
 }: {
   chatId: string;
+  hideScrollButton?: boolean;
 } & React.ComponentProps<"div">) {
   const trpc = useTRPC();
   const socket = useChatSocketContext();
@@ -309,6 +311,7 @@ export function ChatMessageList({
 
       {/* Scroll to bottom button */}
       {scrollManager.showScrollButton &&
+        !hideScrollButton &&
         typeof document !== "undefined" &&
         createPortal(
           <div className="animate-in fade-in slide-in-from-bottom-2 fixed right-8 bottom-24 z-50">

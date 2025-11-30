@@ -243,7 +243,7 @@ function ChatWindowContent({
 
       <ChatImagesProvider>
         <ScrollArea ref={scrollAreaRef} className="flex-1 overflow-auto px-6 py-0">
-          <ChatMessageList chatId={chatId} />
+          <ChatMessageList chatId={chatId} hideScrollButton={!!mediaPreview} />
         </ScrollArea>
       </ChatImagesProvider>
 
