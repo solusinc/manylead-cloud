@@ -106,34 +106,28 @@ export function ChatMessageAttachment({
   return (
     <div className="mb-2 overflow-hidden rounded-lg">
       {isImage && (
-        <>
-          {!imageLoaded && (
-            <div
-              className="animate-pulse bg-muted"
-              style={{
-                width: attachment.width ?? 400,
-                height: attachment.height ?? 300,
-                maxWidth: '400px',
-                maxHeight: '320px',
-              }}
-            />
-          )}
-          {imageLoaded && (
-            <button
-              onClick={() => openLightbox(messageId)}
-              className="cursor-pointer transition-opacity hover:opacity-90"
-            >
-              <Image
-                src={attachment.storageUrl}
-                alt={attachment.fileName}
-                width={attachment.width ?? 400}
-                height={attachment.height ?? 300}
-                className="max-h-80 w-full object-cover"
-                loading="eager"
-              />
-            </button>
-          )}
-        </>
+        <button
+          onClick={() => openLightbox(messageId)}
+          className="relative cursor-pointer overflow-hidden rounded-lg bg-muted/30 transition-opacity hover:opacity-90"
+          style={{
+            width: attachment.width ?? 400,
+            height: attachment.height ?? 300,
+            maxWidth: '400px',
+            maxHeight: '320px',
+          }}
+        >
+          <Image
+            src={attachment.storageUrl}
+            alt={attachment.fileName}
+            width={attachment.width ?? 400}
+            height={attachment.height ?? 300}
+            className={cn(
+              "max-h-80 w-full object-cover transition-opacity duration-300",
+              imageLoaded ? "opacity-100" : "opacity-0"
+            )}
+            loading="eager"
+          />
+        </button>
       )}
 
       {isVideo && (

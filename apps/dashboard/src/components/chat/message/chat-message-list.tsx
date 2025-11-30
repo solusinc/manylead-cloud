@@ -52,9 +52,6 @@ export function ChatMessageList({
   const lastMessageIdRef = useRef<string | null>(null);
   const firstMessageIdRef = useRef<string | null>(null);
   const isInitialLoadRef = useRef(true);
-  const initialLoadTimestampRef = useRef<number>(0);
-  const userScrollingUpRef = useRef(false);
-  const lastScrollTopRef = useRef(0);
 
   // 1. Data Layer
   const {
@@ -108,14 +105,11 @@ export function ChatMessageList({
   // Reset initial load flag when chat changes
   useEffect(() => {
     isInitialLoadRef.current = true;
-    initialLoadTimestampRef.current = Date.now();
     lastMessageIdRef.current = null;
     firstMessageIdRef.current = null;
-    userScrollingUpRef.current = false;
-    lastScrollTopRef.current = 0;
   }, [chatId]);
 
-  // Initial scroll to bottom - use messagesEndRef (div at bottom)
+  // Initial scroll to bottom - SIMPLE
   useEffect(() => {
     if (
       !isLoading &&
@@ -123,70 +117,14 @@ export function ChatMessageList({
       isInitialLoadRef.current &&
       !isLoadingOlder
     ) {
-      // Scroll to messagesEndRef (div at the very bottom)
-      const scrollToEnd = () => {
-        // STOP if user started scrolling manually
-        if (userScrollingUpRef.current) return;
+      scrollManager.scrollToBottom("initial_load");
 
-        scrollManager.messagesEndRef.current?.scrollIntoView({
-          behavior: "instant",
-          block: "end",
-        });
-      };
-
-      // Multiple attempts to handle media loading (will stop if user scrolls)
-      scrollToEnd();
-      const t1 = setTimeout(scrollToEnd, 100);
-      const t2 = setTimeout(scrollToEnd, 300);
-      const t3 = setTimeout(scrollToEnd, 600);
-      const t4 = setTimeout(scrollToEnd, 1000);
-      const t5 = setTimeout(scrollToEnd, 1500);
-
-      isInitialLoadRef.current = false;
-
-      // Cleanup timeouts on unmount
-      return () => {
-        clearTimeout(t1);
-        clearTimeout(t2);
-        clearTimeout(t3);
-        clearTimeout(t4);
-        clearTimeout(t5);
-      };
+      // Keep flag true for 2 seconds to prevent auto-scroll during image loading
+      setTimeout(() => {
+        isInitialLoadRef.current = false;
+      }, 2000);
     }
   }, [chatId, isLoading, messages.length, isLoadingOlder, scrollManager]);
-
-  // Detect user manual scroll - IMMEDIATELY
-  useEffect(() => {
-    const viewport = scrollManager.scrollViewportRef.current;
-    if (!viewport) return;
-
-    let scrollTimeout: NodeJS.Timeout;
-
-    const handleScroll = () => {
-      const currentScrollTop = viewport.scrollTop;
-      const scrollingUp = currentScrollTop < lastScrollTopRef.current;
-
-      // User is actively scrolling up - SET FLAG IMMEDIATELY
-      if (scrollingUp) {
-        userScrollingUpRef.current = true;
-        clearTimeout(scrollTimeout);
-
-        // Reset flag after 1 second of no scrolling
-        scrollTimeout = setTimeout(() => {
-          userScrollingUpRef.current = false;
-        }, 1000);
-      }
-
-      lastScrollTopRef.current = currentScrollTop;
-    };
-
-    viewport.addEventListener("scroll", handleScroll, { passive: true });
-
-    return () => {
-      viewport.removeEventListener("scroll", handleScroll);
-      clearTimeout(scrollTimeout);
-    };
-  }, [chatId, scrollManager]);
 
 
   // Setup scroll listener
@@ -194,10 +132,14 @@ export function ChatMessageList({
     return scrollManager.setupScrollListener(containerRef.current);
   }, [chatId, scrollManager]);
 
-  // Typing scroll
+  // Typing scroll - ONLY if user is near bottom (WhatsApp behavior)
   useEffect(() => {
     if (isTyping) {
-      scrollManager.scrollToBottom("typing_indicator");
+      const context = scrollManager.getScrollContext();
+      // Only scroll if user is near bottom (< 300px)
+      if (context.distanceFromBottom < 300) {
+        scrollManager.scrollToBottom("typing_indicator");
+      }
     }
   }, [isTyping, scrollManager]);
 
@@ -248,12 +190,10 @@ export function ChatMessageList({
 
       // Rule 1: Own messages ALWAYS scroll (instant)
       if (isOwnMessage) {
-        userScrollingUpRef.current = false; // Clear flag for own messages
         scrollManager.scrollToBottom("own_message");
       }
       // Rule 2: System messages ALWAYS scroll (smooth)
       else if (isSystemMessage) {
-        userScrollingUpRef.current = false; // Clear flag for system messages
         scrollManager.scrollToBottom("system_message");
       }
       // Rule 3: Received messages - scroll based on distance from bottom
@@ -276,41 +216,18 @@ export function ChatMessageList({
       lastMessageIdRef.current = lastMessage.id;
     }
 
-    // Handle media expansion for SAME message (when media loads/expands)
-    else if (!isNewMessage && lastMessage.id === lastMessageIdRef.current) {
-      const context = scrollManager.getScrollContext();
-      const hasMedia = !!(lastMessage.messageType && !["text", "comment"].includes(lastMessage.messageType));
-
-      // If message has media and we're very close to bottom, keep scrolling as it expands
-      if (hasMedia && context.distanceFromBottom < 600) {
-        scrollManager.scrollToBottom("own_message");
-      }
-    }
-
     // Always update first message ref
     if (firstMessage) {
       firstMessageIdRef.current = firstMessage.id;
     }
   }, [messages, isFetchingNextPage, isLoadingOlder, scrollManager]);
 
-  // Image load callback
+  // Image load callback - DISABLED (images have fixed dimensions now)
   const handleImageLoad = useCallback(
-    (index: number) => {
-      if (isLoadingOlder) return;
-
-      const context = scrollManager.getScrollContext();
-      const isRecent =
-        index >= messages.length - SCROLL_CONSTANTS.RECENT_MESSAGE_COUNT;
-      const trigger = isRecent ? "image_load_recent" : "image_load_old";
-
-      scrollManager.scrollToBottom(trigger, {
-        ...context,
-        isLoadingOlder,
-        messageIndex: index,
-        totalMessages: messages.length,
-      });
+    (_index: number) => {
+      // No-op - images have fixed dimensions, no need to scroll on load
     },
-    [isLoadingOlder, messages.length, scrollManager],
+    [],
   );
 
   // Loading skeleton
