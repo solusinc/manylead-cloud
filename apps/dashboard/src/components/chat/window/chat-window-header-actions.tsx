@@ -106,7 +106,7 @@ export function ChatWindowHeaderActions({
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" aria-label="More options">
+          <Button variant="ghost" size="icon" aria-label="More options" className="text-muted-foreground">
             <MoreVertical className="size-5" />
           </Button>
         </DropdownMenuTrigger>

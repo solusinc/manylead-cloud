@@ -37,8 +37,8 @@ export function ChatInputToolbar({
 } & React.ComponentProps<"div">) {
   return (
     <div className={cn("flex items-center pl-1", className)} {...props}>
-      <ChatInputAttachButton chatId={chatId} onFileSelect={onFileSelect} />
       <ChatInputEmojiButton onEmojiSelect={onEmojiSelect} />
+      <ChatInputAttachButton chatId={chatId} onFileSelect={onFileSelect} />
     </div>
   );
 }
@@ -70,7 +70,7 @@ export function ChatInputEmojiButton({
           <Smile className="size-5" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-full border-0 p-0 bg-transparent" side="top" align="start">
+      <PopoverContent className="w-full border-0 p-0 bg-transparent" side="top" align="start" sideOffset={16}>
         <div className="overflow-hidden rounded-lg">
           <Picker
             data={data}
@@ -163,7 +163,7 @@ export function ChatInputAttachButton({
             <Plus className="size-5" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-56 p-2" side="top" align="start">
+        <PopoverContent className="w-56 p-2" side="top" align="start" sideOffset={16}>
           <div className="space-y-1">
             <AttachMenuOption
               icon={MessageSquareText}
@@ -224,7 +224,7 @@ function AttachMenuOption({
         onClick={inputId ? () => document.getElementById(inputId)?.click() : onClick}
         className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm hover:bg-accent"
       >
-        <Icon className="h-5 w-5" />
+        <Icon className="h-5 w-5 text-muted-foreground" />
         <span>{label}</span>
       </button>
     </>

@@ -89,6 +89,7 @@ export function ChatEndingSelector({ chatId, chatCreatedAt }: ChatEndingSelector
               size="icon"
               aria-label="Finalizar"
               disabled={closeMutation.isPending}
+              className="text-muted-foreground"
             >
               <CheckCircle className="size-5" />
             </Button>

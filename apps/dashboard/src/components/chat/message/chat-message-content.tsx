@@ -108,12 +108,13 @@ export function ChatMessageAttachment({
       {isImage && (
         <button
           onClick={() => openLightbox(messageId)}
-          className="relative cursor-pointer overflow-hidden rounded-lg bg-muted/30 transition-opacity hover:opacity-90"
+          className="relative w-full cursor-pointer overflow-hidden rounded-lg bg-muted/30 transition-opacity hover:opacity-90"
           style={{
-            width: attachment.width ?? 400,
-            height: attachment.height ?? 300,
             maxWidth: '400px',
             maxHeight: '320px',
+            aspectRatio: attachment.width && attachment.height
+              ? `${attachment.width} / ${attachment.height}`
+              : '4 / 3',
           }}
         >
           <Image
@@ -122,7 +123,7 @@ export function ChatMessageAttachment({
             width={attachment.width ?? 400}
             height={attachment.height ?? 300}
             className={cn(
-              "max-h-80 w-full object-cover transition-opacity duration-300",
+              "h-full w-full object-cover transition-opacity duration-300",
               imageLoaded ? "opacity-100" : "opacity-0"
             )}
             loading="eager"

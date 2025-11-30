@@ -123,7 +123,7 @@ export function ChatTagSelector({ chatId, chatCreatedAt }: ChatTagSelectorProps)
               variant="ghost"
               size="icon"
               aria-label="Etiquetas"
-              className="relative"
+              className="relative text-muted-foreground"
             >
               <Tag className="size-5" />
               {selectedIds.length > 0 && (

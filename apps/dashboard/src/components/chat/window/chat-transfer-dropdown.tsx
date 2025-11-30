@@ -85,7 +85,7 @@ export function ChatTransferDropdown({
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label="Transferir">
+        <Button variant="ghost" size="icon" aria-label="Transferir" className="text-muted-foreground">
           <ArrowRightLeft className="size-5" />
         </Button>
       </DropdownMenuTrigger>
