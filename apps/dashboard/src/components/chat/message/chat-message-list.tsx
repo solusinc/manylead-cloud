@@ -47,7 +47,6 @@ export function ChatMessageList({
   const trpc = useTRPC();
   const socket = useChatSocketContext();
   const containerRef = useRef<HTMLDivElement>(null);
-  const [isMounted, setIsMounted] = useState(false);
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
 
   // Track refs for auto-scroll logic
@@ -65,10 +64,17 @@ export function ChatMessageList({
   } = useMessageData(chatId);
 
   // 2. Scroll Layer
-  const scrollManager = useScrollManager();
+  const {
+    messagesEndRef,
+    scrollViewportRef,
+    showScrollButton,
+    scrollToBottom: scrollToBottomFn,
+    getScrollContext,
+    setupScrollListener,
+  } = useScrollManager();
 
   // 3. Infinite Scroll Layer
-  const infiniteScroll = useInfiniteScroll(scrollManager.scrollViewportRef, {
+  const { sentinelRef } = useInfiniteScroll(scrollViewportRef, {
     hasNextPage,
     isFetchingNextPage,
     fetchNextPage,
@@ -93,16 +99,8 @@ export function ChatMessageList({
     trpc.agents.getCurrent.queryOptions(),
   );
 
-  const canEditMessages = isMounted
-    ? (currentAgent?.permissions.messages.canEdit ?? false)
-    : false;
-  const canDeleteMessages = isMounted
-    ? (currentAgent?.permissions.messages.canDelete ?? false)
-    : false;
-
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
+  const canEditMessages = currentAgent?.permissions.messages.canEdit ?? false;
+  const canDeleteMessages = currentAgent?.permissions.messages.canDelete ?? false;
 
   // Reset initial load flag when chat changes
   useEffect(() => {
@@ -119,39 +117,39 @@ export function ChatMessageList({
       isInitialLoadRef.current &&
       !isLoadingOlder
     ) {
-      scrollManager.scrollToBottom("initial_load");
+      scrollToBottomFn("initial_load");
 
       // Keep flag true for 2 seconds to prevent auto-scroll during image loading
       setTimeout(() => {
         isInitialLoadRef.current = false;
       }, 2000);
     }
-  }, [chatId, isLoading, messages.length, isLoadingOlder, scrollManager]);
+  }, [chatId, isLoading, messages.length, isLoadingOlder, scrollToBottomFn]);
 
 
   // Setup scroll listener
   useEffect(() => {
-    return scrollManager.setupScrollListener(containerRef.current);
-  }, [chatId, scrollManager]);
+    return setupScrollListener(containerRef.current);
+  }, [chatId, setupScrollListener]);
 
   // Typing scroll - ONLY if user is near bottom (WhatsApp behavior)
   useEffect(() => {
     if (isTyping) {
-      const context = scrollManager.getScrollContext();
+      const context = getScrollContext();
       // Only scroll if user is near bottom (< 300px)
       if (context.distanceFromBottom < 300) {
-        scrollManager.scrollToBottom("typing_indicator");
+        scrollToBottomFn("typing_indicator");
       }
     }
-  }, [isTyping, scrollManager]);
+  }, [isTyping, getScrollContext, scrollToBottomFn]);
 
   // Chat updated scroll
   const scrollToBottom = useCallback(
     (behavior: "instant" | "smooth" | "auto" = "smooth") => {
       const trigger = behavior === "auto" ? "manual_button" : "chat_updated";
-      scrollManager.scrollToBottom(trigger);
+      scrollToBottomFn(trigger);
     },
-    [scrollManager],
+    [scrollToBottomFn],
   );
 
   // Auto-scroll on new messages - SIMPLIFIED LOGIC
@@ -185,27 +183,27 @@ export function ChatMessageList({
 
     // Only scroll for NEW messages, not when loading older ones
     if (isNewMessage && !loadedOlderMessages) {
-      const context = scrollManager.getScrollContext();
+      const context = getScrollContext();
       const isOwnMessage = lastMessage.sender === "agent";
       const isSystemMessage = lastMessage.sender === "system";
       const hasMedia = !!(lastMessage.messageType && !["text", "comment"].includes(lastMessage.messageType));
 
       // Rule 1: Own messages ALWAYS scroll (instant)
       if (isOwnMessage) {
-        scrollManager.scrollToBottom("own_message");
+        scrollToBottomFn("own_message");
       }
       // Rule 2: System messages ALWAYS scroll (smooth)
       else if (isSystemMessage) {
-        scrollManager.scrollToBottom("system_message");
+        scrollToBottomFn("system_message");
       }
       // Rule 3: Received messages - scroll based on distance from bottom
       else {
         // For media, be more aggressive (scroll if < 500px from bottom)
         if (hasMedia && context.distanceFromBottom < 500) {
-          scrollManager.scrollToBottom("own_message"); // instant scroll
+          scrollToBottomFn("own_message"); // instant scroll
         } else {
           // For text, use standard threshold (300px)
-          scrollManager.scrollToBottom("received_message", {
+          scrollToBottomFn("received_message", {
             ...context,
             isLoadingOlder,
             messageIndex: 0,
@@ -222,7 +220,7 @@ export function ChatMessageList({
     if (firstMessage) {
       firstMessageIdRef.current = firstMessage.id;
     }
-  }, [messages, isFetchingNextPage, isLoadingOlder, scrollManager]);
+  }, [messages, isFetchingNextPage, isLoadingOlder, getScrollContext, scrollToBottomFn]);
 
   // Image load callback - DISABLED (images have fixed dimensions now)
   const handleImageLoad = useCallback(
@@ -258,7 +256,7 @@ export function ChatMessageList({
       {...props}
     >
       {/* Sentinel for infinite scroll */}
-      {hasNextPage && <div ref={infiniteScroll.sentinelRef} className="h-px" />}
+      {hasNextPage && <div ref={sentinelRef} className="h-px" />}
 
       {/* Loading indicator */}
       {isFetchingNextPage && (
@@ -306,11 +304,11 @@ export function ChatMessageList({
         {isTyping && <ChatMessageTypingIndicator />}
 
         {/* Anchor for scroll */}
-        <div ref={scrollManager.messagesEndRef} className="h-6" />
+        <div ref={messagesEndRef} className="h-6" />
       </div>
 
       {/* Scroll to bottom button */}
-      {scrollManager.showScrollButton &&
+      {showScrollButton &&
         !hideScrollButton &&
         typeof document !== "undefined" &&
         createPortal(
