@@ -753,15 +753,17 @@ export function ChatMessageList({
                       return;
                     }
 
-                    // ALWAYS scroll for own RECENT messages - they just sent the media
-                    // Only for last 5 messages to avoid scrolling when old own messages load
+                    // Check if this is a recent message (last 5)
                     const isRecentMessage = index >= messages.length - 5;
-                    if (message.sender === "agent" && isRecentMessage) {
+
+                    // ALWAYS scroll for RECENT messages (own or received) - they just sent/received the media
+                    // Only for last 5 messages to avoid scrolling when old messages load
+                    if (isRecentMessage) {
                       setTimeout(() => scrollToBottom("instant"), 100);
                       return;
                     }
 
-                    // For received messages, only scroll if near bottom
+                    // For old messages, only scroll if near bottom
                     const viewport = scrollViewportRef.current;
                     if (viewport) {
                       const distanceFromBottom =
