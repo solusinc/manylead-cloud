@@ -43,6 +43,17 @@ export interface TypingStopEvent {
   agentId: string;
 }
 
+export interface RecordingStartEvent {
+  chatId: string;
+  agentId: string;
+  agentName: string;
+}
+
+export interface RecordingStopEvent {
+  chatId: string;
+  agentId: string;
+}
+
 export interface ContactLogoUpdatedEvent {
   sourceOrganizationId: string;
   logoUrl: string | null;
@@ -66,11 +77,17 @@ export interface UseChatSocketReturn {
   onMessageDeleted: (callback: (data: MessageDeletedEvent) => void) => () => void;
   onTypingStart: (callback: (data: TypingStartEvent) => void) => () => void;
   onTypingStop: (callback: (data: TypingStopEvent) => void) => () => void;
+  onRecordingStart: (callback: (data: RecordingStartEvent) => void) => () => void;
+  onRecordingStop: (callback: (data: RecordingStopEvent) => void) => () => void;
   onContactLogoUpdated: (callback: (data: ContactLogoUpdatedEvent) => void) => () => void;
 
   // Typing indicators
   emitTypingStart: (chatId: string) => void;
   emitTypingStop: (chatId: string) => void;
+
+  // Recording indicators
+  emitRecordingStart: (chatId: string) => void;
+  emitRecordingStop: (chatId: string) => void;
 }
 
 /**
@@ -85,6 +102,8 @@ export interface UseChatSocketReturn {
  * - message:deleted - Mensagem deletada
  * - typing:start - Usuário começou a digitar
  * - typing:stop - Usuário parou de digitar
+ * - recording:start - Usuário começou a gravar áudio
+ * - recording:stop - Usuário parou de gravar áudio
  */
 export function useChatSocket(): UseChatSocketReturn {
   const socketRef = useRef<Socket | null>(null);
@@ -273,6 +292,30 @@ export function useChatSocket(): UseChatSocketReturn {
     };
   };
 
+  const onRecordingStart = (callback: (data: RecordingStartEvent) => void) => {
+    if (!socketRef.current) {
+      return () => {
+        // No-op
+      };
+    }
+    socketRef.current.on("recording:start", callback);
+    return () => {
+      socketRef.current?.off("recording:start", callback);
+    };
+  };
+
+  const onRecordingStop = (callback: (data: RecordingStopEvent) => void) => {
+    if (!socketRef.current) {
+      return () => {
+        // No-op
+      };
+    }
+    socketRef.current.on("recording:stop", callback);
+    return () => {
+      socketRef.current?.off("recording:stop", callback);
+    };
+  };
+
   const onContactLogoUpdated = (callback: (data: ContactLogoUpdatedEvent) => void) => {
     if (!socketRef.current) {
       return () => {
@@ -298,6 +341,19 @@ export function useChatSocket(): UseChatSocketReturn {
     }
   };
 
+  // Emit recording events
+  const emitRecordingStart = (chatId: string) => {
+    if (socketRef.current?.connected) {
+      socketRef.current.emit("recording:start", { chatId });
+    }
+  };
+
+  const emitRecordingStop = (chatId: string) => {
+    if (socketRef.current?.connected) {
+      socketRef.current.emit("recording:stop", { chatId });
+    }
+  };
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -317,8 +373,12 @@ export function useChatSocket(): UseChatSocketReturn {
     onMessageDeleted,
     onTypingStart,
     onTypingStop,
+    onRecordingStart,
+    onRecordingStop,
     onContactLogoUpdated,
     emitTypingStart,
     emitTypingStop,
+    emitRecordingStart,
+    emitRecordingStop,
   };
 }

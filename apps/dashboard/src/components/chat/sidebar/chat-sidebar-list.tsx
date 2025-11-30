@@ -35,6 +35,9 @@ export function ChatSidebarList({
   // Estado para rastrear quem está digitando (chatId -> true/false)
   const [typingChats, setTypingChats] = useState<Set<string>>(new Set());
 
+  // Estado para rastrear quem está gravando (chatId -> true/false)
+  const [recordingChats, setRecordingChats] = useState<Set<string>>(new Set());
+
   // Buscar agent atual para obter o ID quando o filtro for "mine"
   const { data: currentAgent } = useCurrentAgent();
 
@@ -96,6 +99,29 @@ export function ChatSidebarList({
     return () => {
       unsubscribeTypingStart();
       unsubscribeTypingStop();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [socket.isConnected]);
+
+  // Escutar eventos de recording do Socket.io
+  useEffect(() => {
+    if (!socket.isConnected) return;
+
+    const unsubscribeRecordingStart = socket.onRecordingStart((data) => {
+      setRecordingChats((prev) => new Set(prev).add(data.chatId));
+    });
+
+    const unsubscribeRecordingStop = socket.onRecordingStop((data) => {
+      setRecordingChats((prev) => {
+        const next = new Set(prev);
+        next.delete(data.chatId);
+        return next;
+      });
+    });
+
+    return () => {
+      unsubscribeRecordingStart();
+      unsubscribeRecordingStop();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket.isConnected]);
@@ -214,6 +240,7 @@ export function ChatSidebarList({
                 chat={chat}
                 isActive={chat.id === activeChatId}
                 isTyping={typingChats.has(chat.id)}
+                isRecording={recordingChats.has(chat.id)}
                 currentAgentId={currentAgent?.id}
               />
             </div>

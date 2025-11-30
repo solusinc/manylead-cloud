@@ -18,6 +18,7 @@ interface InfiniteQueryData {
 
 export interface UseMessageSocketReturn {
   isTyping: boolean;
+  isRecording: boolean;
 }
 
 export function useMessageSocket(
@@ -26,6 +27,7 @@ export function useMessageSocket(
 ): UseMessageSocketReturn {
   const queryClient = useQueryClient();
   const [isTyping, setIsTyping] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
 
   /**
    * Helper para atualizar mensagem no cache (DRY)
@@ -89,6 +91,25 @@ export function useMessageSocket(
     "onTypingStop",
     (data) => {
       if (data.chatId === chatId) setIsTyping(false);
+    },
+    [chatId]
+  );
+
+  // Recording events
+  useSocketListener(
+    socket,
+    "onRecordingStart",
+    (data) => {
+      if (data.chatId === chatId) setIsRecording(true);
+    },
+    [chatId]
+  );
+
+  useSocketListener(
+    socket,
+    "onRecordingStop",
+    (data) => {
+      if (data.chatId === chatId) setIsRecording(false);
     },
     [chatId]
   );
@@ -159,5 +180,5 @@ export function useMessageSocket(
     [queryClient]
   );
 
-  return { isTyping };
+  return { isTyping, isRecording };
 }

@@ -4,7 +4,7 @@ import { Server as SocketIOServer } from "socket.io";
 import type { SocketData } from "./types";
 import { env } from "../env";
 import { tenantManager } from "../libs/tenant-manager";
-import { TypingHandler, OrganizationHandler } from "./handlers";
+import { TypingHandler, RecordingHandler, OrganizationHandler } from "./handlers";
 import { authMiddleware } from "./middleware";
 import { RedisPubSubManager } from "./redis-pubsub";
 import { createLogger } from "../libs/utils/logger";
@@ -28,6 +28,7 @@ export class SocketManager {
   private io: SocketIOServer;
   private redisPubSub: RedisPubSubManager;
   private typingHandler: TypingHandler;
+  private recordingHandler: RecordingHandler;
   private organizationHandler: OrganizationHandler;
 
   constructor(httpServer: HTTPServer) {
@@ -56,6 +57,10 @@ export class SocketManager {
     // Initialize typing handler
     log.info("Initializing typing handler...");
     this.typingHandler = new TypingHandler(this.io, tenantManager);
+
+    // Initialize recording handler
+    log.info("Initializing recording handler...");
+    this.recordingHandler = new RecordingHandler(this.io, tenantManager);
 
     // Initialize organization handler
     log.info("Initializing organization handler...");
@@ -136,6 +141,17 @@ export class SocketManager {
 
       socket.on("typing:stop", (data: { chatId: string }) => {
         void this.typingHandler.handleTyping(socket, data, "stop");
+      });
+
+      /**
+       * Recording indicators - delegados para RecordingHandler
+       */
+      socket.on("recording:start", (data: { chatId: string }) => {
+        void this.recordingHandler.handleRecording(socket, data, "start");
+      });
+
+      socket.on("recording:stop", (data: { chatId: string }) => {
+        void this.recordingHandler.handleRecording(socket, data, "stop");
       });
 
       /**

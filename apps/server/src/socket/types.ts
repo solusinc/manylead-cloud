@@ -76,6 +76,19 @@ export interface TypingEvent {
 }
 
 /**
+ * Recording indicator events
+ */
+export interface RecordingEvent {
+  type: "recording:start" | "recording:stop";
+  organizationId: string;
+  chatId: string;
+  userId: string;
+  data: {
+    userName: string;
+  };
+}
+
+/**
  * Union type of all events
  */
 export type SocketEvent =
@@ -83,7 +96,8 @@ export type SocketEvent =
   | ChannelSyncEvent
   | ChatEvent
   | MessageEvent
-  | TypingEvent;
+  | TypingEvent
+  | RecordingEvent;
 
 /**
  * Redis channel names
@@ -94,6 +108,7 @@ export const REDIS_CHANNELS = {
   CHAT: "chat:events",
   MESSAGE: "message:events",
   TYPING: "typing:events",
+  RECORDING: "recording:events",
 } as const;
 
 /**

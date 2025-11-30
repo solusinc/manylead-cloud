@@ -261,6 +261,8 @@ function ChatWindowContent({
           assignedTo={chat.assignedTo}
           onTypingStart={() => socket.emitTypingStart(chatId)}
           onTypingStop={() => socket.emitTypingStop(chatId)}
+          onRecordingStart={() => socket.emitRecordingStart(chatId)}
+          onRecordingStop={() => socket.emitRecordingStop(chatId)}
         />
       </div>
     </div>

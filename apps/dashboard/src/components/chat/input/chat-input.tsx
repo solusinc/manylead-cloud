@@ -32,6 +32,8 @@ export function ChatInput({
   assignedTo,
   onTypingStart,
   onTypingStop,
+  onRecordingStart,
+  onRecordingStop,
   className,
   ...props
 }: {
@@ -41,6 +43,8 @@ export function ChatInput({
   assignedTo: string | null;
   onTypingStart?: () => void;
   onTypingStop?: () => void;
+  onRecordingStart?: () => void;
+  onRecordingStop?: () => void;
 } & React.ComponentProps<"div">) {
   const [isSending, setIsSending] = useState(false);
   const [mode, setMode] = useState<"text" | "recording">("text");
@@ -301,17 +305,19 @@ export function ChatInput({
     async (audioBlob: Blob, duration: number) => {
       try {
         await sendAudio(audioBlob, duration);
+        onRecordingStop?.();
         setMode("text");
       } catch (err) {
         console.error("Failed to send audio:", err);
       }
     },
-    [sendAudio]
+    [sendAudio, onRecordingStop]
   );
 
   const handleAudioCancel = useCallback(() => {
+    onRecordingStop?.();
     setMode("text");
-  }, []);
+  }, [onRecordingStop]);
 
   const handleMicClick = useCallback(() => {
     // Request permission SYNCHRONOUSLY in click handler (preserves user gesture)
@@ -321,6 +327,7 @@ export function ChatInput({
         stream.getTracks().forEach(track => track.stop());
         // Permission granted, now show recorder
         setMode("recording");
+        onRecordingStart?.();
       })
       .catch((err) => {
         const error = err instanceof Error ? err : new Error("Unknown error");
@@ -337,7 +344,7 @@ export function ChatInput({
           });
         }
       });
-  }, []);
+  }, [onRecordingStart]);
 
   // Determina se deve usar rounded-full ou rounded-3xl (WhatsApp style)
   const isMultiLine = rows > 2;
@@ -490,7 +497,12 @@ export function ChatInput({
           </div>
         ) : (
           <div className="border-input bg-background flex flex-1 items-center gap-1 border rounded-full px-2 transition-all">
-            <AudioRecorder onSend={handleAudioSend} onCancel={handleAudioCancel} />
+            <AudioRecorder
+              onSend={handleAudioSend}
+              onCancel={handleAudioCancel}
+              onPause={onRecordingStop}
+              onResume={onRecordingStart}
+            />
           </div>
         )}
       </div>

@@ -3,7 +3,7 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { isSameDay } from "date-fns";
-import { ChevronDown, Loader2 } from "lucide-react";
+import { ChevronDown, Loader2, Mic } from "lucide-react";
 import { createPortal } from "react-dom";
 
 import { cn } from "@manylead/ui";
@@ -89,7 +89,7 @@ export function ChatMessageList({
   });
 
   // 4. Socket Layer
-  const { isTyping } = useMessageSocket(socket, chatId);
+  const { isTyping, isRecording } = useMessageSocket(socket, chatId);
 
   // 5. Focus Layer
   useMessageFocus(chatId);
@@ -142,6 +142,17 @@ export function ChatMessageList({
       }
     }
   }, [isTyping, getScrollContext, scrollToBottomFn]);
+
+  // Recording scroll - ONLY if user is near bottom (WhatsApp behavior)
+  useEffect(() => {
+    if (isRecording) {
+      const context = getScrollContext();
+      // Only scroll if user is near bottom (< 300px)
+      if (context.distanceFromBottom < 300) {
+        scrollToBottomFn("recording_indicator");
+      }
+    }
+  }, [isRecording, getScrollContext, scrollToBottomFn]);
 
   // Chat updated scroll
   const scrollToBottom = useCallback(
@@ -300,8 +311,11 @@ export function ChatMessageList({
           );
         })}
 
+        {/* Recording indicator (prioridade sobre typing) */}
+        {isRecording && <ChatMessageRecordingIndicator />}
+
         {/* Typing indicator */}
-        {isTyping && <ChatMessageTypingIndicator />}
+        {!isRecording && isTyping && <ChatMessageTypingIndicator />}
 
         {/* Anchor for scroll */}
         <div ref={messagesEndRef} className="h-6" />
@@ -356,6 +370,21 @@ function ChatMessageTypingIndicator() {
             •
           </span>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function ChatMessageRecordingIndicator() {
+  return (
+    <div className="mb-2 flex justify-start gap-2">
+      <div className="bg-msg-incoming max-w-[65%] rounded-2xl rounded-bl-sm px-3 py-2.5">
+        <Mic
+          className="h-5 w-5 opacity-70"
+          style={{
+            animation: "pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+          }}
+        />
       </div>
     </div>
   );

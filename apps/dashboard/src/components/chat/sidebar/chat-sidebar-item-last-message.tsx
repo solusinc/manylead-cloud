@@ -12,6 +12,7 @@ import { MessageStatusIcon } from "../message/message-status-icon";
  */
 export function ChatSidebarItemLastMessage({
   isTyping = false,
+  isRecording = false,
   lastMessageIsDeleted = false,
   messageSender,
   messageStatus,
@@ -20,6 +21,7 @@ export function ChatSidebarItemLastMessage({
   className,
 }: {
   isTyping?: boolean;
+  isRecording?: boolean;
   lastMessageIsDeleted?: boolean;
   messageSender?: "agent" | "contact" | "system";
   messageStatus?: MessageStatus;
@@ -27,7 +29,16 @@ export function ChatSidebarItemLastMessage({
   message: string;
   className?: string;
 }) {
-  // Caso 1: Usuário está digitando
+  // Caso 1: Usuário está gravando (prioridade máxima)
+  if (isRecording) {
+    return (
+      <span className="text-primary flex-1 truncate text-sm font-semibold">
+        gravando áudio...
+      </span>
+    );
+  }
+
+  // Caso 2: Usuário está digitando
   if (isTyping) {
     return (
       <span className="text-primary flex-1 truncate text-sm font-semibold">
@@ -36,7 +47,7 @@ export function ChatSidebarItemLastMessage({
     );
   }
 
-  // Caso 2: Mensagem foi deletada
+  // Caso 3: Mensagem foi deletada
   if (lastMessageIsDeleted) {
     return (
       <div className={cn("flex min-w-0 flex-1 items-center gap-1.5", className)}>
@@ -48,7 +59,7 @@ export function ChatSidebarItemLastMessage({
     );
   }
 
-  // Caso 3: Mensagem normal (texto ou mídia)
+  // Caso 4: Mensagem normal (texto ou mídia)
   return (
     <div className={cn("flex min-w-0 flex-1 items-center gap-1.5", className)}>
       {/* Status icon - SOMENTE se última mensagem foi enviada pelo agent */}

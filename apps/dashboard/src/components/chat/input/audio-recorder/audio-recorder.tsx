@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Circle } from "lucide-react";
 import { toast } from "sonner";
 
@@ -12,9 +12,11 @@ import { AudioRecorderWaveform } from "./audio-recorder-waveform";
 interface AudioRecorderProps {
   onSend: (audioBlob: Blob, duration: number) => void;
   onCancel: () => void;
+  onPause?: () => void;
+  onResume?: () => void;
 }
 
-export function AudioRecorder({ onSend, onCancel }: AudioRecorderProps) {
+export function AudioRecorder({ onSend, onCancel, onPause, onResume }: AudioRecorderProps) {
   const {
     state,
     duration,
@@ -34,6 +36,25 @@ export function AudioRecorder({ onSend, onCancel }: AudioRecorderProps) {
   useEffect(() => {
     void startRecording();
   }, [startRecording]);
+
+  // Track previous state to detect pause/resume transitions
+  const prevStateRef = useRef(state);
+
+  // Notify parent when paused/resumed
+  useEffect(() => {
+    const prevState = prevStateRef.current;
+
+    // Só notifica se houve transição (não na montagem)
+    if (prevState !== state) {
+      if (state === "paused") {
+        onPause?.();
+      } else if (state === "recording" && prevState === "paused") {
+        onResume?.();
+      }
+    }
+
+    prevStateRef.current = state;
+  }, [state, onPause, onResume]);
 
   // Handle error
   useEffect(() => {

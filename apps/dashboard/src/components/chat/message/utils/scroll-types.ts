@@ -6,6 +6,7 @@ export type ScrollTrigger =
   | "system_message"         // Mensagem de sistema
   | "received_message"       // Mensagem recebida do contato
   | "typing_indicator"       // Indicador de digitação
+  | "recording_indicator"    // Indicador de gravação
   | "chat_updated"           // Chat transferido/finalizado
   | "image_load_recent"      // Imagem carregou (últimas 5)
   | "image_load_old"         // Imagem carregou (antigas)

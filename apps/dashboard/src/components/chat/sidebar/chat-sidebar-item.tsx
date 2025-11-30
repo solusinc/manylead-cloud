@@ -49,6 +49,7 @@ interface ChatSidebarItemProps {
   };
   isActive?: boolean;
   isTyping?: boolean;
+  isRecording?: boolean;
   currentAgentId?: string;
   className?: string;
 }
@@ -57,6 +58,7 @@ export function ChatSidebarItem({
   chat,
   isActive,
   isTyping = false,
+  isRecording = false,
   currentAgentId,
   className,
   ...props
@@ -92,6 +94,7 @@ export function ChatSidebarItem({
           lastMessageIsDeleted={chat.lastMessageIsDeleted}
           unreadCount={chat.unreadCount}
           isTyping={isTyping}
+          isRecording={isRecording}
           isActive={isActive}
           tags={chat.tags}
           assignedTo={chat.assignedTo}
@@ -179,6 +182,7 @@ export function ChatSidebarItemContent({
   lastMessageIsDeleted = false,
   unreadCount,
   isTyping = false,
+  isRecording = false,
   isActive = false,
   tags,
   assignedTo,
@@ -194,6 +198,7 @@ export function ChatSidebarItemContent({
   lastMessageIsDeleted?: boolean;
   unreadCount: number;
   isTyping?: boolean;
+  isRecording?: boolean;
   isActive?: boolean;
   tags?: Pick<Tag, "id" | "name" | "color">[];
   assignedTo?: string | null;
@@ -223,6 +228,7 @@ export function ChatSidebarItemContent({
       <div className="flex items-center justify-between gap-2">
         <ChatSidebarItemLastMessage
           isTyping={isTyping}
+          isRecording={isRecording}
           lastMessageIsDeleted={lastMessageIsDeleted}
           messageSender={messageSender}
           messageStatus={messageStatus}
