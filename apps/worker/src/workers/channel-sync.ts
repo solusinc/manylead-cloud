@@ -58,9 +58,21 @@ export async function processChannelSync(
     // 1. Fetch messages from Evolution API
     // 2. Store them in the messages table
     // 3. Update sync progress
+    // 4. Track sync cursor/checkpoint for incremental sync
     //
-    // For now, simulate processing time (1 minute)
-    await new Promise((resolve) => setTimeout(resolve, 60000));
+    // Example implementation (commented for future reference):
+    // const messages = await evolutionApi.fetchMessages(channelId, { limit: 100 });
+    // await tenantDb.insert(message).values(messages.map(msg => ({
+    //   id: msg.id,
+    //   channelId: channelId,
+    //   content: msg.content,
+    //   // ... other fields
+    // })));
+
+    logger.warn(
+      { channelId },
+      "Channel sync: actual message sync not implemented yet"
+    );
 
     // Update status to completed
     await tenantDb

@@ -26,6 +26,16 @@ export async function setupCronJobs() {
       connection,
     });
 
+    // Remove existing repeatable jobs to prevent duplicates
+    const existingCleanupJobs = await cleanupQueue.getRepeatableJobs();
+    for (const job of existingCleanupJobs) {
+      await cleanupQueue.removeRepeatableByKey(job.key);
+      logger.info(
+        { jobKey: job.key, jobName: job.name },
+        "Removed existing repeatable job before creating new one"
+      );
+    }
+
     await cleanupQueue.add(
       "daily-cleanup",
       { organizationId: "system" },
@@ -46,6 +56,16 @@ export async function setupCronJobs() {
       name: "attachment-orphan-cleanup",
       connection,
     });
+
+    // Remove existing repeatable jobs to prevent duplicates
+    const existingOrphanJobs = await orphanQueue.getRepeatableJobs();
+    for (const job of existingOrphanJobs) {
+      await orphanQueue.removeRepeatableByKey(job.key);
+      logger.info(
+        { jobKey: job.key, jobName: job.name },
+        "Removed existing repeatable job before creating new one"
+      );
+    }
 
     await orphanQueue.add(
       "weekly-orphan-cleanup",

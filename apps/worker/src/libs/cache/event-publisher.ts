@@ -1,50 +1,26 @@
-import Redis from "ioredis";
-import { env } from "~/env";
 import { logger } from "~/libs/utils/logger";
+import { getRedisClient } from "./redis";
 
 /**
- * Event Publisher Singleton
+ * Event Publisher
  *
- * Manages a single Redis connection for publishing events to Socket.io
- * via Redis Pub/Sub.
+ * Reuses the main Redis connection for publishing events to Socket.io
+ * via Redis Pub/Sub. This avoids creating duplicate connections.
  *
  * Used by workers to send real-time updates:
  * - tenant:provisioning (tenant provisioning progress)
  * - channel:sync (channel sync status)
+ * - chat:events (contact/logo updates)
  */
 class EventPublisher {
-  private static instance: Redis | null = null;
-
   /**
-   * Get Redis publisher instance (singleton)
+   * Get Redis connection for publishing
    *
-   * Creates a new connection on first call, reuses it on subsequent calls.
-   * Connection is configured for optimal pub/sub performance.
+   * Reuses the main BullMQ Redis connection. BullMQ and pub/sub
+   * can safely share the same connection.
    */
-  static getPublisher(): Redis {
-    if (!EventPublisher.instance) {
-      EventPublisher.instance = new Redis(env.REDIS_URL, {
-        lazyConnect: false, // Connect immediately
-        enableAutoPipelining: true, // Batch publish commands for performance
-        keepAlive: 30000, // Keep TCP connection alive for 30 seconds
-        connectTimeout: 10000, // 10 second timeout for initial connection
-      });
-
-      EventPublisher.instance.on("ready", () => {
-        logger.info("Redis event publisher ready");
-      });
-
-      EventPublisher.instance.on("error", (err) => {
-        logger.error(
-          { error: err.message, stack: err.stack },
-          "Redis event publisher error",
-        );
-      });
-
-      logger.info("Redis event publisher initialized");
-    }
-
-    return EventPublisher.instance;
+  static getPublisher() {
+    return getRedisClient();
   }
 
   /**
@@ -79,17 +55,11 @@ class EventPublisher {
   }
 
   /**
-   * Close Redis connection (called on graceful shutdown)
-   *
-   * Cleanly closes the connection and resets the singleton instance.
-   * Should be called in the gracefulShutdown handler.
+   * Close is handled by the main Redis connection (redis.ts)
+   * No need for separate cleanup since we're reusing the connection.
    */
-  static async close(): Promise<void> {
-    if (EventPublisher.instance) {
-      await EventPublisher.instance.quit();
-      EventPublisher.instance = null;
-      logger.info("Redis event publisher closed");
-    }
+  static close(): void {
+    logger.info("Event publisher cleanup - connection managed by main Redis client");
   }
 }
 

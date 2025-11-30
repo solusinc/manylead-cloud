@@ -6,3 +6,4 @@ export * from "./queue";
 export * from "./storage";
 export * from "./api";
 export * from "./logger";
+export * from "./circuit-breaker";

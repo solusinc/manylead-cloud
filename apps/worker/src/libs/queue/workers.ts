@@ -1,5 +1,5 @@
-import type { Worker } from "bullmq";
-import { createWorker } from "@manylead/clients/queue";
+import type { Worker, Queue } from "bullmq";
+import { createWorker, createQueue } from "@manylead/clients/queue";
 import { createLogger } from "~/libs/utils/logger";
 import type { TenantProvisioningJobData } from "~/workers/tenant-provisioning";
 import type { ChannelSyncJobData } from "~/workers/channel-sync";
@@ -233,4 +233,39 @@ export function createWorkers(): Worker[] {
    */
 
   return workers;
+}
+
+/**
+ * Create queue instances for health monitoring
+ * Note: These are Queue instances (for inspection), not Workers
+ */
+export function createQueuesForMonitoring(): { name: string; queue: Queue }[] {
+  const connection = getRedisClient();
+
+  return [
+    {
+      name: "tenant-provisioning",
+      queue: createQueue({ name: "tenant-provisioning", connection }),
+    },
+    {
+      name: "channel-sync",
+      queue: createQueue({ name: "channel-sync", connection }),
+    },
+    {
+      name: "media-download",
+      queue: createQueue({ name: "media-download", connection }),
+    },
+    {
+      name: "attachment-cleanup",
+      queue: createQueue({ name: "attachment-cleanup", connection }),
+    },
+    {
+      name: "attachment-orphan-cleanup",
+      queue: createQueue({ name: "attachment-orphan-cleanup", connection }),
+    },
+    {
+      name: "cross-org-logo-sync",
+      queue: createQueue({ name: "cross-org-logo-sync", connection }),
+    },
+  ];
 }

@@ -29,7 +29,7 @@ import type { CreateQueueOptions, CreateWorkerOptions } from "./types";
 export function createQueue<T = unknown>(
   options: CreateQueueOptions,
 ): Queue<T> {
-  const { name, connection, preset = "default", config = {}, logger } = options;
+  const { name, connection, preset = "default", config = {} } = options;
 
   const baseConfig = getQueueConfig(preset);
 

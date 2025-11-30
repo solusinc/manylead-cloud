@@ -2,8 +2,9 @@ import type { Worker } from "bullmq";
 import { env } from "~/env";
 import { closeRedis } from "~/libs/cache/redis";
 import { eventPublisher } from "~/libs/cache/event-publisher";
-import { createWorkers } from "~/libs/queue/workers";
+import { createWorkers, createQueuesForMonitoring } from "~/libs/queue/workers";
 import { setupCronJobs } from "~/libs/queue/scheduler";
+import { logHealthStatus } from "~/libs/queue/health";
 import { logger } from "~/libs/utils/logger";
 
 /**
@@ -34,14 +35,25 @@ async function startWorker() {
     await setupCronJobs();
     logger.info("Cron jobs setup completed");
 
+    // Setup health check monitoring (every 5 minutes)
+    const queues = createQueuesForMonitoring();
+    const healthCheckInterval = setInterval(() => {
+      void logHealthStatus(queues);
+    }, 5 * 60 * 1000); // 5 minutes
+
+    // Initial health check
+    void logHealthStatus(queues);
+
     // Keep process alive
     process.on("SIGTERM", () => {
       logger.info("SIGTERM received, shutting down gracefully");
+      clearInterval(healthCheckInterval);
       void gracefulShutdown(workers);
     });
 
     process.on("SIGINT", () => {
       logger.info("SIGINT received, shutting down gracefully");
+      clearInterval(healthCheckInterval);
       void gracefulShutdown(workers);
     });
   } catch (error) {
@@ -74,8 +86,8 @@ async function gracefulShutdown(workers: Worker[]) {
   // Close Redis connection
   await closeRedis();
 
-  // Close event publisher
-  await eventPublisher.close();
+  // Close event publisher (no await needed - managed by main Redis connection)
+  eventPublisher.close();
 
   logger.info("Graceful shutdown complete");
   process.exit(0);

@@ -7,8 +7,10 @@ import {
 } from "@manylead/storage/utils";
 import { evolutionAPI } from "@manylead/evolution-api-client";
 import { storage } from "@manylead/storage";
+import { CircuitBreakerError } from "@manylead/clients";
 import { logger } from "~/libs/utils/logger";
 import { tenantManager } from "~/libs/tenant-manager";
+import { evolutionCircuitBreaker } from "~/libs/evolution-circuit-breaker";
 
 /**
  * Media download job data schema
@@ -65,16 +67,15 @@ export async function processMediaDownload(
 
     logger.debug({ attachmentId }, "Attachment status updated to downloading");
 
-    // Download media from Evolution API
+    // Download media from Evolution API (with circuit breaker protection)
     logger.debug(
       { instanceName, whatsappMediaId },
       "Downloading media from Evolution API",
     );
 
-    const mediaData = await evolutionAPI.message.downloadMedia(
-      instanceName,
-      whatsappMediaId,
-    );
+    const mediaData = await evolutionCircuitBreaker.execute(async () => {
+      return evolutionAPI.message.downloadMedia(instanceName, whatsappMediaId);
+    });
 
     logger.debug(
       { attachmentId, mimeType: mediaData.mimetype },
@@ -135,16 +136,31 @@ export async function processMediaDownload(
     const errorMessage =
       error instanceof Error ? error.message : String(error);
 
-    logger.error(
-      {
-        jobId: job.id,
-        organizationId,
-        attachmentId,
-        error: errorMessage,
-        stack: error instanceof Error ? error.stack : undefined,
-      },
-      "Media download failed",
-    );
+    // Special handling for circuit breaker errors
+    if (error instanceof CircuitBreakerError) {
+      logger.error(
+        {
+          jobId: job.id,
+          organizationId,
+          attachmentId,
+          circuitState: error.state,
+          circuitStats: error.stats,
+          error: errorMessage,
+        },
+        "Media download failed - Evolution API circuit breaker is OPEN",
+      );
+    } else {
+      logger.error(
+        {
+          jobId: job.id,
+          organizationId,
+          attachmentId,
+          error: errorMessage,
+          stack: error instanceof Error ? error.stack : undefined,
+        },
+        "Media download failed",
+      );
+    }
 
     try {
       // Update attachment with failure

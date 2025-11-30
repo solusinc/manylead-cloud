@@ -1,5 +1,5 @@
 import type { Job } from "bullmq";
-import { and, attachment, eq, inArray, isNotNull, sql } from "@manylead/db";
+import { and, attachment, eq, inArray, isNotNull } from "@manylead/db";
 import { db, organization } from "@manylead/db";
 import { storage } from "@manylead/storage";
 import { logger } from "~/libs/utils/logger";
