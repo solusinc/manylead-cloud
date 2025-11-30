@@ -39,7 +39,7 @@ export function ChatMessageComment({
   return (
     <div className={cn("group mb-4 flex justify-center", className)}>
       <div
-        className="relative flex max-w-2xl items-start gap-2 rounded-lg bg-emerald-50 px-4 py-3 text-sm shadow-sm dark:bg-emerald-950/30"
+        className="relative flex max-w-2xl items-start gap-2 rounded-lg bg-emerald-50 px-4 py-3 text-sm shadow-sm dark:bg-emerald-950/80"
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
@@ -53,7 +53,7 @@ export function ChatMessageComment({
           </p>
         </div>
         {(isHovered || isMenuOpen) && (
-          <div className="absolute top-1 right-1 rounded-full bg-emerald-50/50 p-0.5 transition-all duration-200 dark:bg-emerald-950/50">
+          <div className="absolute top-1 right-1 rounded-full bg-emerald-50/80 p-0.5 transition-all duration-200 dark:bg-emerald-950/90">
             <ChatCommentActions
               message={message}
               onOpenChange={setIsMenuOpen}
@@ -83,7 +83,6 @@ export function ChatCommentActions({
   const deleteCommentMutation = useMutation(
     trpc.messages.deleteComment.mutationOptions({
       onSuccess: () => {
-        toast.success("Comentário removido");
         void queryClient.invalidateQueries({ queryKey: [["messages"]] });
       },
       onError: (error) => {
@@ -168,7 +167,7 @@ export function ChatMessageSystem({
 
     return (
       <div className={cn("mb-4 flex justify-center", className)}>
-        <div className="dark:bg-muted/50 w-full max-w-4xl rounded-lg bg-white px-4 py-3 text-sm shadow-sm">
+        <div className="w-full max-w-4xl rounded-lg bg-white px-4 py-3 text-sm shadow-sm dark:bg-muted/90">
           {/* Layout em 2 colunas em md/lg */}
           <div className="grid grid-cols-1 gap-x-6 gap-y-2 md:grid-cols-2">
             {/* Coluna 1 */}
@@ -241,7 +240,7 @@ export function ChatMessageSystem({
   // Mensagens simples (Sessão criada, Transferida, etc.)
   return (
     <div className={cn("mb-4 flex justify-center", className)}>
-      <div className="dark:bg-muted/50 flex items-center gap-2 rounded-lg bg-white px-3 py-1.5 text-sm font-semibold shadow-sm">
+      <div className="flex items-center gap-2 rounded-lg bg-white px-3 py-1.5 text-sm font-semibold shadow-sm dark:bg-muted/90">
         <ArrowRightLeft className="h-3.5 w-3.5" />
         <span>{message.content}</span>
       </div>

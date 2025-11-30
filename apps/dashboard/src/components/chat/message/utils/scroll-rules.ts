@@ -56,6 +56,7 @@ export class ScrollRuleEngine {
     switch (trigger) {
       case "initial_load":
       case "own_message":
+      case "system_message":
       case "image_load_recent":
       case "image_load_old":
         return "instant";
