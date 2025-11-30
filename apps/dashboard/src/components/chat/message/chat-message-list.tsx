@@ -1,23 +1,7 @@
-/* eslint-disable @typescript-eslint/non-nullable-type-assertion-style */
-/* eslint-disable @typescript-eslint/no-unnecessary-condition */
 "use client";
 
-import {
-  createContext,
-  Fragment,
-  useCallback,
-  useContext,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import {
-  useInfiniteQuery,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { isSameDay } from "date-fns";
 import { ChevronDown, Loader2 } from "lucide-react";
 import { createPortal } from "react-dom";
@@ -26,36 +10,28 @@ import { cn } from "@manylead/ui";
 import { Button } from "@manylead/ui/button";
 import { Skeleton } from "@manylead/ui/skeleton";
 
+import type { Message } from "./chat-message";
 import { useChatSocketContext } from "~/components/providers/chat-socket-provider";
-import { useSocketListener } from "~/hooks/chat/use-socket-listener";
 import { useTRPC } from "~/lib/trpc/react";
-import { useMessageFocusStore } from "~/stores/use-message-focus-store";
 import { ChatMessage } from "./chat-message";
 import { ChatMessageDateDivider } from "./chat-message-date";
 import { ChatMessageComment, ChatMessageSystem } from "./chat-message-system";
-
-// Context to expose refetch function to parent components
-const ChatMessageRefetchContext = createContext<(() => void) | null>(null);
-export const useChatMessageRefetch = () =>
-  useContext(ChatMessageRefetchContext);
-
-const INITIAL_LIMIT = 50; // WhatsApp-style: 50 mensagens iniciais
-const LOAD_MORE_LIMIT = 30; // WhatsApp-style: 30 mensagens por scroll
+// Hooks
+import { useInfiniteScroll } from "./hooks/use-infinite-scroll";
+import { useMessageData } from "./hooks/use-message-data";
+import { useMessageFocus } from "./hooks/use-message-focus";
+import { useMessageSocket } from "./hooks/use-message-socket";
+import { useScrollManager } from "./hooks/use-scroll-manager";
+import { SCROLL_CONSTANTS } from "./utils/scroll-rules";
 
 /**
- * Determine if a date divider should be shown between two messages
- * WhatsApp style: show divider when date changes
+ * Determine if a date divider should be shown
  */
 function shouldShowDateDivider(
   currentTimestamp: Date,
   previousTimestamp?: Date,
 ): boolean {
-  // Always show divider for first message
-  if (!previousTimestamp) {
-    return true;
-  }
-
-  // Show divider if messages are on different days
+  if (!previousTimestamp) return true;
   return !isSameDay(new Date(currentTimestamp), new Date(previousTimestamp));
 }
 
@@ -66,29 +42,56 @@ export function ChatMessageList({
 }: {
   chatId: string;
 } & React.ComponentProps<"div">) {
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const sentinelRef = useRef<HTMLDivElement>(null);
-  const observerRef = useRef<IntersectionObserver | null>(null);
-  const scrollViewportRef = useRef<HTMLElement | null>(null);
-  const anchorMessageIdRef = useRef<string | null>(null);
-  const anchorOffsetFromTopRef = useRef<number>(0);
-  const savedScrollTopRef = useRef<number>(0);
-  const previousMessageCountRef = useRef<number>(0);
-  const isLoadingOlderMessagesRef = useRef<boolean>(false);
   const trpc = useTRPC();
   const socket = useChatSocketContext();
-  const queryClient = useQueryClient();
-  const [isTyping, setIsTyping] = useState(false);
-  const [showScrollButton, setShowScrollButton] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isMounted, setIsMounted] = useState(false);
+  const [isLoadingOlder, setIsLoadingOlder] = useState(false);
 
-  // Buscar permissões do agent atual uma vez
+  // Track refs for auto-scroll logic
+  const lastMessageIdRef = useRef<string | null>(null);
+  const firstMessageIdRef = useRef<string | null>(null);
+  const isInitialLoadRef = useRef(true);
+  const initialLoadTimestampRef = useRef<number>(0);
+
+  // 1. Data Layer
+  const {
+    messages,
+    isLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useMessageData(chatId);
+
+  // 2. Scroll Layer
+  const scrollManager = useScrollManager();
+
+  // 3. Infinite Scroll Layer
+  const infiniteScroll = useInfiniteScroll(scrollManager.scrollViewportRef, {
+    hasNextPage,
+    isFetchingNextPage,
+    fetchNextPage,
+    messageCount: messages.length,
+    onLoadingStart: () => setIsLoadingOlder(true),
+    onLoadingEnd: () => {
+      setTimeout(
+        () => setIsLoadingOlder(false),
+        SCROLL_CONSTANTS.LOADING_PROTECTION_MS,
+      );
+    },
+  });
+
+  // 4. Socket Layer
+  const { isTyping } = useMessageSocket(socket, chatId);
+
+  // 5. Focus Layer
+  useMessageFocus(chatId);
+
+  // 6. Permissions
   const { data: currentAgent } = useQuery(
     trpc.agents.getCurrent.queryOptions(),
   );
 
-  // Garantir consistência entre server e client para evitar hydration errors
   const canEditMessages = isMounted
     ? (currentAgent?.permissions.messages.canEdit ?? false)
     : false;
@@ -96,590 +99,184 @@ export function ChatMessageList({
     ? (currentAgent?.permissions.messages.canDelete ?? false)
     : false;
 
-  // Marcar como mounted após hidratação
   useEffect(() => {
     setIsMounted(true);
   }, []);
 
-  // Message focus store (para navegação de busca)
-  const { focusMessageId, focusChatId, clearFocus } = useMessageFocusStore();
-  const shouldFocusMessage = focusChatId === chatId && focusMessageId !== null;
-
-  // TanStack Query handles ALL the complexity for us
-  const { data, isLoading, isFetchingNextPage, fetchNextPage, hasNextPage } =
-    useInfiniteQuery({
-      ...trpc.messages.list.infiniteQueryOptions({
-        chatId,
-        firstPageLimit: INITIAL_LIMIT,
-        limit: LOAD_MORE_LIMIT,
-      }),
-      getNextPageParam: (lastPage) => lastPage.nextCursor,
-      staleTime: Infinity, // NEVER mark as stale - we'll manually refetch first page only
-      gcTime: Infinity, // Keep in cache forever
-    });
-
-  // Flatten pages - backend returns ASC, we reverse pages to get chronological order
-  // Memoized to prevent unnecessary array operations on every render
-  const messages = useMemo(
-    () =>
-      (data?.pages
-        ? [...data.pages].reverse().flatMap((page) => page.items)
-        : []
-      ).map((item) => ({
-        id: item.message.id,
-        content: item.message.content,
-        sender:
-          item.message.sender === "system"
-            ? ("system" as const)
-            : item.isOwnMessage
-              ? ("agent" as const)
-              : ("contact" as const),
-        timestamp: item.message.timestamp,
-        status: item.message.status as
-          | "pending"
-          | "sent"
-          | "delivered"
-          | "read"
-          | undefined,
-        messageType: item.message.messageType as string | undefined,
-        isStarred: item.message.isStarred,
-        isDeleted: item.message.isDeleted,
-        isEdited: item.message.isEdited,
-        editedAt: item.message.editedAt as Date | null | undefined,
-        readAt: item.message.readAt as Date | null | undefined,
-        repliedToMessageId: item.message.repliedToMessageId as
-          | string
-          | null
-          | undefined,
-        metadata: item.message.metadata as Record<string, unknown> | undefined,
-        chatId,
-        attachment: item.attachment ?? undefined,
-      })),
-    [data?.pages, chatId],
-  );
-
-  // Query para buscar mensagens ao redor de uma mensagem específica (navegação de busca)
-  const { data: contextData, isLoading: _isLoadingContext } = useQuery({
-    ...trpc.messages.getContext.queryOptions({
-      chatId,
-      messageId: focusMessageId ?? "",
-      before: 30,
-      after: 30,
-    }),
-    enabled: shouldFocusMessage,
-  });
-
-  // Efeito para processar o foco em uma mensagem
+  // Reset initial load flag when chat changes
   useEffect(() => {
-    if (!shouldFocusMessage || !focusMessageId) return;
+    isInitialLoadRef.current = true;
+    initialLoadTimestampRef.current = Date.now();
+    lastMessageIdRef.current = null;
+    firstMessageIdRef.current = null;
+  }, [chatId]);
 
-    // Função para fazer scroll e highlight
-    const scrollAndHighlight = (messageId: string) => {
-      setTimeout(() => {
-        const messageElement = document.querySelector(
-          `[data-message-id="${messageId}"]`,
-        );
-        if (messageElement) {
-          messageElement.scrollIntoView({
-            behavior: "instant",
-            block: "center",
-          });
-          messageElement.classList.add("reply-highlight");
-          setTimeout(() => {
-            messageElement.classList.remove("reply-highlight");
-          }, 2000);
-        }
-        clearFocus();
-      }, 100);
-    };
-
-    // Primeiro, verificar se a mensagem já está no DOM
-    const existingElement = document.querySelector(
-      `[data-message-id="${focusMessageId}"]`,
-    );
-    if (existingElement) {
-      scrollAndHighlight(focusMessageId);
-      return;
-    }
-
-    // Se não está no DOM e temos dados de contexto, atualizar o cache
-    if (contextData?.items && contextData.items.length > 0) {
-      // Criar uma nova página com as mensagens do contexto
-      const contextPage = {
-        items: contextData.items,
-        nextCursor: contextData.hasMoreBefore
-          ? contextData.items[0]?.message.id
-          : undefined,
-        hasMore: contextData.hasMoreBefore,
-      };
-
-      // Substituir os dados no cache temporariamente
-      const queryKey = trpc.messages.list.infiniteQueryKey({
-        chatId,
-        firstPageLimit: 50,
-        limit: 30,
-      });
-      queryClient.setQueryData(queryKey, {
-        pages: [contextPage],
-        pageParams: [null],
-      });
-
-      // Após atualizar, fazer scroll
-      scrollAndHighlight(focusMessageId);
-    }
-  }, [
-    shouldFocusMessage,
-    focusMessageId,
-    contextData,
-    clearFocus,
-    queryClient,
-    trpc,
-    chatId,
-  ]);
-
-  // Scroll to bottom on initial load
-  const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
-    messagesEndRef.current?.scrollIntoView({ behavior, block: "end" });
-  }, []);
-
-  // Initial scroll to bottom ONLY on first load (not when loading more messages)
-  const isInitialLoadRef = useRef(true);
+  // Initial scroll to bottom
   useEffect(() => {
-    // CRITICAL: Don't scroll if we're loading older messages!
     if (
       !isLoading &&
       messages.length > 0 &&
       isInitialLoadRef.current &&
-      !isLoadingOlderMessagesRef.current
-    ) {
-      scrollToBottom("instant");
-      isInitialLoadRef.current = false;
-    }
-  }, [chatId, isLoading, messages.length, scrollToBottom]);
-
-  // Reset initial load flag when chat changes
-  useEffect(() => {
-    isInitialLoadRef.current = true;
-  }, [chatId]);
-
-  // Setup scroll listener ONCE for show/hide scroll-to-bottom button
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) return;
-
-    let scrollViewport = container.querySelector(
-      "[data-radix-scroll-area-viewport]",
-    ) as HTMLElement;
-
-    if (!scrollViewport) {
-      // Try finding viewport by going up from container
-      let parent = container.parentElement;
-      while (parent && !scrollViewport) {
-        scrollViewport = parent.querySelector(
-          "[data-radix-scroll-area-viewport]",
-        ) as HTMLElement;
-        parent = parent.parentElement;
-      }
-    }
-
-    if (!scrollViewport) return;
-
-    scrollViewportRef.current = scrollViewport;
-
-    const handleScroll = () => {
-      const distanceFromBottom =
-        scrollViewport.scrollHeight -
-        scrollViewport.scrollTop -
-        scrollViewport.clientHeight;
-      setShowScrollButton(distanceFromBottom > 300);
-    };
-
-    handleScroll();
-    scrollViewport.addEventListener("scroll", handleScroll);
-
-    return () => {
-      scrollViewport.removeEventListener("scroll", handleScroll);
-    };
-  }, [chatId]);
-
-  // INDUSTRY STANDARD: IntersectionObserver for loading older messages
-  useEffect(() => {
-    // Clean up previous observer
-    if (observerRef.current) {
-      observerRef.current.disconnect();
-    }
-
-    // Don't set up observer if no more pages or currently fetching
-    if (!hasNextPage || !sentinelRef.current) {
-      return;
-    }
-
-    // Find the Radix ScrollArea viewport
-    let scrollViewport = sentinelRef.current.parentElement;
-    while (
-      scrollViewport &&
-      !scrollViewport.hasAttribute("data-radix-scroll-area-viewport")
-    ) {
-      scrollViewport = scrollViewport.parentElement;
-    }
-
-    if (!scrollViewport) return;
-
-    // Create IntersectionObserver with the scroll viewport as root
-    observerRef.current = new IntersectionObserver(
-      (entries) => {
-        const entry = entries[0];
-        if (!entry) return;
-
-        // When sentinel becomes visible AND we're not already fetching
-        if (entry.isIntersecting && !isFetchingNextPage) {
-          // Mark that we're loading older messages - prevents auto-scroll
-          isLoadingOlderMessagesRef.current = true;
-
-          // CRITICAL: Find the first visible message and save its ID AND position relative to viewport top
-          if (scrollViewport) {
-            // SAVE CURRENT SCROLL POSITION!
-            savedScrollTopRef.current = scrollViewport.scrollTop;
-
-            const viewportRect = scrollViewport.getBoundingClientRect();
-            const messageElements =
-              scrollViewport.querySelectorAll("[data-message-id]");
-
-            // Find first message that's visible in viewport
-            for (const el of Array.from(messageElements)) {
-              const rect = el.getBoundingClientRect();
-              if (
-                rect.top >= viewportRect.top &&
-                rect.top <= viewportRect.bottom
-              ) {
-                anchorMessageIdRef.current = el.getAttribute("data-message-id");
-                // Save the offset from the top of the viewport
-                anchorOffsetFromTopRef.current = rect.top - viewportRect.top;
-                break;
-              }
-            }
-
-            previousMessageCountRef.current = messages.length;
-          }
-
-          void fetchNextPage();
-        }
-      },
-      {
-        root: scrollViewport,
-        rootMargin: "200px 0px 0px 0px",
-        threshold: 0,
-      },
-    );
-
-    // Start observing the sentinel
-    observerRef.current.observe(sentinelRef.current);
-
-    // Cleanup on unmount or when dependencies change
-    return () => {
-      if (observerRef.current) {
-        observerRef.current.disconnect();
-      }
-    };
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage, messages.length]);
-
-  // Escutar eventos de typing para este chat
-  useSocketListener(
-    socket,
-    "onTypingStart",
-    (data) => {
-      if (data.chatId === chatId) {
-        setIsTyping(true);
-      }
-    },
-    [chatId],
-  );
-
-  useSocketListener(
-    socket,
-    "onTypingStop",
-    (data) => {
-      if (data.chatId === chatId) {
-        setIsTyping(false);
-      }
-    },
-    [chatId],
-  );
-
-  // Escutar eventos de message:updated para atualizar mensagens (star toggle, read status)
-  useSocketListener(
-    socket,
-    "onMessageUpdated",
-    (event) => {
-      const messageChatId = event.message.chatId as string;
-      if (messageChatId === chatId) {
-        const updatedMessage = event.message;
-        const messageId = updatedMessage.id as string;
-
-        // Atualizar diretamente no cache ao invés de invalidar (mais rápido)
-        const queries = queryClient.getQueryCache().findAll({
-          queryKey: [["messages", "list"]],
-          exact: false,
-        });
-
-        queries.forEach((query) => {
-          const queryState = query.state.data as
-            | {
-                pages: {
-                  items: {
-                    message: Record<string, unknown>;
-                    attachment: Record<string, unknown> | null;
-                    isOwnMessage: boolean;
-                  }[];
-                  nextCursor: string | undefined;
-                  hasMore: boolean;
-                }[];
-                pageParams: unknown[];
-              }
-            | undefined;
-
-          if (!queryState?.pages) return;
-
-          // Atualizar a mensagem no cache
-          const newPages = queryState.pages.map((page) => ({
-            ...page,
-            items: page.items.map((item) =>
-              item.message.id === messageId
-                ? {
-                    ...item,
-                    message: {
-                      ...item.message,
-                      status: updatedMessage.status,
-                      isStarred: updatedMessage.isStarred,
-                      readAt: updatedMessage.readAt,
-                      content: updatedMessage.content,
-                      isEdited: updatedMessage.isEdited,
-                      editedAt: updatedMessage.editedAt,
-                      isDeleted: updatedMessage.isDeleted,
-                    } as Record<string, unknown>,
-                  }
-                : item,
-            ),
-          }));
-
-          queryClient.setQueryData(query.queryKey, {
-            ...queryState,
-            pages: newPages,
-            pageParams: queryState.pageParams,
-          });
-
-          // Force re-render
-          void queryClient.invalidateQueries({
-            queryKey: query.queryKey,
-            refetchType: "none",
-          });
-        });
-      }
-    },
-    [chatId, queryClient],
-  );
-
-  // Escutar eventos de chat:updated para fazer scroll após transferir/finalizar/assign
-  useSocketListener(
-    socket,
-    "onChatUpdated",
-    (event) => {
-      const updatedChatId = event.chat.id as string;
-
-      // Se for o chat atual, fazer scroll to bottom após um delay para garantir que mensagens foram carregadas
-      if (updatedChatId === chatId) {
-        setTimeout(() => {
-          scrollToBottom("smooth");
-        }, 300);
-      }
-    },
-    [chatId, scrollToBottom],
-  );
-
-  // Escutar eventos de message:deleted para remover mensagens deletadas
-  useSocketListener(
-    socket,
-    "onMessageDeleted",
-    (event) => {
-      const messageId = event.message.id as string;
-
-      // Remover mensagem do cache
-      const queries = queryClient.getQueryCache().findAll({
-        queryKey: [["messages", "list"]],
-        exact: false,
-      });
-
-      queries.forEach((query) => {
-        const queryState = query.state.data as
-          | {
-              pages: {
-                items: {
-                  message: Record<string, unknown>;
-                  attachment: Record<string, unknown> | null;
-                  isOwnMessage: boolean;
-                }[];
-                nextCursor: string | undefined;
-                hasMore: boolean;
-              }[];
-              pageParams: unknown[];
-            }
-          | undefined;
-
-        if (!queryState?.pages) return;
-
-        // Remover a mensagem do cache
-        const newPages = queryState.pages.map((page) => ({
-          ...page,
-          items: page.items.filter((item) => item.message.id !== messageId),
-        }));
-
-        queryClient.setQueryData(query.queryKey, {
-          ...queryState,
-          pages: newPages,
-          pageParams: queryState.pageParams,
-        });
-
-        // Force re-render
-        void queryClient.invalidateQueries({
-          queryKey: query.queryKey,
-          refetchType: "none",
-        });
-      });
-    },
-    [queryClient],
-  );
-
-  // Auto-scroll: ALWAYS when YOU send, only if near bottom when receiving
-  const previousMessagesLengthRef = useRef(messages.length);
-  const lastMessageIdRef = useRef<string | null>(null);
-  const firstMessageIdRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    const currentLength = messages.length;
-    const previousLength = previousMessagesLengthRef.current;
-
-    // Skip auto-scroll if we're loading older messages (infinite scroll)
-    const isLoadingOlder = isLoadingOlderMessagesRef.current;
-
-    // Only scroll if messages were ADDED (not initial load, not loading older messages)
-    if (
-      currentLength > previousLength &&
-      !isInitialLoadRef.current &&
-      !isFetchingNextPage &&
       !isLoadingOlder
     ) {
-      const firstMessage = messages[0];
-      const lastMessage = messages[messages.length - 1];
-
-      // Initialize firstMessageIdRef if not set
-      if (!firstMessageIdRef.current && firstMessage) {
-        firstMessageIdRef.current = firstMessage.id;
-      }
-
-      // Check if first message ID changed - means we loaded OLDER messages at the top
-      // In this case, DON'T auto-scroll
-      const loadedOlderMessages =
-        firstMessage && firstMessage.id !== firstMessageIdRef.current;
-
-      if (!loadedOlderMessages) {
-        // Check if this is a NEW message we haven't seen before (at the bottom)
-        if (lastMessage && lastMessage.id !== lastMessageIdRef.current) {
-          const isOwnMessage = lastMessage.sender === "agent";
-          const isSystemMessage = lastMessage.sender === "system";
-
-          // ALWAYS scroll when YOU send OR when system messages (transfer, assign, close)
-          if (isOwnMessage || isSystemMessage) {
-            scrollToBottom("instant");
-          } else {
-            // Only scroll if near bottom for received messages
-            const viewport = scrollViewportRef.current;
-            if (viewport) {
-              const distanceFromBottom =
-                viewport.scrollHeight -
-                viewport.scrollTop -
-                viewport.clientHeight;
-              const isNearBottom = distanceFromBottom < 200;
-
-              if (isNearBottom) {
-                setTimeout(() => {
-                  scrollToBottom("smooth");
-                }, 50);
-              }
-            }
-          }
-
-          lastMessageIdRef.current = lastMessage.id;
-        }
-      }
-
-      // Update firstMessageIdRef
-      if (firstMessage) {
-        firstMessageIdRef.current = firstMessage.id;
-      }
+      scrollManager.scrollToBottom("initial_load");
+      isInitialLoadRef.current = false;
     }
+  }, [chatId, isLoading, messages.length, isLoadingOlder, scrollManager]);
 
-    previousMessagesLengthRef.current = currentLength;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messages.length, isFetchingNextPage, scrollToBottom]);
-
-  // Scroll quando typing indicator aparecer/desaparecer
+  // ResizeObserver for initial load - handles media loading professionally
   useEffect(() => {
-    if (isTyping) {
-      // Scroll suave quando alguém começa a digitar
-      scrollToBottom("smooth");
-    }
-  }, [isTyping, scrollToBottom]);
-
-  // CRITICAL: Restore scroll position after loading older messages
-  // useLayoutEffect executes SYNCHRONOUSLY before browser paint - prevents visual jump
-  useLayoutEffect(() => {
-    // Skip if no anchor message saved
-    if (!anchorMessageIdRef.current) {
+    if (isLoading || !containerRef.current || messages.length === 0) {
       return;
     }
 
-    // Only adjust if we loaded MORE messages (older messages were added)
-    if (messages.length > previousMessageCountRef.current) {
-      const viewport = scrollViewportRef.current;
-      const anchorMessageId = anchorMessageIdRef.current;
-      const savedOffsetFromTop = anchorOffsetFromTopRef.current;
-      const savedScrollTop = savedScrollTopRef.current;
+    const container = containerRef.current;
+    let resizeTimeout: NodeJS.Timeout;
 
-      if (!viewport) return;
+    const resizeObserver = new ResizeObserver(() => {
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(() => {
+        // Only scroll if within 5 seconds of initial load (enough time for heavy media)
+        const timeSinceLoad = Date.now() - initialLoadTimestampRef.current;
+        if (timeSinceLoad < 5000) {
+          const context = scrollManager.getScrollContext();
+          if (context.distanceFromBottom < 800) {
+            scrollManager.scrollToBottom("initial_load");
+          }
+        }
+      }, 50);
+    });
 
-      // Find the anchor message element
-      const anchorElement = viewport.querySelector(
-        `[data-message-id="${anchorMessageId}"]`,
-      ) as HTMLElement;
+    resizeObserver.observe(container);
 
-      if (anchorElement) {
-        // Get the anchor element's current position relative to the viewport
-        const viewportRect = viewport.getBoundingClientRect();
-        const anchorRect = anchorElement.getBoundingClientRect();
+    return () => {
+      resizeObserver.disconnect();
+      clearTimeout(resizeTimeout);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- messages.length is intentionally NOT in deps to prevent recreating observer on every message
+  }, [chatId, isLoading, scrollManager]);
 
-        // Calculate the current offset from viewport top
-        const currentOffsetFromTop = anchorRect.top - viewportRect.top;
+  // Setup scroll listener
+  useEffect(() => {
+    return scrollManager.setupScrollListener(containerRef.current);
+  }, [chatId, scrollManager]);
 
-        // Adjust scroll to restore the original offset
-        // IMPORTANT: Use savedScrollTop as base, not viewport.scrollTop (which may be 0)
-        const scrollAdjustment = currentOffsetFromTop - savedOffsetFromTop;
+  // Typing scroll
+  useEffect(() => {
+    if (isTyping) {
+      scrollManager.scrollToBottom("typing_indicator");
+    }
+  }, [isTyping, scrollManager]);
 
-        viewport.scrollTop = savedScrollTop + scrollAdjustment;
+  // Chat updated scroll
+  const scrollToBottom = useCallback(
+    (behavior: "instant" | "smooth" | "auto" = "smooth") => {
+      const trigger = behavior === "auto" ? "manual_button" : "chat_updated";
+      scrollManager.scrollToBottom(trigger);
+    },
+    [scrollManager],
+  );
+
+  // Auto-scroll on new messages - SIMPLIFIED LOGIC
+  useEffect(() => {
+    // Skip if no messages or still in initial load phase
+    if (messages.length === 0 || isInitialLoadRef.current) {
+      return;
+    }
+
+    // Skip if loading older messages (prevents jump)
+    if (isFetchingNextPage || isLoadingOlder) {
+      return;
+    }
+
+    const lastMessage = messages[messages.length - 1];
+    if (!lastMessage) return;
+
+    // First time seeing messages - initialize ref and skip scroll
+    if (!lastMessageIdRef.current) {
+      lastMessageIdRef.current = lastMessage.id;
+      firstMessageIdRef.current = messages[0]?.id ?? null;
+      return;
+    }
+
+    // Check if this is a NEW message (different from last known ID)
+    const isNewMessage = lastMessage.id !== lastMessageIdRef.current;
+
+    // Check if we loaded older messages at the top (first message changed)
+    const firstMessage = messages[0];
+    const loadedOlderMessages = firstMessage && firstMessage.id !== firstMessageIdRef.current;
+
+    // Only scroll for NEW messages, not when loading older ones
+    if (isNewMessage && !loadedOlderMessages) {
+      const context = scrollManager.getScrollContext();
+      const isOwnMessage = lastMessage.sender === "agent";
+      const isSystemMessage = lastMessage.sender === "system";
+      const hasMedia = !!(lastMessage.messageType && !["text", "comment"].includes(lastMessage.messageType));
+
+      // Rule 1: Own messages ALWAYS scroll (instant)
+      if (isOwnMessage) {
+        scrollManager.scrollToBottom("own_message");
+      }
+      // Rule 2: System messages ALWAYS scroll (smooth)
+      else if (isSystemMessage) {
+        scrollManager.scrollToBottom("system_message");
+      }
+      // Rule 3: Received messages - scroll based on distance from bottom
+      else {
+        // For media, be more aggressive (scroll if < 500px from bottom)
+        if (hasMedia && context.distanceFromBottom < 500) {
+          scrollManager.scrollToBottom("own_message"); // instant scroll
+        } else {
+          // For text, use standard threshold (300px)
+          scrollManager.scrollToBottom("received_message", {
+            ...context,
+            isLoadingOlder,
+            messageIndex: 0,
+            totalMessages: messages.length,
+          });
+        }
       }
 
-      // Reset anchor refs for next load (but keep isLoadingOlderMessagesRef until after auto-scroll check)
-      anchorMessageIdRef.current = null;
-      anchorOffsetFromTopRef.current = 0;
-      savedScrollTopRef.current = 0;
-      previousMessageCountRef.current = messages.length;
-
-      // Reset the loading flag after images have time to start loading
-      // Combined with index check in onImageLoad for double protection
-      setTimeout(() => {
-        isLoadingOlderMessagesRef.current = false;
-      }, 1000);
+      // Update last message ref
+      lastMessageIdRef.current = lastMessage.id;
     }
-  }, [messages.length]);
+
+    // Handle media expansion for SAME message (when media loads/expands)
+    else if (!isNewMessage && lastMessage.id === lastMessageIdRef.current) {
+      const context = scrollManager.getScrollContext();
+      const hasMedia = !!(lastMessage.messageType && !["text", "comment"].includes(lastMessage.messageType));
+
+      // If message has media and we're very close to bottom, keep scrolling as it expands
+      if (hasMedia && context.distanceFromBottom < 600) {
+        scrollManager.scrollToBottom("own_message");
+      }
+    }
+
+    // Always update first message ref
+    if (firstMessage) {
+      firstMessageIdRef.current = firstMessage.id;
+    }
+  }, [messages, isFetchingNextPage, isLoadingOlder, scrollManager]);
+
+  // Image load callback
+  const handleImageLoad = useCallback(
+    (index: number) => {
+      if (isLoadingOlder) return;
+
+      const context = scrollManager.getScrollContext();
+      const isRecent =
+        index >= messages.length - SCROLL_CONSTANTS.RECENT_MESSAGE_COUNT;
+      const trigger = isRecent ? "image_load_recent" : "image_load_old";
+
+      scrollManager.scrollToBottom(trigger, {
+        ...context,
+        isLoadingOlder,
+        messageIndex: index,
+        totalMessages: messages.length,
+      });
+    },
+    [isLoadingOlder, messages.length, scrollManager],
+  );
 
   // Loading skeleton
   if (isLoading) {
@@ -706,10 +303,10 @@ export function ChatMessageList({
       className={cn("relative space-y-4", className)}
       {...props}
     >
-      {/* SENTINEL ELEMENT - IntersectionObserver watches this */}
-      {hasNextPage && <div ref={sentinelRef} className="h-px" />}
+      {/* Sentinel for infinite scroll */}
+      {hasNextPage && <div ref={infiniteScroll.sentinelRef} className="h-px" />}
 
-      {/* Loading indicator at top - floating, doesn't push content */}
+      {/* Loading indicator */}
       {isFetchingNextPage && (
         <div className="absolute top-2 left-1/2 z-10 -translate-x-1/2">
           <div className="bg-background/80 rounded-full border px-3 py-2 shadow-lg backdrop-blur-sm">
@@ -723,13 +320,10 @@ export function ChatMessageList({
           const prevMessage = messages[index - 1];
           const showAvatar =
             !prevMessage || prevMessage.sender !== message.sender;
-
           const showDateDivider = shouldShowDateDivider(
             message.timestamp,
             prevMessage?.timestamp,
           );
-
-          // Hide first badge when loading to prevent visual jump
           const shouldHideBadge = index === 0 && isFetchingNextPage;
 
           return (
@@ -738,59 +332,31 @@ export function ChatMessageList({
                 <ChatMessageDateDivider date={new Date(message.timestamp)} />
               )}
               {message.messageType === "comment" ? (
-                <ChatMessageComment message={message} />
+                <ChatMessageComment message={message as Message} />
               ) : message.sender === "system" ? (
-                <ChatMessageSystem message={message} />
+                <ChatMessageSystem message={message as Message} />
               ) : (
                 <ChatMessage
-                  message={message}
+                  message={message as Message}
                   showAvatar={showAvatar}
                   canEditMessages={canEditMessages}
                   canDeleteMessages={canDeleteMessages}
-                  onImageLoad={() => {
-                    // Scroll após imagem carregar - APENAS se estiver perto do bottom E NÃO estiver carregando mensagens antigas
-                    if (isLoadingOlderMessagesRef.current) {
-                      return;
-                    }
-
-                    // Check if this is a recent message (last 5)
-                    const isRecentMessage = index >= messages.length - 5;
-
-                    // ALWAYS scroll for RECENT messages (own or received) - they just sent/received the media
-                    // Only for last 5 messages to avoid scrolling when old messages load
-                    if (isRecentMessage) {
-                      setTimeout(() => scrollToBottom("instant"), 100);
-                      return;
-                    }
-
-                    // For old messages, only scroll if near bottom
-                    const viewport = scrollViewportRef.current;
-                    if (viewport) {
-                      const distanceFromBottom =
-                        viewport.scrollHeight -
-                        viewport.scrollTop -
-                        viewport.clientHeight;
-                      // Só faz scroll se estiver a menos de 300px do bottom
-                      if (distanceFromBottom < 300) {
-                        setTimeout(() => scrollToBottom("instant"), 100);
-                      }
-                    }
-                  }}
+                  onImageLoad={() => handleImageLoad(index)}
                 />
               )}
             </Fragment>
           );
         })}
 
-        {/* Typing indicator - estilo WhatsApp */}
+        {/* Typing indicator */}
         {isTyping && <ChatMessageTypingIndicator />}
 
-        {/* Anchor for scroll-to-bottom */}
-        <div ref={messagesEndRef} className="h-6" />
+        {/* Anchor for scroll */}
+        <div ref={scrollManager.messagesEndRef} className="h-6" />
       </div>
 
-      {/* Scroll to bottom button - Rendered via portal to escape ScrollArea overflow */}
-      {showScrollButton &&
+      {/* Scroll to bottom button */}
+      {scrollManager.showScrollButton &&
         typeof document !== "undefined" &&
         createPortal(
           <div className="animate-in fade-in slide-in-from-bottom-2 fixed right-8 bottom-24 z-50">
@@ -812,7 +378,6 @@ export function ChatMessageList({
 
 /**
  * Typing indicator - WhatsApp style
- * Usa o mesmo estilo do ChatMessageBubble para incoming messages
  */
 function ChatMessageTypingIndicator() {
   return (
