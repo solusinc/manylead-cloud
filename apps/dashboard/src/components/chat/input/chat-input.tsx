@@ -138,7 +138,6 @@ export function ChatInput({
     trpc.chats.createNewSession.mutationOptions({
       onSuccess: (chat) => {
         void queryClient.invalidateQueries({ queryKey: [["chats", "list"]] });
-        toast.success("Nova sessão criada");
         // Navegar para o novo chat
         router.push(`/chats/${chat.id}`);
       },

@@ -190,8 +190,9 @@ export class CrossOrgMirrorService {
       .returning();
 
     // Criar attachment espelhado (mesma URL)
+    let mirroredAttachment = null;
     if (attachmentData && mirroredMessage) {
-      await targetTenantDb.insert(attachment).values({
+      const [attachmentRecord] = await targetTenantDb.insert(attachment).values({
         messageId: mirroredMessage.id,
         fileName: attachmentData.fileName,
         mimeType: attachmentData.mimeType,
@@ -204,8 +205,20 @@ export class CrossOrgMirrorService {
         duration: attachmentData.duration ?? null,
         downloadStatus: "completed",
         downloadedAt: messageTimestamp,
-      });
+      }).returning();
+
+      mirroredAttachment = attachmentRecord;
     }
+
+    // Atualizar status da mensagem original na sourceOrg para "delivered" ANTES de emitir eventos
+    const [updatedSourceMessage] = await sourceTenantDb
+      .update(message)
+      .set({
+        status: "delivered",
+        deliveredAt: now,
+      })
+      .where(eq(message.id, messageId))
+      .returning();
 
     // Atualizar chat com nova mensagem
     await this.updateMirroredChatAfterMessage(
@@ -215,12 +228,24 @@ export class CrossOrgMirrorService {
       messageTimestamp,
     );
 
-    // Emitir evento message:created
+    // Emitir evento message:created para targetOrg (incluir attachment se houver)
     if (mirroredMessage) {
       await this.eventPublisher.messageCreated(
         targetOrgId,
         mirroredChat.id,
         mirroredMessage,
+        {
+          attachment: mirroredAttachment ?? undefined,
+        },
+      );
+    }
+
+    // Emitir evento message:updated para sourceOrg (mensagem já foi atualizada no banco acima)
+    if (updatedSourceMessage) {
+      await this.eventPublisher.messageUpdated(
+        sourceOrgId,
+        sourceChat.id,
+        updatedSourceMessage,
       );
     }
   }
@@ -336,8 +361,9 @@ export class CrossOrgMirrorService {
       .returning();
 
     // Criar attachment espelhado (mesma URL)
+    let mirroredAttachment = null;
     if (attachmentData && mirroredMessage) {
-      await targetTenantDb.insert(attachment).values({
+      const [attachmentRecord] = await targetTenantDb.insert(attachment).values({
         messageId: mirroredMessage.id,
         fileName: attachmentData.fileName,
         mimeType: attachmentData.mimeType,
@@ -350,8 +376,20 @@ export class CrossOrgMirrorService {
         duration: attachmentData.duration ?? null,
         downloadStatus: "completed",
         downloadedAt: messageTimestamp,
-      });
+      }).returning();
+
+      mirroredAttachment = attachmentRecord;
     }
+
+    // Atualizar status da mensagem original na sourceOrg para "delivered" ANTES de emitir eventos
+    const [updatedSourceMessage] = await sourceTenantDb
+      .update(message)
+      .set({
+        status: "delivered",
+        deliveredAt: now,
+      })
+      .where(eq(message.id, messageId))
+      .returning();
 
     // Atualizar chat espelhado
     await this.updateMirroredChatAfterMessage(
@@ -361,12 +399,24 @@ export class CrossOrgMirrorService {
       messageTimestamp,
     );
 
-    // Emitir evento message:new
+    // Emitir evento message:new para targetOrg (incluir attachment se houver)
     if (mirroredMessage) {
       await this.eventPublisher.messageCreated(
         targetOrgId,
         mirroredChat.id,
         mirroredMessage,
+        {
+          attachment: mirroredAttachment ?? undefined,
+        },
+      );
+    }
+
+    // Emitir evento message:updated para sourceOrg (mensagem já foi atualizada no banco acima)
+    if (updatedSourceMessage) {
+      await this.eventPublisher.messageUpdated(
+        sourceOrgId,
+        sourceChat.id,
+        updatedSourceMessage,
       );
     }
   }

@@ -74,10 +74,6 @@ export async function publishChatEvent(
   try {
     const redis = getPublisher(redisUrl);
     await redis.publish(REDIS_CHANNELS.CHAT, JSON.stringify(event));
-    logger.debug(
-      { type: event.type, chatId: event.chatId },
-      "Published chat event",
-    );
   } catch (error) {
     logger.error({ err: error, event }, "Failed to publish chat event");
     throw error;
@@ -94,10 +90,6 @@ export async function publishMessageEvent(
   try {
     const redis = getPublisher(redisUrl);
     await redis.publish(REDIS_CHANNELS.MESSAGE, JSON.stringify(event));
-    logger.debug(
-      { type: event.type, messageId: event.messageId },
-      "Published message event",
-    );
   } catch (error) {
     logger.error({ err: error, event }, "Failed to publish message event");
     throw error;
@@ -114,10 +106,6 @@ export async function publishTypingEvent(
   try {
     const redis = getPublisher(redisUrl);
     await redis.publish(REDIS_CHANNELS.TYPING, JSON.stringify(event));
-    logger.debug(
-      { type: event.type, chatId: event.chatId },
-      "Published typing event",
-    );
   } catch (error) {
     logger.error({ err: error, event }, "Failed to publish typing event");
     // Don't throw - typing indicators are not critical

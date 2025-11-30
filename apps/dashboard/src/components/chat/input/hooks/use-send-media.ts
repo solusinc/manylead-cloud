@@ -68,9 +68,8 @@ export function useSendMedia(_chatId: string) {
 
         setUploadProgress(90);
 
-        // 4. Criar mensagem otimista no cache
+        // 4. Registrar tempId para evitar duplicação
         register(tempId);
-        // TODO: adicionar mensagem otimista ao cache
 
         // 5. Enviar para backend
         await sendWithAttachmentMutation.mutateAsync({

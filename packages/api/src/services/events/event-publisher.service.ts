@@ -34,8 +34,14 @@ export class EventPublisher {
       senderId?: string;
       targetAgentId?: string;
       sender?: Agent;
+      attachment?: unknown;
     },
   ): Promise<void> {
+    // Incluir attachment se fornecido
+    const messageData = options?.attachment
+      ? { ...message, attachment: options.attachment }
+      : message;
+
     const event: SharedMessageEvent = {
       type: "message:new",
       organizationId,
@@ -44,7 +50,7 @@ export class EventPublisher {
       senderId: options?.senderId,
       targetAgentId: options?.targetAgentId,
       data: {
-        message: message as unknown as Record<string, unknown>,
+        message: messageData as unknown as Record<string, unknown>,
         sender: options?.sender as unknown as Record<string, unknown>,
       },
     };

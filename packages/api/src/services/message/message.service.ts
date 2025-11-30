@@ -84,8 +84,9 @@ export class MessageService {
     }
 
     // Criar attachment se fornecido
+    let createdAttachment = null;
     if (input.attachmentData) {
-      await tenantDb.insert(attachment).values({
+      const [attachmentRecord] = await tenantDb.insert(attachment).values({
         messageId: newMessage.id,
         fileName: input.attachmentData.fileName,
         mimeType: input.attachmentData.mimeType,
@@ -98,7 +99,9 @@ export class MessageService {
         duration: input.attachmentData.duration ?? null,
         downloadStatus: "completed",
         downloadedAt: now,
-      });
+      }).returning();
+
+      createdAttachment = attachmentRecord;
     }
 
     // Atualizar chat
@@ -110,8 +113,18 @@ export class MessageService {
       "sent",
     );
 
+    // Emitir evento para org original (sempre)
+    await this.eventPublisher.messageCreated(
+      organizationId,
+      chatRecord.id,
+      newMessage,
+      {
+        senderId: input.agentId,
+        attachment: createdAttachment ?? undefined,
+      },
+    );
+
     // Espelhamento cross-org (se aplicável)
-    // Fazer ANTES de emitir evento para evitar flickering de status
     if (this.crossOrgMirror.shouldMirror(chatRecord)) {
       await this.handleCrossOrgMirroring(
         organizationId,
@@ -122,14 +135,6 @@ export class MessageService {
         formattedContent,
         input.metadata,
         input.attachmentData,
-      );
-    } else {
-      // Se NÃO é cross-org, emitir evento normalmente
-      await this.eventPublisher.messageCreated(
-        organizationId,
-        chatRecord.id,
-        newMessage,
-        { senderId: input.agentId },
       );
     }
 
@@ -507,10 +512,9 @@ export class MessageService {
         .where(eq(chat.id, chatRecord.id));
     }
 
-    // Emitir evento messageCreated com status já atualizado (delivered)
-    // Isso evita flickering de sent -> delivered
+    // Emitir evento de status atualizado (delivered)
     if (updatedMessage) {
-      await this.eventPublisher.messageCreated(
+      await this.eventPublisher.messageUpdated(
         organizationId,
         chatRecord.id,
         updatedMessage,

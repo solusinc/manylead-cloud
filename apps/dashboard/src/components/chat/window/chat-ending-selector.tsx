@@ -50,7 +50,6 @@ export function ChatEndingSelector({ chatId, chatCreatedAt }: ChatEndingSelector
       onSuccess: () => {
         void queryClient.invalidateQueries({ queryKey: [["chats"]] });
         void queryClient.invalidateQueries({ queryKey: [["messages"]] });
-        toast.success("Atendimento finalizado com sucesso!");
         onClose();
       },
       onError: (error) => {

@@ -68,12 +68,6 @@ function ChatLayoutInner({
       const serverId = messageData.id as string;
       const tempId = (messageData.metadata as Record<string, unknown> | undefined)?.tempId as string | undefined;
 
-      // === LAYER 1: Dedup Store (Primary) ===
-      // Check if serverId OR tempId was already processed
-      if (isAnyProcessed([serverId, tempId])) {
-        return;
-      }
-
       // Find all queries for messages.list
       const queries = queryClient.getQueryCache().findAll({
         queryKey: [["messages", "list"]],
@@ -105,7 +99,7 @@ function ChatLayoutInner({
         // Only update if message belongs to this chat
         if (!queryChatId || messageData.chatId !== queryChatId) return;
 
-        // === LAYER 2: Cache Check (Secondary) ===
+        // === LAYER 1: Cache Check (Primary) ===
         // Check if message exists in cache (by serverId OR tempId)
         const messageExists = queryState.pages.some((page) =>
           page.items.some((item) =>
@@ -117,6 +111,11 @@ function ChatLayoutInner({
         if (messageExists) {
           return;
         }
+
+        // === LAYER 2: Dedup Store (Secondary) ===
+        // Check if serverId OR tempId was already processed
+        // BUT only block if message actually exists in cache (checked above)
+        // This handles the case where tempId was registered but message wasn't added to cache (media uploads)
 
         // === PASSED ALL CHECKS: Add message ===
 
@@ -135,7 +134,7 @@ function ChatLayoutInner({
               ...firstPage.items,
               {
                 message: messageData,
-                attachment: null,
+                attachment: (messageData as { attachment?: Record<string, unknown> }).attachment ?? null,
                 isOwnMessage: currentAgent ? messageData.senderId === currentAgent.id : false,
               },
             ],
@@ -156,6 +155,7 @@ function ChatLayoutInner({
       });
 
       // Invalidate chats list to update last message preview
+      // Need to refetch because we don't manually update the chat cache
       void queryClient.invalidateQueries({
         queryKey: [["chats", "list"]],
       });
@@ -194,29 +194,16 @@ function ChatLayoutInner({
         refetchType: "active",
       });
 
-      // Invalidar mensagens também para buscar mensagens de sistema (transferência, etc)
+      // Invalidate messages to fetch system messages (transfer, assignment, etc)
       void queryClient.invalidateQueries({
         queryKey: [["messages"]],
-        refetchType: "active",
+        refetchType: "none", // Just mark as stale - socket will bring new message
       });
     },
     [queryClient]
   );
 
-  // 4. Quando um chat é atualizado (unreadCount, lastMessage, etc) - invalidar cache
-  useSocketListener(
-    socket,
-    'onChatUpdated',
-    () => {
-      // Invalidar cache de chats para refetch com dados atualizados
-      void queryClient.invalidateQueries({
-        queryKey: [["chats"]],
-      });
-    },
-    [queryClient]
-  );
-
-  // 5. Quando uma mensagem é atualizada (status read/delivered) - atualizar sidebar
+  // 4. Quando uma mensagem é atualizada (status read/delivered) - atualizar sidebar
   useSocketListener(
     socket,
     'onMessageUpdated',

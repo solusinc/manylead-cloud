@@ -585,7 +585,7 @@ Duração: ${duration}`;
       metadata?: Record<string, unknown>;
     },
   ): Promise<void> {
-    await ctx.tenantDb.insert(message).values({
+    const [newMessage] = await ctx.tenantDb.insert(message).values({
       chatId: chatRecord.id,
       messageSource: chatRecord.messageSource,
       sender: "system",
@@ -598,7 +598,16 @@ Duração: ${duration}`;
         systemEventType: options.systemEventType,
         ...options.metadata,
       },
-    });
+    }).returning();
+
+    // Emit message:new event so clients see the system message immediately
+    if (newMessage) {
+      await this.eventPublisher.messageCreated(
+        ctx.organizationId,
+        chatRecord.id,
+        newMessage,
+      );
+    }
   }
 }
 

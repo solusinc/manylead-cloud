@@ -46,11 +46,17 @@ export function useMessageSocket(
 
         const newPages = queryState.pages.map((page) => ({
           ...page,
-          items: page.items.map((item) =>
-            item.message.id === messageId
-              ? { ...item, message: updater(item.message) }
-              : item
-          ),
+          items: page.items.map((item) => {
+            // Match by serverId OR tempId (for optimistic updates)
+            const itemTempId = (item.message.metadata as Record<string, unknown> | undefined)?.tempId as string | undefined;
+            const matchesById = item.message.id === messageId;
+            const matchesByTempId = itemTempId === messageId;
+
+            if (matchesById || matchesByTempId) {
+              return { ...item, message: updater(item.message) };
+            }
+            return item;
+          }),
         }));
 
         queryClient.setQueryData(query.queryKey, {
@@ -92,9 +98,18 @@ export function useMessageSocket(
     socket,
     "onMessageUpdated",
     (event) => {
-      if (event.message.chatId === chatId) {
-        updateMessageInCache(event.message.id as string, (msg) => ({
+      if (event.message.chatId !== chatId) return;
+
+      const serverId = event.message.id as string;
+      const tempId = (event.message.metadata as Record<string, unknown> | undefined)?.tempId as string | undefined;
+
+      // Try to find message by serverId first, then tempId
+      const searchIds = [serverId, tempId].filter(Boolean) as string[];
+
+      for (const searchId of searchIds) {
+        updateMessageInCache(searchId, (msg) => ({
           ...msg,
+          id: serverId, // Update to serverId if it was tempId
           status: event.message.status,
           isStarred: event.message.isStarred,
           readAt: event.message.readAt,

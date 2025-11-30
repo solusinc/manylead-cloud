@@ -47,7 +47,6 @@ export function ChatTransferDropdown({
       onSuccess: () => {
         // Invalidar queries para atualizar a lista
         void queryClient.invalidateQueries({ queryKey: [["chats", "list"]] });
-        toast.success("Chat transferido com sucesso!");
         onClose();
       },
       onError: (error) => {

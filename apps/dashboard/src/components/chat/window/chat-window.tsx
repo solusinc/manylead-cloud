@@ -16,7 +16,6 @@ import { ChatWindowHeader } from "./chat-window-header";
 import { ChatReplyProvider, useChatReply } from "../providers/chat-reply-provider";
 import { ChatErrorBoundary } from "../providers/chat-error-boundary";
 import { ChatProvider } from "../providers/chat-context";
-import { useChatAccessControl } from "./hooks/use-chat-access-control";
 import { MediaPreviewDialog } from "../input/media-preview";
 import { useSendMedia } from "../input/hooks/use-send-media";
 import { ChatImagesProvider } from "../message/chat-images-context";
@@ -45,9 +44,6 @@ export function ChatWindow({
 
   // Encontrar o chat específico
   const chatItem = chatData?.items.find((item) => item.chat.id === chatId);
-
-  // Access control and auto-read marking
-  useChatAccessControl(chatId, chatItem);
 
   // Redirect para /chats se conversa não encontrada (após loading)
   useEffect(() => {
