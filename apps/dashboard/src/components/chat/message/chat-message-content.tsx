@@ -56,17 +56,25 @@ export function ChatMessageAttachment({
   const isVideo = attachment.mediaType === "video";
   const isDocument = attachment.mediaType === "document";
   const isAudio = attachment.mediaType === "audio";
+  const [imageLoaded, setImageLoaded] = useState(false);
 
-  // Registrar imagem no context quando o componente montar
+  // Pré-carregar imagem para evitar layout shift
   useEffect(() => {
     if (isImage && attachment.storageUrl) {
+      const img = new window.Image();
+      img.onload = () => {
+        setImageLoaded(true);
+        onImageLoad?.();
+      };
+      img.src = attachment.storageUrl;
+
       registerImage({
         url: attachment.storageUrl,
         alt: attachment.fileName,
         messageId,
       });
     }
-  }, [isImage, attachment.storageUrl, attachment.fileName, messageId, registerImage]);
+  }, [isImage, attachment.storageUrl, attachment.fileName, messageId, registerImage, onImageLoad]);
 
   // Se a mídia expirou, mostrar placeholder visual
   if (!attachment.storageUrl) {
@@ -98,20 +106,34 @@ export function ChatMessageAttachment({
   return (
     <div className="mb-2 overflow-hidden rounded-lg">
       {isImage && (
-        <button
-          onClick={() => openLightbox(messageId)}
-          className="cursor-pointer transition-opacity hover:opacity-90"
-        >
-          <Image
-            src={attachment.storageUrl}
-            alt={attachment.fileName}
-            width={attachment.width ?? 400}
-            height={attachment.height ?? 300}
-            className="max-h-80 w-full object-cover"
-            loading="lazy"
-            onLoad={onImageLoad}
-          />
-        </button>
+        <>
+          {!imageLoaded && (
+            <div
+              className="animate-pulse bg-muted"
+              style={{
+                width: attachment.width ?? 400,
+                height: attachment.height ?? 300,
+                maxWidth: '400px',
+                maxHeight: '320px',
+              }}
+            />
+          )}
+          {imageLoaded && (
+            <button
+              onClick={() => openLightbox(messageId)}
+              className="cursor-pointer transition-opacity hover:opacity-90"
+            >
+              <Image
+                src={attachment.storageUrl}
+                alt={attachment.fileName}
+                width={attachment.width ?? 400}
+                height={attachment.height ?? 300}
+                className="max-h-80 w-full object-cover"
+                loading="eager"
+              />
+            </button>
+          )}
+        </>
       )}
 
       {isVideo && (

@@ -53,6 +53,8 @@ export function ChatMessageList({
   const firstMessageIdRef = useRef<string | null>(null);
   const isInitialLoadRef = useRef(true);
   const initialLoadTimestampRef = useRef<number>(0);
+  const userScrollingUpRef = useRef(false);
+  const lastScrollTopRef = useRef(0);
 
   // 1. Data Layer
   const {
@@ -109,9 +111,11 @@ export function ChatMessageList({
     initialLoadTimestampRef.current = Date.now();
     lastMessageIdRef.current = null;
     firstMessageIdRef.current = null;
+    userScrollingUpRef.current = false;
+    lastScrollTopRef.current = 0;
   }, [chatId]);
 
-  // Initial scroll to bottom
+  // Initial scroll to bottom - use messagesEndRef (div at bottom)
   useEffect(() => {
     if (
       !isLoading &&
@@ -119,42 +123,71 @@ export function ChatMessageList({
       isInitialLoadRef.current &&
       !isLoadingOlder
     ) {
-      scrollManager.scrollToBottom("initial_load");
+      // Scroll to messagesEndRef (div at the very bottom)
+      const scrollToEnd = () => {
+        // STOP if user started scrolling manually
+        if (userScrollingUpRef.current) return;
+
+        scrollManager.messagesEndRef.current?.scrollIntoView({
+          behavior: "instant",
+          block: "end",
+        });
+      };
+
+      // Multiple attempts to handle media loading (will stop if user scrolls)
+      scrollToEnd();
+      const t1 = setTimeout(scrollToEnd, 100);
+      const t2 = setTimeout(scrollToEnd, 300);
+      const t3 = setTimeout(scrollToEnd, 600);
+      const t4 = setTimeout(scrollToEnd, 1000);
+      const t5 = setTimeout(scrollToEnd, 1500);
+
       isInitialLoadRef.current = false;
+
+      // Cleanup timeouts on unmount
+      return () => {
+        clearTimeout(t1);
+        clearTimeout(t2);
+        clearTimeout(t3);
+        clearTimeout(t4);
+        clearTimeout(t5);
+      };
     }
   }, [chatId, isLoading, messages.length, isLoadingOlder, scrollManager]);
 
-  // ResizeObserver for initial load - handles media loading professionally
+  // Detect user manual scroll - IMMEDIATELY
   useEffect(() => {
-    if (isLoading || !containerRef.current || messages.length === 0) {
-      return;
-    }
+    const viewport = scrollManager.scrollViewportRef.current;
+    if (!viewport) return;
 
-    const container = containerRef.current;
-    let resizeTimeout: NodeJS.Timeout;
+    let scrollTimeout: NodeJS.Timeout;
 
-    const resizeObserver = new ResizeObserver(() => {
-      clearTimeout(resizeTimeout);
-      resizeTimeout = setTimeout(() => {
-        // Only scroll if within 5 seconds of initial load (enough time for heavy media)
-        const timeSinceLoad = Date.now() - initialLoadTimestampRef.current;
-        if (timeSinceLoad < 5000) {
-          const context = scrollManager.getScrollContext();
-          if (context.distanceFromBottom < 800) {
-            scrollManager.scrollToBottom("initial_load");
-          }
-        }
-      }, 50);
-    });
+    const handleScroll = () => {
+      const currentScrollTop = viewport.scrollTop;
+      const scrollingUp = currentScrollTop < lastScrollTopRef.current;
 
-    resizeObserver.observe(container);
+      // User is actively scrolling up - SET FLAG IMMEDIATELY
+      if (scrollingUp) {
+        userScrollingUpRef.current = true;
+        clearTimeout(scrollTimeout);
+
+        // Reset flag after 1 second of no scrolling
+        scrollTimeout = setTimeout(() => {
+          userScrollingUpRef.current = false;
+        }, 1000);
+      }
+
+      lastScrollTopRef.current = currentScrollTop;
+    };
+
+    viewport.addEventListener("scroll", handleScroll, { passive: true });
 
     return () => {
-      resizeObserver.disconnect();
-      clearTimeout(resizeTimeout);
+      viewport.removeEventListener("scroll", handleScroll);
+      clearTimeout(scrollTimeout);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- messages.length is intentionally NOT in deps to prevent recreating observer on every message
-  }, [chatId, isLoading, scrollManager]);
+  }, [chatId, scrollManager]);
+
 
   // Setup scroll listener
   useEffect(() => {
@@ -215,10 +248,12 @@ export function ChatMessageList({
 
       // Rule 1: Own messages ALWAYS scroll (instant)
       if (isOwnMessage) {
+        userScrollingUpRef.current = false; // Clear flag for own messages
         scrollManager.scrollToBottom("own_message");
       }
       // Rule 2: System messages ALWAYS scroll (smooth)
       else if (isSystemMessage) {
+        userScrollingUpRef.current = false; // Clear flag for system messages
         scrollManager.scrollToBottom("system_message");
       }
       // Rule 3: Received messages - scroll based on distance from bottom
