@@ -673,10 +673,11 @@ export function ChatMessageList({
       savedScrollTopRef.current = 0;
       previousMessageCountRef.current = messages.length;
 
-      // Reset the loading flag after a small delay to ensure auto-scroll check has run
+      // Reset the loading flag after images have time to start loading
+      // Combined with index check in onImageLoad for double protection
       setTimeout(() => {
         isLoadingOlderMessagesRef.current = false;
-      }, 100);
+      }, 1000);
     }
   }, [messages.length]);
 
@@ -752,6 +753,15 @@ export function ChatMessageList({
                       return;
                     }
 
+                    // ALWAYS scroll for own RECENT messages - they just sent the media
+                    // Only for last 5 messages to avoid scrolling when old own messages load
+                    const isRecentMessage = index >= messages.length - 5;
+                    if (message.sender === "agent" && isRecentMessage) {
+                      setTimeout(() => scrollToBottom("instant"), 100);
+                      return;
+                    }
+
+                    // For received messages, only scroll if near bottom
                     const viewport = scrollViewportRef.current;
                     if (viewport) {
                       const distanceFromBottom =
