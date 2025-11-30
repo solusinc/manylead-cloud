@@ -87,6 +87,7 @@ export function AudioPlayer({ src, onTimeUpdate, isOwnMessage = false }: AudioPl
     return () => {
       wavesurfer.destroy();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [src]);
 
   const handlePlayPause = useCallback(() => {

@@ -28,43 +28,69 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
   const streamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
+  const sourceNodeRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
   const startTimeRef = useRef<number>(0);
   const pausedTimeRef = useRef<number>(0);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
   const stopRecordingRef = useRef<(() => void) | null>(null);
   const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+  const isRequestingMicRef = useRef<boolean>(false);
 
   // Cleanup function
-  const cleanup = useCallback(() => {
+  const cleanup = useCallback((stopTracks = true) => {
+    // DON'T reset isRequestingMicRef here - it should only be reset in startRecording's finally
+    // This prevents race conditions where cleanup between getUserMedia calls allows duplicate requests
+
     // Stop animation frame
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
     }
 
-    // Clear interval - CRITICAL: Must clear interval to prevent multiple intervals
+    // Clear interval
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
     }
 
-    // Stop media recorder
-    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-      mediaRecorderRef.current.stop();
+    // CRITICAL: Disconnect source node FIRST before closing AudioContext
+    if (sourceNodeRef.current) {
+      try {
+        sourceNodeRef.current.disconnect();
+      } catch {
+        // Ignore errors
+      }
+      sourceNodeRef.current = null;
     }
 
-    // Close audio context
-    if (audioContextRef.current) {
+    // Close audio context BEFORE stopping tracks
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
       void audioContextRef.current.close();
       audioContextRef.current = null;
     }
 
-    // Stop all tracks
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((track) => track.stop());
+    // Stop media recorder
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      try {
+        mediaRecorderRef.current.stop();
+      } catch {
+        // Ignore errors
+      }
+    }
+
+    // CRITICAL: Stop all tracks to release microphone IMMEDIATELY
+    if (stopTracks && streamRef.current) {
+      const tracks = streamRef.current.getTracks();
+      tracks.forEach((track) => {
+        track.stop();
+      });
       streamRef.current = null;
     }
+
+    // Clear refs
+    mediaRecorderRef.current = null;
+    analyserRef.current = null;
   }, []);
 
   // Extract waveform data from audio stream
@@ -106,16 +132,29 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
 
   // Start recording
   const startRecording = useCallback(async () => {
-    // Prevent multiple simultaneous recordings
+    // CRITICAL: Prevent multiple simultaneous getUserMedia calls
+    if (isRequestingMicRef.current) {
+      return;
+    }
+
+    // CRITICAL: Prevent multiple simultaneous recordings
+    if (streamRef.current) {
+      return;
+    }
+
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
       return;
     }
+
+    // Set flag BEFORE async operation
+    isRequestingMicRef.current = true;
 
     try {
       setError(null);
 
       // Request microphone access
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
       streamRef.current = stream;
 
       // Create audio context and analyser for waveform
@@ -128,6 +167,7 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
 
       audioContextRef.current = audioContext;
       analyserRef.current = analyser;
+      sourceNodeRef.current = source;
 
       // Start waveform extraction
       extractWaveformData();
@@ -157,7 +197,7 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
       mediaRecorder.onstop = () => {
         const blob = new Blob(audioChunksRef.current, { type: mimeType });
         setAudioBlob(blob);
-        cleanup();
+        // Don't call cleanup here - it's called directly in stop/cancel functions
       };
 
       mediaRecorder.onerror = () => {
@@ -203,6 +243,9 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
       }
 
       cleanup();
+    } finally {
+      // CRITICAL: Reset flag after getUserMedia completes (success or error)
+      isRequestingMicRef.current = false;
     }
   }, [cleanup, extractWaveformData]);
 
@@ -232,17 +275,72 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
         animationFrameRef.current = null;
       }
 
+      // CRITICAL: Disconnect source node FIRST
+      if (sourceNodeRef.current) {
+        try {
+          sourceNodeRef.current.disconnect();
+        } catch {
+          // Ignore errors
+        }
+        sourceNodeRef.current = null;
+      }
+
+      // Close audio context BEFORE stopping tracks
+      if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+        void audioContextRef.current.close();
+        audioContextRef.current = null;
+      }
+
+      // IMPORTANT: Stop tracks to release microphone when paused
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((track) => {
+          track.stop();
+        });
+        streamRef.current = null;
+      }
+
       setState("paused");
     }
   }, []);
 
   // Stop recording
   const stopRecording = useCallback(() => {
-    if (mediaRecorderRef.current?.state !== "inactive") {
-      mediaRecorderRef.current?.stop();
-      setState("idle");
+    // CRITICAL: Disconnect audio nodes FIRST
+    if (sourceNodeRef.current) {
+      try {
+        sourceNodeRef.current.disconnect();
+      } catch {
+        // Ignore errors
+      }
+      sourceNodeRef.current = null;
     }
-  }, []);
+
+    // Close AudioContext BEFORE stopping tracks
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      void audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+
+    // Stop tracks to release microphone
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => {
+        track.stop();
+      });
+      streamRef.current = null;
+    }
+
+    if (mediaRecorderRef.current?.state !== "inactive") {
+      try {
+        mediaRecorderRef.current?.requestData();
+        mediaRecorderRef.current?.stop();
+      } catch {
+        // Ignore errors
+      }
+    }
+
+    cleanup(false);
+    setState("idle");
+  }, [cleanup]);
 
   // Store stopRecording in ref for use in intervals
   useEffect(() => {
@@ -294,7 +392,42 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
 
   // Cancel recording
   const cancelRecording = useCallback(() => {
-    cleanup();
+    // CRITICAL: Disconnect audio nodes FIRST
+    if (sourceNodeRef.current) {
+      try {
+        sourceNodeRef.current.disconnect();
+      } catch {
+        // Ignore errors
+      }
+      sourceNodeRef.current = null;
+    }
+
+    // Close AudioContext BEFORE stopping tracks
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      void audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+
+    // Stop tracks to release microphone
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => {
+        track.stop();
+      });
+      streamRef.current = null;
+    }
+
+    // Stop MediaRecorder
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      try {
+        mediaRecorderRef.current.stop();
+        mediaRecorderRef.current = null;
+      } catch {
+        // Ignore errors
+      }
+    }
+
+    cleanup(false);
+
     setState("idle");
     setDuration(0);
     setAudioBlob(null);

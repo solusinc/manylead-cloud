@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/non-nullable-type-assertion-style */
+/* eslint-disable @typescript-eslint/no-unnecessary-condition */
 "use client";
 
 import {
@@ -11,22 +13,26 @@ import {
   useRef,
   useState,
 } from "react";
-import { createPortal } from "react-dom";
-import { useInfiniteQuery, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, ChevronDown } from "lucide-react";
+import {
+  useInfiniteQuery,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { isSameDay } from "date-fns";
+import { ChevronDown, Loader2 } from "lucide-react";
+import { createPortal } from "react-dom";
 
 import { cn } from "@manylead/ui";
 import { Button } from "@manylead/ui/button";
 import { Skeleton } from "@manylead/ui/skeleton";
 
 import { useChatSocketContext } from "~/components/providers/chat-socket-provider";
+import { useSocketListener } from "~/hooks/chat/use-socket-listener";
 import { useTRPC } from "~/lib/trpc/react";
 import { useMessageFocusStore } from "~/stores/use-message-focus-store";
-import { useSocketListener } from "~/hooks/chat/use-socket-listener";
 import { ChatMessage } from "./chat-message";
 import { ChatMessageDateDivider } from "./chat-message-date";
-import { ChatMessageSystem, ChatMessageComment } from "./chat-message-system";
+import { ChatMessageComment, ChatMessageSystem } from "./chat-message-system";
 
 // Context to expose refetch function to parent components
 const ChatMessageRefetchContext = createContext<(() => void) | null>(null);
@@ -42,7 +48,7 @@ const LOAD_MORE_LIMIT = 30; // WhatsApp-style: 30 mensagens por scroll
  */
 function shouldShowDateDivider(
   currentTimestamp: Date,
-  previousTimestamp?: Date
+  previousTimestamp?: Date,
 ): boolean {
   // Always show divider for first message
   if (!previousTimestamp) {
@@ -66,6 +72,7 @@ export function ChatMessageList({
   const scrollViewportRef = useRef<HTMLElement | null>(null);
   const anchorMessageIdRef = useRef<string | null>(null);
   const anchorOffsetFromTopRef = useRef<number>(0);
+  const savedScrollTopRef = useRef<number>(0);
   const previousMessageCountRef = useRef<number>(0);
   const isLoadingOlderMessagesRef = useRef<boolean>(false);
   const trpc = useTRPC();
@@ -77,11 +84,17 @@ export function ChatMessageList({
   const [isMounted, setIsMounted] = useState(false);
 
   // Buscar permissões do agent atual uma vez
-  const { data: currentAgent } = useQuery(trpc.agents.getCurrent.queryOptions());
+  const { data: currentAgent } = useQuery(
+    trpc.agents.getCurrent.queryOptions(),
+  );
 
   // Garantir consistência entre server e client para evitar hydration errors
-  const canEditMessages = isMounted ? (currentAgent?.permissions.messages.canEdit ?? false) : false;
-  const canDeleteMessages = isMounted ? (currentAgent?.permissions.messages.canDelete ?? false) : false;
+  const canEditMessages = isMounted
+    ? (currentAgent?.permissions.messages.canEdit ?? false)
+    : false;
+  const canDeleteMessages = isMounted
+    ? (currentAgent?.permissions.messages.canDelete ?? false)
+    : false;
 
   // Marcar como mounted após hidratação
   useEffect(() => {
@@ -107,16 +120,20 @@ export function ChatMessageList({
 
   // Flatten pages - backend returns ASC, we reverse pages to get chronological order
   // Memoized to prevent unnecessary array operations on every render
-  const messages = useMemo(() =>
-    (data?.pages ? [...data.pages].reverse().flatMap((page) => page.items) : [])
-      .map((item) => ({
+  const messages = useMemo(
+    () =>
+      (data?.pages
+        ? [...data.pages].reverse().flatMap((page) => page.items)
+        : []
+      ).map((item) => ({
         id: item.message.id,
         content: item.message.content,
-        sender: item.message.sender === "system"
-          ? ("system" as const)
-          : item.isOwnMessage
-            ? ("agent" as const)
-            : ("contact" as const),
+        sender:
+          item.message.sender === "system"
+            ? ("system" as const)
+            : item.isOwnMessage
+              ? ("agent" as const)
+              : ("contact" as const),
         timestamp: item.message.timestamp,
         status: item.message.status as
           | "pending"
@@ -130,12 +147,15 @@ export function ChatMessageList({
         isEdited: item.message.isEdited,
         editedAt: item.message.editedAt as Date | null | undefined,
         readAt: item.message.readAt as Date | null | undefined,
-        repliedToMessageId: item.message.repliedToMessageId as string | null | undefined,
+        repliedToMessageId: item.message.repliedToMessageId as
+          | string
+          | null
+          | undefined,
         metadata: item.message.metadata as Record<string, unknown> | undefined,
         chatId,
         attachment: item.attachment ?? undefined,
       })),
-    [data?.pages, chatId]
+    [data?.pages, chatId],
   );
 
   // Query para buscar mensagens ao redor de uma mensagem específica (navegação de busca)
@@ -156,9 +176,14 @@ export function ChatMessageList({
     // Função para fazer scroll e highlight
     const scrollAndHighlight = (messageId: string) => {
       setTimeout(() => {
-        const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
+        const messageElement = document.querySelector(
+          `[data-message-id="${messageId}"]`,
+        );
         if (messageElement) {
-          messageElement.scrollIntoView({ behavior: "instant", block: "center" });
+          messageElement.scrollIntoView({
+            behavior: "instant",
+            block: "center",
+          });
           messageElement.classList.add("reply-highlight");
           setTimeout(() => {
             messageElement.classList.remove("reply-highlight");
@@ -169,7 +194,9 @@ export function ChatMessageList({
     };
 
     // Primeiro, verificar se a mensagem já está no DOM
-    const existingElement = document.querySelector(`[data-message-id="${focusMessageId}"]`);
+    const existingElement = document.querySelector(
+      `[data-message-id="${focusMessageId}"]`,
+    );
     if (existingElement) {
       scrollAndHighlight(focusMessageId);
       return;
@@ -180,12 +207,18 @@ export function ChatMessageList({
       // Criar uma nova página com as mensagens do contexto
       const contextPage = {
         items: contextData.items,
-        nextCursor: contextData.hasMoreBefore ? contextData.items[0]?.message.id : undefined,
+        nextCursor: contextData.hasMoreBefore
+          ? contextData.items[0]?.message.id
+          : undefined,
         hasMore: contextData.hasMoreBefore,
       };
 
       // Substituir os dados no cache temporariamente
-      const queryKey = trpc.messages.list.infiniteQueryKey({ chatId, firstPageLimit: 50, limit: 30 });
+      const queryKey = trpc.messages.list.infiniteQueryKey({
+        chatId,
+        firstPageLimit: 50,
+        limit: 30,
+      });
       queryClient.setQueryData(queryKey, {
         pages: [contextPage],
         pageParams: [null],
@@ -194,7 +227,15 @@ export function ChatMessageList({
       // Após atualizar, fazer scroll
       scrollAndHighlight(focusMessageId);
     }
-  }, [shouldFocusMessage, focusMessageId, contextData, clearFocus, queryClient, trpc, chatId]);
+  }, [
+    shouldFocusMessage,
+    focusMessageId,
+    contextData,
+    clearFocus,
+    queryClient,
+    trpc,
+    chatId,
+  ]);
 
   // Scroll to bottom on initial load
   const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
@@ -204,7 +245,13 @@ export function ChatMessageList({
   // Initial scroll to bottom ONLY on first load (not when loading more messages)
   const isInitialLoadRef = useRef(true);
   useEffect(() => {
-    if (!isLoading && messages.length > 0 && isInitialLoadRef.current) {
+    // CRITICAL: Don't scroll if we're loading older messages!
+    if (
+      !isLoading &&
+      messages.length > 0 &&
+      isInitialLoadRef.current &&
+      !isLoadingOlderMessagesRef.current
+    ) {
       scrollToBottom("instant");
       isInitialLoadRef.current = false;
     }
@@ -220,13 +267,17 @@ export function ChatMessageList({
     const container = containerRef.current;
     if (!container) return;
 
-    let scrollViewport = container.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement;
+    let scrollViewport = container.querySelector(
+      "[data-radix-scroll-area-viewport]",
+    ) as HTMLElement;
 
     if (!scrollViewport) {
       // Try finding viewport by going up from container
       let parent = container.parentElement;
       while (parent && !scrollViewport) {
-        scrollViewport = parent.querySelector('[data-radix-scroll-area-viewport]') as HTMLElement;
+        scrollViewport = parent.querySelector(
+          "[data-radix-scroll-area-viewport]",
+        ) as HTMLElement;
         parent = parent.parentElement;
       }
     }
@@ -237,7 +288,9 @@ export function ChatMessageList({
 
     const handleScroll = () => {
       const distanceFromBottom =
-        scrollViewport.scrollHeight - scrollViewport.scrollTop - scrollViewport.clientHeight;
+        scrollViewport.scrollHeight -
+        scrollViewport.scrollTop -
+        scrollViewport.clientHeight;
       setShowScrollButton(distanceFromBottom > 300);
     };
 
@@ -285,14 +338,21 @@ export function ChatMessageList({
 
           // CRITICAL: Find the first visible message and save its ID AND position relative to viewport top
           if (scrollViewport) {
+            // SAVE CURRENT SCROLL POSITION!
+            savedScrollTopRef.current = scrollViewport.scrollTop;
+
             const viewportRect = scrollViewport.getBoundingClientRect();
-            const messageElements = scrollViewport.querySelectorAll('[data-message-id]');
+            const messageElements =
+              scrollViewport.querySelectorAll("[data-message-id]");
 
             // Find first message that's visible in viewport
             for (const el of Array.from(messageElements)) {
               const rect = el.getBoundingClientRect();
-              if (rect.top >= viewportRect.top && rect.top <= viewportRect.bottom) {
-                anchorMessageIdRef.current = el.getAttribute('data-message-id');
+              if (
+                rect.top >= viewportRect.top &&
+                rect.top <= viewportRect.bottom
+              ) {
+                anchorMessageIdRef.current = el.getAttribute("data-message-id");
                 // Save the offset from the top of the viewport
                 anchorOffsetFromTopRef.current = rect.top - viewportRect.top;
                 break;
@@ -326,30 +386,30 @@ export function ChatMessageList({
   // Escutar eventos de typing para este chat
   useSocketListener(
     socket,
-    'onTypingStart',
+    "onTypingStart",
     (data) => {
       if (data.chatId === chatId) {
         setIsTyping(true);
       }
     },
-    [chatId]
+    [chatId],
   );
 
   useSocketListener(
     socket,
-    'onTypingStop',
+    "onTypingStop",
     (data) => {
       if (data.chatId === chatId) {
         setIsTyping(false);
       }
     },
-    [chatId]
+    [chatId],
   );
 
   // Escutar eventos de message:updated para atualizar mensagens (star toggle, read status)
   useSocketListener(
     socket,
-    'onMessageUpdated',
+    "onMessageUpdated",
     (event) => {
       const messageChatId = event.message.chatId as string;
       if (messageChatId === chatId) {
@@ -363,18 +423,20 @@ export function ChatMessageList({
         });
 
         queries.forEach((query) => {
-          const queryState = query.state.data as {
-            pages: {
-              items: {
-                message: Record<string, unknown>;
-                attachment: Record<string, unknown> | null;
-                isOwnMessage: boolean;
-              }[];
-              nextCursor: string | undefined;
-              hasMore: boolean;
-            }[];
-            pageParams: unknown[];
-          } | undefined;
+          const queryState = query.state.data as
+            | {
+                pages: {
+                  items: {
+                    message: Record<string, unknown>;
+                    attachment: Record<string, unknown> | null;
+                    isOwnMessage: boolean;
+                  }[];
+                  nextCursor: string | undefined;
+                  hasMore: boolean;
+                }[];
+                pageParams: unknown[];
+              }
+            | undefined;
 
           if (!queryState?.pages) return;
 
@@ -396,7 +458,7 @@ export function ChatMessageList({
                       isDeleted: updatedMessage.isDeleted,
                     } as Record<string, unknown>,
                   }
-                : item
+                : item,
             ),
           }));
 
@@ -414,13 +476,13 @@ export function ChatMessageList({
         });
       }
     },
-    [chatId, queryClient]
+    [chatId, queryClient],
   );
 
   // Escutar eventos de chat:updated para fazer scroll após transferir/finalizar/assign
   useSocketListener(
     socket,
-    'onChatUpdated',
+    "onChatUpdated",
     (event) => {
       const updatedChatId = event.chat.id as string;
 
@@ -431,13 +493,13 @@ export function ChatMessageList({
         }, 300);
       }
     },
-    [chatId, scrollToBottom]
+    [chatId, scrollToBottom],
   );
 
   // Escutar eventos de message:deleted para remover mensagens deletadas
   useSocketListener(
     socket,
-    'onMessageDeleted',
+    "onMessageDeleted",
     (event) => {
       const messageId = event.message.id as string;
 
@@ -448,18 +510,20 @@ export function ChatMessageList({
       });
 
       queries.forEach((query) => {
-        const queryState = query.state.data as {
-          pages: {
-            items: {
-              message: Record<string, unknown>;
-              attachment: Record<string, unknown> | null;
-              isOwnMessage: boolean;
-            }[];
-            nextCursor: string | undefined;
-            hasMore: boolean;
-          }[];
-          pageParams: unknown[];
-        } | undefined;
+        const queryState = query.state.data as
+          | {
+              pages: {
+                items: {
+                  message: Record<string, unknown>;
+                  attachment: Record<string, unknown> | null;
+                  isOwnMessage: boolean;
+                }[];
+                nextCursor: string | undefined;
+                hasMore: boolean;
+              }[];
+              pageParams: unknown[];
+            }
+          | undefined;
 
         if (!queryState?.pages) return;
 
@@ -482,7 +546,7 @@ export function ChatMessageList({
         });
       });
     },
-    [queryClient]
+    [queryClient],
   );
 
   // Auto-scroll: ALWAYS when YOU send, only if near bottom when receiving
@@ -514,7 +578,8 @@ export function ChatMessageList({
 
       // Check if first message ID changed - means we loaded OLDER messages at the top
       // In this case, DON'T auto-scroll
-      const loadedOlderMessages = firstMessage && firstMessage.id !== firstMessageIdRef.current;
+      const loadedOlderMessages =
+        firstMessage && firstMessage.id !== firstMessageIdRef.current;
 
       if (!loadedOlderMessages) {
         // Check if this is a NEW message we haven't seen before (at the bottom)
@@ -530,7 +595,9 @@ export function ChatMessageList({
             const viewport = scrollViewportRef.current;
             if (viewport) {
               const distanceFromBottom =
-                viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+                viewport.scrollHeight -
+                viewport.scrollTop -
+                viewport.clientHeight;
               const isNearBottom = distanceFromBottom < 200;
 
               if (isNearBottom) {
@@ -576,11 +643,14 @@ export function ChatMessageList({
       const viewport = scrollViewportRef.current;
       const anchorMessageId = anchorMessageIdRef.current;
       const savedOffsetFromTop = anchorOffsetFromTopRef.current;
+      const savedScrollTop = savedScrollTopRef.current;
 
       if (!viewport) return;
 
       // Find the anchor message element
-      const anchorElement = viewport.querySelector(`[data-message-id="${anchorMessageId}"]`) as HTMLElement;
+      const anchorElement = viewport.querySelector(
+        `[data-message-id="${anchorMessageId}"]`,
+      ) as HTMLElement;
 
       if (anchorElement) {
         // Get the anchor element's current position relative to the viewport
@@ -591,13 +661,16 @@ export function ChatMessageList({
         const currentOffsetFromTop = anchorRect.top - viewportRect.top;
 
         // Adjust scroll to restore the original offset
+        // IMPORTANT: Use savedScrollTop as base, not viewport.scrollTop (which may be 0)
         const scrollAdjustment = currentOffsetFromTop - savedOffsetFromTop;
-        viewport.scrollTop = viewport.scrollTop + scrollAdjustment;
+
+        viewport.scrollTop = savedScrollTop + scrollAdjustment;
       }
 
       // Reset anchor refs for next load (but keep isLoadingOlderMessagesRef until after auto-scroll check)
       anchorMessageIdRef.current = null;
       anchorOffsetFromTopRef.current = 0;
+      savedScrollTopRef.current = 0;
       previousMessageCountRef.current = messages.length;
 
       // Reset the loading flag after a small delay to ensure auto-scroll check has run
@@ -616,7 +689,7 @@ export function ChatMessageList({
             key={i}
             className={cn(
               "flex gap-2",
-              i % 2 === 0 ? "justify-start" : "justify-end"
+              i % 2 === 0 ? "justify-start" : "justify-end",
             )}
           >
             <Skeleton className="h-16 w-64 rounded-2xl" />
@@ -627,7 +700,11 @@ export function ChatMessageList({
   }
 
   return (
-    <div ref={containerRef} className={cn("relative space-y-4", className)} {...props}>
+    <div
+      ref={containerRef}
+      className={cn("relative space-y-4", className)}
+      {...props}
+    >
       {/* SENTINEL ELEMENT - IntersectionObserver watches this */}
       {hasNextPage && <div ref={sentinelRef} className="h-px" />}
 
@@ -648,7 +725,7 @@ export function ChatMessageList({
 
           const showDateDivider = shouldShowDateDivider(
             message.timestamp,
-            prevMessage?.timestamp
+            prevMessage?.timestamp,
           );
 
           // Hide first badge when loading to prevent visual jump
@@ -670,10 +747,17 @@ export function ChatMessageList({
                   canEditMessages={canEditMessages}
                   canDeleteMessages={canDeleteMessages}
                   onImageLoad={() => {
-                    // Scroll após imagem carregar - APENAS se estiver perto do bottom
+                    // Scroll após imagem carregar - APENAS se estiver perto do bottom E NÃO estiver carregando mensagens antigas
+                    if (isLoadingOlderMessagesRef.current) {
+                      return;
+                    }
+
                     const viewport = scrollViewportRef.current;
                     if (viewport) {
-                      const distanceFromBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+                      const distanceFromBottom =
+                        viewport.scrollHeight -
+                        viewport.scrollTop -
+                        viewport.clientHeight;
                       // Só faz scroll se estiver a menos de 300px do bottom
                       if (distanceFromBottom < 300) {
                         setTimeout(() => scrollToBottom("instant"), 100);
@@ -694,20 +778,22 @@ export function ChatMessageList({
       </div>
 
       {/* Scroll to bottom button - Rendered via portal to escape ScrollArea overflow */}
-      {showScrollButton && typeof document !== 'undefined' && createPortal(
-        <div className="fixed bottom-24 right-8 z-50 animate-in fade-in slide-in-from-bottom-2">
-          <Button
-            onClick={() => scrollToBottom("auto")}
-            size="icon"
-            variant="secondary"
-            className="h-11 w-11 rounded-full shadow-lg hover:shadow-xl transition-shadow bg-accent hover:bg-accent"
-            aria-label="Ir para mensagens recentes"
-          >
-            <ChevronDown className="h-5 w-5 text-foreground/70" />
-          </Button>
-        </div>,
-        document.body
-      )}
+      {showScrollButton &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div className="animate-in fade-in slide-in-from-bottom-2 fixed right-8 bottom-24 z-50">
+            <Button
+              onClick={() => scrollToBottom("auto")}
+              size="icon"
+              variant="secondary"
+              className="bg-accent hover:bg-accent h-11 w-11 rounded-full shadow-lg transition-shadow hover:shadow-xl"
+              aria-label="Ir para mensagens recentes"
+            >
+              <ChevronDown className="text-foreground/70 h-5 w-5" />
+            </Button>
+          </div>,
+          document.body,
+        )}
     </div>
   );
 }
