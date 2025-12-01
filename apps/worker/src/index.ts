@@ -6,6 +6,7 @@ import { createWorkers, createQueuesForMonitoring } from "~/libs/queue/workers";
 import { setupCronJobs } from "~/libs/queue/scheduler";
 import { logHealthStatus } from "~/libs/queue/health";
 import { logger } from "~/libs/utils/logger";
+import { startScheduledMessageAutoCancelListener } from "~/listeners/scheduled-message-auto-cancel";
 
 /**
  * Worker entry point
@@ -29,6 +30,11 @@ async function startWorker() {
       },
       "Workers started successfully",
     );
+
+    // Start scheduled message auto-cancel listener
+    logger.info("Starting scheduled message auto-cancel listener...");
+    await startScheduledMessageAutoCancelListener();
+    logger.info("Scheduled message auto-cancel listener started");
 
     // Setup cron jobs
     logger.info("Setting up cron jobs...");
