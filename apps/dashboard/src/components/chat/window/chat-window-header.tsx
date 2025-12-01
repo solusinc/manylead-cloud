@@ -13,6 +13,7 @@ import { ChatStarredSheet } from "./chat-starred-sheet";
 import { ChatHistorySheet } from "./chat-history-sheet";
 import { ChatWindowHeaderActions } from "./chat-window-header-actions";
 import { ChatImagesProvider } from "../message/chat-images-context";
+import { ScheduleSheet } from "../schedule";
 
 interface ChatWindowHeaderProps {
   chat: {
@@ -44,6 +45,7 @@ export function ChatWindowHeader({
   const [searchOpen, setSearchOpen] = useState(false);
   const [starredOpen, setStarredOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
 
   const contactDisplayName = chat.contact.customName ?? chat.contact.name;
 
@@ -69,6 +71,7 @@ export function ChatWindowHeader({
           onOpenSearch={() => setSearchOpen(true)}
           onOpenStarred={() => setStarredOpen(true)}
           onOpenHistory={() => setHistoryOpen(true)}
+          onOpenSchedule={() => setScheduleOpen(true)}
         />
       </div>
 
@@ -100,6 +103,8 @@ export function ChatWindowHeader({
         contactId={chat.contact.id}
         currentChatId={chat.id}
       />
+
+      <ScheduleSheet open={scheduleOpen} onOpenChange={setScheduleOpen} />
     </>
   );
 }

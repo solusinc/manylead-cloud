@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useMutation } from "@tanstack/react-query";
-import { EyeOff, History, MoreVertical, Search, Star, User } from "lucide-react";
+import { Calendar, EyeOff, History, MoreVertical, Search, Star, User } from "lucide-react";
 import { toast } from "sonner";
 
 import { cn } from "@manylead/ui";
@@ -33,6 +33,7 @@ export function ChatWindowHeaderActions({
   onOpenSearch,
   onOpenStarred,
   onOpenHistory,
+  onOpenSchedule,
   className,
 }: {
   chat: {
@@ -46,6 +47,7 @@ export function ChatWindowHeaderActions({
   onOpenSearch?: () => void;
   onOpenStarred?: () => void;
   onOpenHistory?: () => void;
+  onOpenSchedule?: () => void;
   className?: string;
 }) {
   const trpc = useTRPC();
@@ -103,6 +105,25 @@ export function ChatWindowHeaderActions({
           <ChatEndingSelector chatId={chatId} chatCreatedAt={chatCreatedAt} />
         </>
       )}
+
+      {/* Botão de Agendamentos */}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={onOpenSchedule}
+            aria-label="Agendamentos"
+            className="text-muted-foreground relative"
+          >
+            <Calendar className="size-5" />
+            {/* TODO: Adicionar indicator se houver agendamentos pendentes */}
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>
+          <p>Agendamentos</p>
+        </TooltipContent>
+      </Tooltip>
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
