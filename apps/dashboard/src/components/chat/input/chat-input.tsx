@@ -52,7 +52,7 @@ export function ChatInput({
   const router = useRouter();
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-  const { replyingTo, cancelReply, setMediaPreview, setFocusInput, myOrganizationName } = useChatReply();
+  const { replyingTo, cancelReply, setMediaPreview, setFocusInput } = useChatReply();
 
   // Custom hooks
   const { data: currentAgent } = useCurrentAgent();
@@ -227,9 +227,6 @@ export function ChatInput({
             repliedToContent: replyingTo.content,
             repliedToSender: replyingTo.senderName,
             repliedToMessageType: replyingTo.messageType,
-            repliedToOrgName: replyingTo.organizationName,
-            repliedToInstanceCode: replyingTo.instanceCode,
-            repliedToIsCrossOrg: replyingTo.organizationName !== myOrganizationName,
           }
         : undefined,
     })
@@ -240,7 +237,7 @@ export function ChatInput({
         setIsSending(false);
         cancelReply();
       });
-  }, [content, isSending, onTypingStop, clearContent, sendMessage, chatId, replyingTo, cancelReply, myOrganizationName]);
+  }, [content, isSending, onTypingStop, clearContent, sendMessage, chatId, replyingTo, cancelReply]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -485,8 +482,6 @@ export function ChatInput({
                 content: replyingTo.content,
                 senderName: replyingTo.senderName,
                 messageType: replyingTo.messageType,
-                organizationName: replyingTo.organizationName,
-                instanceCode: replyingTo.instanceCode,
               }
             : null
         }

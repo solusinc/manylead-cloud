@@ -11,7 +11,6 @@ import { cn } from "@manylead/ui";
 import { getDocumentType } from "~/lib/document-type-map";
 import { formatFileSize, formatDuration } from "@manylead/shared/constants";
 
-import { useChatReply } from "../providers/chat-reply-provider";
 import { ChatMessageActions } from "./chat-message-actions";
 import { useChatImages } from "./chat-images-context";
 import { AudioPlayer } from "./audio-player";
@@ -348,15 +347,10 @@ export function ChatMessageReplyPreview({
   repliedToMessageId?: string | null;
   className?: string;
 }) {
-  const { messageSource } = useChatReply();
-
   // Extrair dados do metadata
   const content = metadata.repliedToContent as string;
   const senderName = metadata.repliedToSender as string;
   const messageType = metadata.repliedToMessageType as string | undefined;
-  const orgName = metadata.repliedToOrgName as string | undefined;
-  const instanceCodeFromMetadata = metadata.repliedToInstanceCode as string | undefined;
-  const isCrossOrg = metadata.repliedToIsCrossOrg as boolean | undefined;
 
   const isMedia = messageType && messageType !== "text";
 
@@ -384,12 +378,6 @@ export function ChatMessageReplyPreview({
       ? `${cleanContent.substring(0, 50)}...`
       : cleanContent;
 
-  // Se for internal, mostrar: OrgName + instanceCode / AgentName / Content
-  // Se for WhatsApp, mostrar: ContactName / Content
-  // Se for internal da MESMA org (não cross-org), mostrar apenas AgentName
-  const isInternal = messageSource === "internal";
-  const showOrgName = isInternal && isCrossOrg;
-
   const handleClick = () => {
     if (repliedToMessageId) {
       scrollToMessage(repliedToMessageId);
@@ -407,53 +395,16 @@ export function ChatMessageReplyPreview({
         className,
       )}
     >
-      {showOrgName ? (
-        <>
-          {/* Linha 1: Nome da Org + instanceCode (somente cross-org) */}
-          <div className="mb-1 flex items-center gap-1.5">
-            <p
-              className={cn(
-                "text-xs font-semibold",
-                isOutgoing
-                  ? "text-primary dark:text-primary"
-                  : "text-primary/90",
-              )}
-            >
-              {orgName}
-            </p>
-            {instanceCodeFromMetadata && (
-              <span
-                className={cn(
-                  "text-[10px] opacity-60",
-                  isOutgoing && "dark:text-white/60",
-                )}
-              >
-                {instanceCodeFromMetadata}
-              </span>
-            )}
-          </div>
-          {/* Linha 2: Nome do agente */}
-          <p
-            className={cn(
-              "text-[11px] font-semibold opacity-70",
-              isOutgoing && "dark:text-white/70",
-            )}
-          >
-            {senderName}
-          </p>
-        </>
-      ) : (
-        /* WhatsApp ou Internal da mesma org: apenas nome do sender */
-        <p
-          className={cn(
-            "text-xs font-semibold",
-            isOutgoing ? "text-primary dark:text-primary" : "text-primary/90",
-          )}
-        >
-          {senderName}
-        </p>
-      )}
-      {/* Linha 3 (ou 2 se WhatsApp): Conteúdo ou Mídia */}
+      {/* Nome do remetente */}
+      <p
+        className={cn(
+          "text-xs font-semibold",
+          isOutgoing ? "text-primary dark:text-primary" : "text-primary/90",
+        )}
+      >
+        {senderName}
+      </p>
+      {/* Conteúdo ou Mídia */}
       {isMedia ? (
         <div className="flex items-center gap-1.5 text-xs opacity-80">
           {MediaIcon && <MediaIcon className="h-3.5 w-3.5" />}

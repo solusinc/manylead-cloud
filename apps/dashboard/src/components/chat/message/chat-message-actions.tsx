@@ -45,7 +45,7 @@ export function ChatMessageActions({
   className?: string;
 }) {
   // Hooks devem vir ANTES de qualquer return condicional
-  const { setReplyingTo, contactName, focusInput, organizationName, instanceCode, myOrganizationName, myInstanceCode } = useChatReply();
+  const { setReplyingTo, contactName, focusInput } = useChatReply();
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [shouldFocusAfterClose, setShouldFocusAfterClose] = useState(false);
@@ -64,18 +64,12 @@ export function ChatMessageActions({
       ? (message.attachment.mediaType as "image" | "video" | "audio" | "document")
       : (message.messageType as "text" | "image" | "video" | "audio" | "document");
 
-    // Detectar organização: se é outgoing, é minha org. Se não, é a org do contact
-    const replyOrgName = isOutgoing ? myOrganizationName : organizationName;
-    const replyInstanceCode = isOutgoing ? myInstanceCode : instanceCode;
-
     setReplyingTo({
       id: message.id,
       content: message.content,
       senderName,
       timestamp: message.timestamp,
       messageType,
-      organizationName: replyOrgName,
-      instanceCode: replyInstanceCode,
     });
 
     // Marcar para focar após fechar

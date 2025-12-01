@@ -9,8 +9,6 @@ interface ReplyMessage {
   senderName: string;
   timestamp: Date;
   messageType?: "text" | "image" | "video" | "audio" | "document";
-  organizationName?: string;
-  instanceCode?: string;
 }
 
 interface ChatReplyContextValue {
@@ -19,10 +17,6 @@ interface ChatReplyContextValue {
   cancelReply: () => void;
   contactName: string;
   messageSource: "whatsapp" | "internal";
-  instanceCode?: string;
-  organizationName?: string;
-  myOrganizationName?: string;
-  myInstanceCode?: string;
   mediaPreview: File | null;
   setMediaPreview: (file: File | null) => void;
   cancelMediaPreview: () => void;
@@ -36,18 +30,10 @@ export function ChatReplyProvider({
   children,
   contactName = "Contato",
   messageSource = "whatsapp",
-  instanceCode,
-  organizationName,
-  myOrganizationName,
-  myInstanceCode,
 }: {
   children: ReactNode;
   contactName?: string;
   messageSource?: "whatsapp" | "internal";
-  instanceCode?: string;
-  organizationName?: string;
-  myOrganizationName?: string;
-  myInstanceCode?: string;
 }) {
   const [replyingTo, setReplyingTo] = useState<ReplyMessage | null>(null);
   const [mediaPreview, setMediaPreview] = useState<File | null>(null);
@@ -69,10 +55,6 @@ export function ChatReplyProvider({
         cancelReply,
         contactName,
         messageSource,
-        instanceCode,
-        organizationName,
-        myOrganizationName,
-        myInstanceCode,
         mediaPreview,
         setMediaPreview,
         cancelMediaPreview,

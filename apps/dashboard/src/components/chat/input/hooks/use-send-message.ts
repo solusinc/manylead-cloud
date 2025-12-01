@@ -17,9 +17,6 @@ interface SendMessageOptions {
     repliedToContent: string;
     repliedToSender: string;
     repliedToMessageType?: string;
-    repliedToOrgName?: string;
-    repliedToInstanceCode?: string;
-    repliedToIsCrossOrg?: boolean;
   };
 }
 

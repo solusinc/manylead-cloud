@@ -11,8 +11,6 @@ interface ChatReplyPreviewProps {
     content: string;
     senderName: string;
     messageType?: "text" | "image" | "video" | "audio" | "document";
-    organizationName?: string;
-    instanceCode?: string;
   } | null;
   onCancel: () => void;
   className?: string;

@@ -208,7 +208,7 @@ function MessageItem({
             type="button"
             variant="ghost"
             size="icon"
-            className="h-8 w-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+            className="h-8 w-8"
             onClick={onDelete}
           >
             <Trash2 className="h-4 w-4" />
@@ -276,7 +276,7 @@ function MessageItem({
                 onClick={() => fileInputRef.current?.click()}
               >
                 <Upload className="mr-2 h-4 w-4" />
-                Selecionar {isImage ? "imagem" : isAudio ? "áudio" : "documento"}
+                Selecionar {isImage ? "imagem ou vídeo" : isAudio ? "áudio" : "documento"}
               </Button>
             )}
           </div>
