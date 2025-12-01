@@ -85,6 +85,20 @@
       "when": 1764547418670,
       "tag": "0011_easy_silvermane",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1764625774371,
+      "tag": "0012_funny_sumo",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1764626920902,
+      "tag": "0013_red_ricochet",
+      "breakpoints": true
     }
   ]
 }

@@ -1,6 +1,5 @@
 import { Queue } from "bullmq";
 import { getRedisClient } from "~/libs/cache/redis";
-import { env } from "~/env";
 
 async function inspectFailedJobs() {
   const connection = getRedisClient();
@@ -27,16 +26,11 @@ async function inspectFailedJobs() {
     console.log(`❌ Found ${failed.length} failed jobs:\n`);
 
     for (const job of failed) {
-      if (!job) {
-        console.log("\n[Skipped null job]");
-        continue;
-      }
-
       console.log(`\n--- Job ID: ${job.id} ---`);
       console.log(`Data:`, JSON.stringify(job.data, null, 2));
       console.log(`\nError: ${job.failedReason}`);
 
-      if (job.stacktrace && job.stacktrace.length > 0) {
+      if (job.stacktrace.length > 0) {
         console.log(`\nStack trace:`);
         console.log(job.stacktrace.join("\n"));
       }

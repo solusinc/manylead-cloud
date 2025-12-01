@@ -8,6 +8,7 @@ import type { AttachmentCleanupJobData } from "~/workers/attachment-cleanup";
 import type { AttachmentOrphanCleanupJobData } from "~/workers/attachment-orphan-cleanup";
 import type { QuickReplyOrphanCleanupJobData } from "~/workers/quick-reply-orphan-cleanup";
 import type { CrossOrgLogoSyncJobData } from "~/workers/cross-org-logo-sync";
+import type { ScheduledMessageJobData } from "~/workers/scheduled-message";
 import { env } from "~/env";
 import { getRedisClient } from "~/libs/cache/redis";
 import { processTenantProvisioning } from "~/workers/tenant-provisioning";
@@ -17,6 +18,7 @@ import { processAttachmentCleanup } from "~/workers/attachment-cleanup";
 import { processAttachmentOrphanCleanup } from "~/workers/attachment-orphan-cleanup";
 import { processQuickReplyOrphanCleanup } from "~/workers/quick-reply-orphan-cleanup";
 import { processCrossOrgLogoSync } from "~/workers/cross-org-logo-sync";
+import { processScheduledMessage } from "~/workers/scheduled-message";
 
 const logger = createLogger("Worker:Queue");
 
@@ -252,6 +254,27 @@ export function createWorkers(): Worker[] {
   workers.push(crossOrgLogoSyncWorker);
 
   /**
+   * Scheduled Message Worker
+   * Processa mensagens/notas agendadas para envio futuro
+   */
+  logger.info("Creating worker for queue: scheduled-message");
+
+  const scheduledMessageWorker = createWorker<ScheduledMessageJobData>({
+    name: "scheduled-message",
+    processor: processScheduledMessage,
+    connection,
+    concurrency: 5, // Process multiple scheduled messages concurrently
+    logger,
+  });
+
+  attachEventListeners(scheduledMessageWorker, {
+    queueName: "scheduled-message",
+  });
+
+  logger.info("Worker created for queue: scheduled-message");
+  workers.push(scheduledMessageWorker);
+
+  /**
    * TODO (FASE 4): Add Tenant Migration Worker
    * const tenantMigrationWorker = new Worker(...)
    */
@@ -294,6 +317,10 @@ export function createQueuesForMonitoring(): { name: string; queue: Queue }[] {
     {
       name: "cross-org-logo-sync",
       queue: createQueue({ name: "cross-org-logo-sync", connection }),
+    },
+    {
+      name: "scheduled-message",
+      queue: createQueue({ name: "scheduled-message", connection }),
     },
   ];
 }

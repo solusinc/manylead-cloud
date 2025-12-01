@@ -12,6 +12,7 @@ import { messagesRouter } from "./router/messages";
 import { organizationRouter } from "./router/organization";
 import { organizationSettingsRouter } from "./router/organization-settings";
 import { quickRepliesRouter } from "./router/quick-replies";
+import { scheduledMessagesRouter } from "./router/scheduled-messages";
 import { tagsRouter } from "./router/tags";
 import { userRouter } from "./router/user";
 import { createTRPCRouter } from "./trpc";
@@ -32,6 +33,7 @@ export const appRouter = createTRPCRouter({
   attachments: attachmentsRouter,
   tags: tagsRouter,
   quickReplies: quickRepliesRouter,
+  scheduledMessages: scheduledMessagesRouter,
   endings: endingsRouter,
 });
 
