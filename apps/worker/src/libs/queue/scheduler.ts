@@ -25,6 +25,7 @@ export async function setupCronJobs() {
     const cleanupQueue = createQueue({
       name: env.QUEUE_ATTACHMENT_CLEANUP,
       connection,
+      preset: "cleanup", // Auto-remove failed jobs after 30 days
     });
 
     // Remove existing repeatable jobs to prevent duplicates
@@ -56,6 +57,7 @@ export async function setupCronJobs() {
     const orphanQueue = createQueue({
       name: "attachment-orphan-cleanup",
       connection,
+      preset: "cleanup", // Auto-remove failed jobs after 30 days
     });
 
     // Remove existing repeatable jobs to prevent duplicates
@@ -90,6 +92,7 @@ export async function setupCronJobs() {
     const quickReplyOrphanQueue = createQueue({
       name: "quick-reply-orphan-cleanup",
       connection,
+      preset: "cleanup", // Auto-remove failed jobs after 30 days
     });
 
     // Remove existing repeatable jobs to prevent duplicates

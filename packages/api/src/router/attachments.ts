@@ -239,6 +239,7 @@ export const attachmentsRouter = createTRPCRouter({
       const queue = createQueue({
         name: "attachment-orphan-cleanup",
         connection,
+        preset: "cleanup", // Auto-remove failed jobs after 30 days
       });
 
       const job = await queue.add("orphan-cleanup", {

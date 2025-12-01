@@ -9,7 +9,9 @@
     "dev": "bun with-env bun run --hot src/index.ts",
     "lint": "eslint .",
     "start": "bun with-env bun run src/index.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "inspect-failed": "bun with-env bun run scripts/inspect-failed-jobs.ts",
+    "clean-failed": "bun with-env bun run scripts/clean-failed-jobs.ts"
   },
   "dependencies": {
     "@manylead/clients": "workspace:*",
