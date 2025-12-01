@@ -98,33 +98,51 @@ export function AudioPlayer({ src, onTimeUpdate, isOwnMessage = false }: AudioPl
   // Decidir qual avatar mostrar baseado em quem enviou a mensagem
   const avatarSrc = isOwnMessage ? currentOrg?.logo ?? undefined : chat.contact.avatar ?? undefined;
 
+  const avatarElement = (
+    <Avatar className="size-10 shrink-0 rounded-full">
+      {avatarSrc ? (
+        <AvatarImage src={avatarSrc} alt={isOwnMessage ? currentOrg?.name : chat.contact.name} />
+      ) : (
+        <AvatarFallback className="bg-muted text-muted-foreground rounded-full">
+          <FaUser className="h-4 w-4" />
+        </AvatarFallback>
+      )}
+    </Avatar>
+  );
+
+  const playButton = (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      onClick={handlePlayPause}
+      className="size-10 shrink-0 text-black hover:!bg-transparent dark:text-white dark:hover:!bg-transparent"
+    >
+      {isPlaying ? (
+        <Pause className="size-5 fill-current" />
+      ) : (
+        <Play className="size-5 fill-current" />
+      )}
+    </Button>
+  );
+
+  const waveform = <div ref={containerRef} className="flex-1" style={{ minWidth: '200px' }} />;
+
   return (
     <div className="flex items-center gap-2 py-1">
-      <Avatar className="size-10 shrink-0 rounded-full">
-        {avatarSrc ? (
-          <AvatarImage src={avatarSrc} alt={isOwnMessage ? currentOrg?.name : chat.contact.name} />
-        ) : (
-          <AvatarFallback className="bg-muted text-muted-foreground rounded-full">
-            <FaUser className="h-4 w-4" />
-          </AvatarFallback>
-        )}
-      </Avatar>
-
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        onClick={handlePlayPause}
-        className="size-10 shrink-0 text-black hover:!bg-transparent dark:text-white dark:hover:!bg-transparent"
-      >
-        {isPlaying ? (
-          <Pause className="size-5 fill-current" />
-        ) : (
-          <Play className="size-5 fill-current" />
-        )}
-      </Button>
-
-      <div ref={containerRef} className="flex-1" style={{ minWidth: '200px' }} />
+      {isOwnMessage ? (
+        <>
+          {avatarElement}
+          {playButton}
+          {waveform}
+        </>
+      ) : (
+        <>
+          {playButton}
+          {waveform}
+          {avatarElement}
+        </>
+      )}
     </div>
   );
 }

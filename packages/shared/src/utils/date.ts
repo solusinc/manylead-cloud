@@ -1,4 +1,4 @@
-import { format } from "date-fns";
+import { format, isToday, isYesterday, isThisWeek } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 /**
@@ -6,6 +6,46 @@ import { ptBR } from "date-fns/locale";
  */
 export function formatTime(date: Date): string {
   return format(date, "HH:mm", { locale: ptBR });
+}
+
+/**
+ * Formata data no estilo WhatsApp (para badges de data)
+ * - "Hoje" se for hoje
+ * - "Ontem" se foi ontem
+ * - Nome do dia da semana se for nessa semana (ex: "Segunda-feira")
+ * - "dd/MM/yyyy" se for mais antigo
+ */
+export function formatMessageDate(date: Date): string {
+  if (isToday(date)) {
+    return "Hoje";
+  }
+  if (isYesterday(date)) {
+    return "Ontem";
+  }
+  if (isThisWeek(date, { weekStartsOn: 0 })) {
+    return format(date, "EEEE", { locale: ptBR });
+  }
+  return format(date, "dd/MM/yyyy", { locale: ptBR });
+}
+
+/**
+ * Formata timestamp no estilo WhatsApp (para footer de mensagens)
+ * - "HH:mm" se for hoje
+ * - "Ontem" se foi ontem
+ * - Nome do dia da semana se for nessa semana (ex: "Segunda-feira")
+ * - "dd/MM/yyyy" se for mais antigo
+ */
+export function formatMessageTimestamp(date: Date): string {
+  if (isToday(date)) {
+    return format(date, "HH:mm");
+  }
+  if (isYesterday(date)) {
+    return "Ontem";
+  }
+  if (isThisWeek(date, { weekStartsOn: 0 })) {
+    return format(date, "EEEE", { locale: ptBR });
+  }
+  return format(date, "dd/MM/yyyy", { locale: ptBR });
 }
 
 /**

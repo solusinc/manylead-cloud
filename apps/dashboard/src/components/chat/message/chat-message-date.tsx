@@ -32,17 +32,11 @@ function formatMessageDate(date: Date): string {
   if (isToday(date)) {
     return "Hoje";
   }
-
   if (isYesterday(date)) {
     return "Ontem";
   }
-
-  // Check if date is within this week (last 7 days)
   if (isThisWeek(date, { weekStartsOn: 0 })) {
-    // Show day of week (Segunda-feira, Terça-feira, etc.)
     return format(date, "EEEE", { locale: ptBR });
   }
-
-  // More than 7 days: show date in DD/MM/YYYY format (WhatsApp style)
   return format(date, "dd/MM/yyyy", { locale: ptBR });
 }

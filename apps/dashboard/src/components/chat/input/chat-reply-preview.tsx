@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { X, Image as ImageIcon, Video, Mic, FileText } from "lucide-react";
 
 import { cn } from "@manylead/ui";
@@ -21,6 +22,20 @@ export function ChatReplyPreview({
   onCancel,
   className,
 }: ChatReplyPreviewProps) {
+  // Adicionar listener para ESC cancelar o reply
+  useEffect(() => {
+    if (!repliedMessage) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        onCancel();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [repliedMessage, onCancel]);
+
   if (!repliedMessage) return null;
 
   const messageType = repliedMessage.messageType ?? "text";

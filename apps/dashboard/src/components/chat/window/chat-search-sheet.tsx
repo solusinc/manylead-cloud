@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { format } from "date-fns";
-import { Search, X, Check, CheckCheck, Clock } from "lucide-react";
+import { format, isToday, isYesterday, isThisWeek } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { Search, X } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import type { Attachment } from "@manylead/db";
 
 import { cn } from "@manylead/ui";
 import { Input } from "@manylead/ui/input";
@@ -16,6 +18,24 @@ import {
 import { Button } from "@manylead/ui/button";
 import { useTRPC } from "~/lib/trpc/react";
 import { useMessageFocusStore } from "~/stores/use-message-focus-store";
+import { ChatMessageAttachment } from "../message/chat-message-content";
+import { ChatImagesProvider } from "../message/chat-images-context";
+
+/**
+ * Formata timestamp no estilo WhatsApp (para footer de mensagens)
+ */
+function formatMessageTimestamp(date: Date): string {
+  if (isToday(date)) {
+    return format(date, "HH:mm");
+  }
+  if (isYesterday(date)) {
+    return "Ontem";
+  }
+  if (isThisWeek(date, { weekStartsOn: 0 })) {
+    return format(date, "EEEE", { locale: ptBR });
+  }
+  return format(date, "dd/MM/yyyy", { locale: ptBR });
+}
 
 interface ChatSearchSheetProps {
   open: boolean;
@@ -53,7 +73,7 @@ export function ChatSearchSheet({
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="flex w-full flex-col p-0 sm:max-w-md [&>button]:hidden">
+      <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-2xl [&>button]:hidden">
         <SheetHeader className="flex-row items-center justify-between space-y-0 border-b px-4 py-3">
           <SheetTitle className="text-base font-semibold">
             Buscar no atendimento
@@ -82,7 +102,7 @@ export function ChatSearchSheet({
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        <div className="flex-1 overflow-y-auto">
           {searchTerm.length < 2 ? (
             <p className="text-sm text-muted-foreground text-center py-8">
               Digite pelo menos 2 caracteres para buscar
@@ -96,13 +116,19 @@ export function ChatSearchSheet({
               Nenhuma mensagem encontrada
             </p>
           ) : (
-            searchResults?.items.map((item) => (
-              <SearchResultBubble
-                key={item.message.id}
-                message={item.message}
-                onClick={() => handleResultClick(item.message.id)}
-              />
-            ))
+            <ChatImagesProvider>
+              <div className="divide-y gap-0">
+                {searchResults?.items.map((item) => (
+                  <SearchResultBubble
+                    key={item.message.id}
+                    message={item.message}
+                    attachment={item.attachment}
+                    isOwnMessage={item.isOwnMessage}
+                    onClick={() => handleResultClick(item.message.id)}
+                  />
+                ))}
+              </div>
+            </ChatImagesProvider>
           )}
         </div>
       </SheetContent>
@@ -115,60 +141,99 @@ interface SearchResultBubbleProps {
     id: string;
     content: string;
     sender: string;
+    senderName: string | null;
     timestamp: Date;
     status?: string | null;
+    metadata?: Record<string, unknown> | null;
   };
+  attachment: Attachment | null;
+  isOwnMessage: boolean;
   onClick: () => void;
 }
 
 function SearchResultBubble({
   message,
+  attachment,
+  isOwnMessage,
   onClick,
 }: SearchResultBubbleProps) {
-  const isOutgoing = message.sender === "agent";
+  // Usar o senderName do campo direto da mensagem
+  const senderName = message.senderName ?? (message.sender === "agent" ? "Agente" : "Contato");
 
-  // Remover formatação **Nome**\n do conteúdo (se houver)
-  const cleanContent = message.content.replace(/^\*\*.*?\*\*\n/, "");
+  // Extrair conteúdo sem formatação **Nome**\n
+  const extractNameAndContent = (content: string) => {
+    const regex = /^\*\*(.+?)\*\*\n([\s\S]*)$/;
+    const match = regex.exec(content);
+    if (match) {
+      return {
+        name: match[1],
+        content: match[2],
+      };
+    }
+    return {
+      name: null,
+      content,
+    };
+  };
+
+  const { content } = extractNameAndContent(message.content);
 
   return (
-    <button
+    <div
       onClick={onClick}
-      className={cn(
-        "w-full text-left transition-transform hover:scale-[1.02] active:scale-[0.98]",
-        "flex",
-        isOutgoing ? "justify-end" : "justify-start",
-      )}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+      className="w-full text-left p-4 bg-accent/50 hover:bg-accent/60 transition-colors cursor-pointer"
     >
-      <div
-        className={cn(
-          "max-w-[85%] rounded-2xl px-4 py-2",
-          isOutgoing
-            ? "bg-msg-outgoing rounded-br-sm"
-            : "bg-msg-incoming rounded-bl-sm",
-        )}
-      >
-        <p className="text-sm whitespace-pre-wrap break-words">
-          {cleanContent}
-        </p>
-        <div className="flex items-center justify-end gap-1 mt-1">
-          <span className="text-[10px] text-muted-foreground">
-            {format(new Date(message.timestamp), "dd/MM/yy HH:mm")}
-          </span>
-          {isOutgoing && (
-            <span className="text-muted-foreground">
-              {message.status === "read" ? (
-                <CheckCheck className="h-3.5 w-3.5 text-blue-500" />
-              ) : message.status === "delivered" ? (
-                <CheckCheck className="h-3.5 w-3.5" />
-              ) : message.status === "sent" ? (
-                <Check className="h-3.5 w-3.5" />
-              ) : (
-                <Clock className="h-3 w-3" />
-              )}
-            </span>
+      {/* Bubble igual ao chat message list */}
+      <div className={cn("flex gap-2 mb-2", isOwnMessage ? "justify-end" : "justify-start")}>
+        <div
+          className={cn(
+            "relative max-w-[280px] overflow-hidden rounded-sm sm:max-w-md md:max-w-lg lg:max-w-xl",
+            "px-2 py-2",
+            isOwnMessage ? "bg-msg-outgoing" : "bg-msg-incoming",
           )}
+        >
+          {/* Assinatura - nome do sender */}
+          {senderName && (
+            <p className={cn("text-sm font-semibold mb-2", isOwnMessage && "dark:text-white")}>
+              {senderName}
+            </p>
+          )}
+
+          {/* Renderizar mídia se houver attachment */}
+          {attachment && (
+            <div onClick={(e) => e.stopPropagation()}>
+              <ChatMessageAttachment
+                attachment={attachment}
+                messageId={message.id}
+                isOwnMessage={isOwnMessage}
+                disableLightbox={true}
+              />
+            </div>
+          )}
+
+          {/* Renderizar conteúdo de texto se houver */}
+          {content?.trim() && (
+            <p className={cn("overflow-wrap-anywhere break-word text-sm whitespace-pre-wrap", isOwnMessage && "dark:text-white")}>
+              {content}
+            </p>
+          )}
+
+          {/* Footer com data formatada estilo WhatsApp */}
+          <div className="mt-1 flex items-center justify-end gap-1">
+            <span className="text-xs opacity-70">
+              {formatMessageTimestamp(new Date(message.timestamp))}
+            </span>
+          </div>
         </div>
       </div>
-    </button>
+    </div>
   );
 }

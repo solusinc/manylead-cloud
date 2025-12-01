@@ -43,12 +43,14 @@ export function ChatMessageAttachment({
   onImageLoad,
   onAudioTimeUpdate,
   isOwnMessage = false,
+  disableLightbox = false,
 }: {
   attachment: Attachment;
   messageId: string;
   onImageLoad?: () => void;
   onAudioTimeUpdate?: (currentTime: number, isPlaying: boolean) => void;
   isOwnMessage?: boolean;
+  disableLightbox?: boolean;
 }) {
   const { registerImage, openLightbox } = useChatImages();
   const isImage = attachment.mediaType === "image";
@@ -106,8 +108,11 @@ export function ChatMessageAttachment({
     <div className="mb-2 overflow-hidden rounded-lg">
       {isImage && (
         <button
-          onClick={() => openLightbox(messageId)}
-          className="relative w-full cursor-pointer overflow-hidden rounded-lg bg-muted/30 transition-opacity hover:opacity-90"
+          onClick={disableLightbox ? undefined : () => openLightbox(messageId)}
+          className={cn(
+            "relative w-full overflow-hidden rounded-lg bg-muted/30 transition-opacity",
+            !disableLightbox && "cursor-pointer hover:opacity-90"
+          )}
           style={{
             maxWidth: '400px',
             maxHeight: '320px',
@@ -276,12 +281,6 @@ export function ChatMessageBubble({
       {/* Renderizar baseado em ter ou não attachment */}
       {message.attachment && !message.isDeleted ? (
         <>
-          {/* Assinatura - mostrar ANTES da mídia */}
-          <ChatMessageSignature
-            senderName={message.senderName}
-            isOutgoing={isOutgoing}
-          />
-
           {/* Attachment/Mídia */}
           <ChatMessageAttachment
             attachment={message.attachment}

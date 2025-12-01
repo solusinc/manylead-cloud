@@ -12,6 +12,7 @@ import { ChatSearchSheet } from "./chat-search-sheet";
 import { ChatStarredSheet } from "./chat-starred-sheet";
 import { ChatHistorySheet } from "./chat-history-sheet";
 import { ChatWindowHeaderActions } from "./chat-window-header-actions";
+import { ChatImagesProvider } from "../message/chat-images-context";
 
 interface ChatWindowHeaderProps {
   chat: {
@@ -85,11 +86,13 @@ export function ChatWindowHeader({
         contactName={contactDisplayName}
       />
 
-      <ChatStarredSheet
-        open={starredOpen}
-        onOpenChange={setStarredOpen}
-        chatId={chat.id}
-      />
+      <ChatImagesProvider>
+        <ChatStarredSheet
+          open={starredOpen}
+          onOpenChange={setStarredOpen}
+          chatId={chat.id}
+        />
+      </ChatImagesProvider>
 
       <ChatHistorySheet
         open={historyOpen}
