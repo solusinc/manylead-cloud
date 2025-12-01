@@ -71,6 +71,7 @@ export class CrossOrgMirrorService {
     messageId: string,
     messageTimestamp: Date,
     messageContent: string,
+    senderName: string,
     metadata?: Record<string, unknown>,
     attachmentData?: {
       fileName: string;
@@ -168,6 +169,7 @@ export class CrossOrgMirrorService {
         messageSource: "internal",
         sender: "agent",
         senderId: null,
+        senderName, // Nome do agent que enviou
         messageType: attachmentData?.mediaType === "image"
           ? "image"
           : attachmentData?.mediaType === "video"
@@ -178,6 +180,7 @@ export class CrossOrgMirrorService {
           ? "audio"
           : "text",
         content: messageContent,
+        repliedToMessageId: metadata?.repliedToMessageId as string | undefined ?? null,
         metadata: {
           ...metadata,
           originalMessageId: messageId,
@@ -260,6 +263,7 @@ export class CrossOrgMirrorService {
     messageId: string,
     messageTimestamp: Date,
     messageContent: string,
+    senderName: string,
     metadata?: Record<string, unknown>,
     attachmentData?: {
       fileName: string;
@@ -339,6 +343,7 @@ export class CrossOrgMirrorService {
         messageSource: "internal",
         sender: "agent",
         senderId: null,
+        senderName, // Nome do agent que enviou
         messageType: attachmentData?.mediaType === "image"
           ? "image"
           : attachmentData?.mediaType === "video"
@@ -349,6 +354,7 @@ export class CrossOrgMirrorService {
           ? "audio"
           : "text",
         content: messageContent,
+        repliedToMessageId: metadata?.repliedToMessageId as string | undefined ?? null,
         metadata: {
           ...metadata,
           originalMessageId: messageId,

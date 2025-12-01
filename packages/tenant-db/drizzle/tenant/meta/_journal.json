@@ -78,6 +78,13 @@
       "when": 1764424791461,
       "tag": "0010_spicy_annihilus",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1764547418670,
+      "tag": "0011_easy_silvermane",
+      "breakpoints": true
     }
   ]
 }

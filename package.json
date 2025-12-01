@@ -32,7 +32,8 @@
     "dotenv-cli": "11.0.0",
     "prettier": "catalog:",
     "turbo": "^2.5.8",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "wrangler": "^4.51.0"
   },
   "prettier": "@manylead/prettier-config"
 }

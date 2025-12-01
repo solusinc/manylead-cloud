@@ -8,6 +8,9 @@ interface ReplyMessage {
   content: string;
   senderName: string;
   timestamp: Date;
+  messageType?: "text" | "image" | "video" | "audio" | "document";
+  organizationName?: string;
+  instanceCode?: string;
 }
 
 interface ChatReplyContextValue {
@@ -18,9 +21,13 @@ interface ChatReplyContextValue {
   messageSource: "whatsapp" | "internal";
   instanceCode?: string;
   organizationName?: string;
+  myOrganizationName?: string;
+  myInstanceCode?: string;
   mediaPreview: File | null;
   setMediaPreview: (file: File | null) => void;
   cancelMediaPreview: () => void;
+  focusInput: (() => void) | null;
+  setFocusInput: (fn: (() => void) | null) => void;
 }
 
 const ChatReplyContext = createContext<ChatReplyContextValue | null>(null);
@@ -31,15 +38,20 @@ export function ChatReplyProvider({
   messageSource = "whatsapp",
   instanceCode,
   organizationName,
+  myOrganizationName,
+  myInstanceCode,
 }: {
   children: ReactNode;
   contactName?: string;
   messageSource?: "whatsapp" | "internal";
   instanceCode?: string;
   organizationName?: string;
+  myOrganizationName?: string;
+  myInstanceCode?: string;
 }) {
   const [replyingTo, setReplyingTo] = useState<ReplyMessage | null>(null);
   const [mediaPreview, setMediaPreview] = useState<File | null>(null);
+  const [focusInput, setFocusInput] = useState<(() => void) | null>(null);
 
   const cancelReply = () => {
     setReplyingTo(null);
@@ -59,9 +71,13 @@ export function ChatReplyProvider({
         messageSource,
         instanceCode,
         organizationName,
+        myOrganizationName,
+        myInstanceCode,
         mediaPreview,
         setMediaPreview,
         cancelMediaPreview,
+        focusInput,
+        setFocusInput,
       }}
     >
       {children}

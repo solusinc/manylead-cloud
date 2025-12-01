@@ -45,9 +45,10 @@ export function ChatMessageActions({
   className?: string;
 }) {
   // Hooks devem vir ANTES de qualquer return condicional
-  const { setReplyingTo, contactName } = useChatReply();
+  const { setReplyingTo, contactName, focusInput, organizationName, instanceCode, myOrganizationName, myInstanceCode } = useChatReply();
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [shouldFocusAfterClose, setShouldFocusAfterClose] = useState(false);
 
   // Não mostrar menu de ações para mensagens deletadas
   if (message.isDeleted) {
@@ -55,16 +56,40 @@ export function ChatMessageActions({
   }
 
   const handleReply = () => {
-    // Extrair nome do sender do conteúdo (formato: **Nome**\nConteúdo)
-    const match = /^\*\*(.*?)\*\*/.exec(message.content);
-    const senderName = match?.[1] ?? (isOutgoing ? "Você" : contactName);
+    // Usar senderName do campo message.senderName (agente) ou contactName (contato)
+    const senderName = message.senderName ?? contactName;
+
+    // Se tem attachment, usar o mediaType do attachment
+    const messageType = message.attachment
+      ? (message.attachment.mediaType as "image" | "video" | "audio" | "document")
+      : (message.messageType as "text" | "image" | "video" | "audio" | "document");
+
+    // Detectar organização: se é outgoing, é minha org. Se não, é a org do contact
+    const replyOrgName = isOutgoing ? myOrganizationName : organizationName;
+    const replyInstanceCode = isOutgoing ? myInstanceCode : instanceCode;
 
     setReplyingTo({
       id: message.id,
       content: message.content,
       senderName,
       timestamp: message.timestamp,
+      messageType,
+      organizationName: replyOrgName,
+      instanceCode: replyInstanceCode,
     });
+
+    // Marcar para focar após fechar
+    setShouldFocusAfterClose(true);
+  };
+
+  const handleDropdownOpenChange = (open: boolean) => {
+    onOpenChange?.(open);
+
+    // Quando fechar e deve focar
+    if (!open && shouldFocusAfterClose) {
+      setShouldFocusAfterClose(false);
+      focusInput?.();
+    }
   };
 
   // Não pode editar/deletar se a mensagem já foi lida
@@ -101,7 +126,7 @@ export function ChatMessageActions({
 
   return (
     <>
-      <DropdownMenu onOpenChange={onOpenChange}>
+      <DropdownMenu onOpenChange={handleDropdownOpenChange} modal={false}>
         <DropdownMenuTrigger asChild>
           <Button
             variant="ghost"

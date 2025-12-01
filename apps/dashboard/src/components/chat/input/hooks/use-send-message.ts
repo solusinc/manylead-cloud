@@ -16,6 +16,10 @@ interface SendMessageOptions {
     repliedToMessageId: string;
     repliedToContent: string;
     repliedToSender: string;
+    repliedToMessageType?: string;
+    repliedToOrgName?: string;
+    repliedToInstanceCode?: string;
+    repliedToIsCrossOrg?: boolean;
   };
 }
 
@@ -152,14 +156,13 @@ export function useSendMessage(chatId: string) {
     // Generate tempId BEFORE sending (UUIDv7 - time-sortable)
     const tempId = uuidv7();
 
-    // Format message with signature: **UserName**\nContent (same as backend)
     const userName = session.user.name;
-    const formattedContent = `**${userName}**\n${content}`;
 
     const tempMessage = {
       id: tempId,
       chatId,
-      content: formattedContent,
+      content, // Conteúdo sem assinatura
+      senderName: userName, // Nome do remetente em campo separado
       timestamp: new Date(),
       status: "pending" as const,
       sender: "agent" as const,
@@ -167,6 +170,8 @@ export function useSendMessage(chatId: string) {
       messageType: "text" as const,
       isOwnMessage: true,
       _isOptimistic: true,
+      repliedToMessageId: metadata?.repliedToMessageId ?? null,
+      metadata: metadata ?? null,
     };
 
     // Add to cache BEFORE mutateAsync (instant UI update)

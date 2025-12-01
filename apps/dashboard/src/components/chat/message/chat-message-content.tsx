@@ -3,7 +3,7 @@
 import { memo, useEffect, useState } from "react";
 import Image from "next/image";
 import { format } from "date-fns";
-import { BanIcon, Check, CheckCheck, Clock, Star, FileX } from "lucide-react";
+import { BanIcon, Check, CheckCheck, Clock, Star, FileX, Image as ImageIcon, Video, Mic, FileText } from "lucide-react";
 import type { Attachment } from "@manylead/db";
 
 import { cn } from "@manylead/ui";
@@ -232,23 +232,17 @@ export function ChatMessageBubble({
     isPlaying: boolean;
   }>({ currentTime: 0, isPlaying: false });
 
-  // Extrair dados da mensagem respondida do metadata
-  const repliedMessage =
-    message.metadata && message.repliedToMessageId
-      ? {
-          content: message.metadata.repliedToContent as string,
-          senderName: message.metadata.repliedToSender as string,
-        }
-      : null;
+  // Passar metadata completo para o componente
+  const hasReply = Boolean(message.metadata && message.repliedToMessageId);
 
   return (
     <div
       className={cn(
-        "relative max-w-[280px] overflow-hidden rounded-2xl sm:max-w-md md:max-w-lg lg:max-w-xl",
-        repliedMessage ? "px-2 py-1.5" : "px-2 py-2",
+        "relative max-w-[280px] overflow-hidden rounded-sm sm:max-w-md md:max-w-lg lg:max-w-xl",
+        hasReply ? "px-2 py-1.5" : "px-2 py-2",
         isOutgoing
-          ? "bg-msg-outgoing rounded-br-sm"
-          : "bg-msg-incoming rounded-bl-sm",
+          ? "bg-msg-outgoing"
+          : "bg-msg-incoming",
         className,
       )}
     >
@@ -272,35 +266,50 @@ export function ChatMessageBubble({
       )}
 
       {/* Reply preview - se existe mensagem respondida */}
-      {repliedMessage && (
+      {hasReply && message.metadata && (
         <ChatMessageReplyPreview
-          content={repliedMessage.content}
-          senderName={repliedMessage.senderName}
+          metadata={message.metadata}
           isOutgoing={isOutgoing}
           repliedToMessageId={message.repliedToMessageId}
         />
       )}
 
-      {/* Attachment - se existe e não foi deletada */}
-      {message.attachment && !message.isDeleted && (
-        <ChatMessageAttachment
-          attachment={message.attachment}
-          messageId={message.id}
-          onImageLoad={onImageLoad}
-          onAudioTimeUpdate={(currentTime, isPlaying) =>
-            setAudioPlayback({ currentTime, isPlaying })
-          }
-          isOwnMessage={isOutgoing}
-        />
-      )}
+      {/* Renderizar baseado em ter ou não attachment */}
+      {message.attachment && !message.isDeleted ? (
+        <>
+          {/* Assinatura - mostrar ANTES da mídia */}
+          <ChatMessageSignature
+            senderName={message.senderName}
+            isOutgoing={isOutgoing}
+          />
 
-      {/* Não mostrar caption se mídia expirou */}
-      {!(message.attachment && !message.attachment.storageUrl) && (
-        <ChatMessageContent
-          content={message.content}
-          isOutgoing={isOutgoing}
-          isDeleted={message.isDeleted}
-        />
+          {/* Attachment/Mídia */}
+          <ChatMessageAttachment
+            attachment={message.attachment}
+            messageId={message.id}
+            onImageLoad={onImageLoad}
+            onAudioTimeUpdate={(currentTime, isPlaying) =>
+              setAudioPlayback({ currentTime, isPlaying })
+            }
+            isOwnMessage={isOutgoing}
+          />
+
+          {/* Caption - mostrar DEPOIS da mídia */}
+          <ChatMessageCaption
+            content={message.content}
+            isOutgoing={isOutgoing}
+          />
+        </>
+      ) : (
+        /* Mensagem sem attachment - mostrar conteúdo normal */
+        !(message.attachment && !message.attachment.storageUrl) && (
+          <ChatMessageContent
+            senderName={message.senderName}
+            content={message.content}
+            isOutgoing={isOutgoing}
+            isDeleted={message.isDeleted}
+          />
+        )
       )}
       <ChatMessageFooter
         timestamp={message.timestamp}
@@ -329,19 +338,42 @@ export function ChatMessageBubble({
  * Preview da mensagem sendo respondida dentro do bubble
  */
 export function ChatMessageReplyPreview({
-  content,
-  senderName,
+  metadata,
   isOutgoing,
   repliedToMessageId,
   className,
 }: {
-  content: string;
-  senderName: string;
+  metadata: Record<string, unknown>;
   isOutgoing: boolean;
   repliedToMessageId?: string | null;
   className?: string;
 }) {
-  const { messageSource, instanceCode, organizationName } = useChatReply();
+  const { messageSource } = useChatReply();
+
+  // Extrair dados do metadata
+  const content = metadata.repliedToContent as string;
+  const senderName = metadata.repliedToSender as string;
+  const messageType = metadata.repliedToMessageType as string | undefined;
+  const orgName = metadata.repliedToOrgName as string | undefined;
+  const instanceCodeFromMetadata = metadata.repliedToInstanceCode as string | undefined;
+  const isCrossOrg = metadata.repliedToIsCrossOrg as boolean | undefined;
+
+  const isMedia = messageType && messageType !== "text";
+
+  // Map de ícones e labels para mídia
+  const mediaConfig: Record<string, { icon: typeof ImageIcon; label: string }> = {
+    image: { icon: ImageIcon, label: "Foto" },
+    video: { icon: Video, label: "Vídeo" },
+    audio: { icon: Mic, label: "Áudio" },
+    document: { icon: FileText, label: "Documento" },
+  };
+
+  const mediaInfo = isMedia && messageType && messageType in mediaConfig
+    ? mediaConfig[messageType]
+    : null;
+
+  const MediaIcon = mediaInfo?.icon ?? null;
+  const mediaLabel = mediaInfo?.label ?? null;
 
   // Remover formatação **Nome**\n do conteúdo (se houver)
   const cleanContent = content.replace(/^\*\*.*?\*\*\n/, "");
@@ -354,7 +386,9 @@ export function ChatMessageReplyPreview({
 
   // Se for internal, mostrar: OrgName + instanceCode / AgentName / Content
   // Se for WhatsApp, mostrar: ContactName / Content
+  // Se for internal da MESMA org (não cross-org), mostrar apenas AgentName
   const isInternal = messageSource === "internal";
+  const showOrgName = isInternal && isCrossOrg;
 
   const handleClick = () => {
     if (repliedToMessageId) {
@@ -366,16 +400,16 @@ export function ChatMessageReplyPreview({
     <div
       onClick={handleClick}
       className={cn(
-        "mb-1.5 rounded-md border-l-4 bg-black/10 px-2 py-1 dark:bg-white/10",
+        "mb-2 -mx-1 -mt-0.5 rounded-sm border-l-4 bg-black/10 px-2 py-2 dark:bg-white/10",
         isOutgoing ? "border-primary" : "border-primary/70",
         repliedToMessageId &&
           "cursor-pointer transition-colors hover:bg-black/20 dark:hover:bg-white/20",
         className,
       )}
     >
-      {isInternal ? (
+      {showOrgName ? (
         <>
-          {/* Linha 1: Nome da Org + instanceCode */}
+          {/* Linha 1: Nome da Org + instanceCode (somente cross-org) */}
           <div className="mb-1 flex items-center gap-1.5">
             <p
               className={cn(
@@ -385,23 +419,23 @@ export function ChatMessageReplyPreview({
                   : "text-primary/90",
               )}
             >
-              {organizationName}
+              {orgName}
             </p>
-            {instanceCode && (
+            {instanceCodeFromMetadata && (
               <span
                 className={cn(
                   "text-[10px] opacity-60",
                   isOutgoing && "dark:text-white/60",
                 )}
               >
-                {instanceCode}
+                {instanceCodeFromMetadata}
               </span>
             )}
           </div>
           {/* Linha 2: Nome do agente */}
           <p
             className={cn(
-              "text-[11px] opacity-70",
+              "text-[11px] font-semibold opacity-70",
               isOutgoing && "dark:text-white/70",
             )}
           >
@@ -409,7 +443,7 @@ export function ChatMessageReplyPreview({
           </p>
         </>
       ) : (
-        /* WhatsApp: apenas nome do contato */
+        /* WhatsApp ou Internal da mesma org: apenas nome do sender */
         <p
           className={cn(
             "text-xs font-semibold",
@@ -419,15 +453,22 @@ export function ChatMessageReplyPreview({
           {senderName}
         </p>
       )}
-      {/* Linha 3 (ou 2 se WhatsApp): Conteúdo */}
-      <p
-        className={cn(
-          "truncate text-xs opacity-80",
-          isOutgoing && "dark:text-white/80",
-        )}
-      >
-        {truncatedContent}
-      </p>
+      {/* Linha 3 (ou 2 se WhatsApp): Conteúdo ou Mídia */}
+      {isMedia ? (
+        <div className="flex items-center gap-1.5 text-xs opacity-80">
+          {MediaIcon && <MediaIcon className="h-3.5 w-3.5" />}
+          <span>{mediaLabel}</span>
+        </div>
+      ) : (
+        <p
+          className={cn(
+            "truncate text-xs opacity-80",
+            isOutgoing && "dark:text-white/80",
+          )}
+        >
+          {truncatedContent}
+        </p>
+      )}
     </div>
   );
 }
@@ -436,11 +477,13 @@ export function ChatMessageReplyPreview({
  * Conteúdo da mensagem (texto com markdown simples)
  */
 export const ChatMessageContent = memo(function ChatMessageContent({
+  senderName,
   content,
   className,
   isOutgoing,
   isDeleted,
 }: {
+  senderName?: string;
   content: string;
   className?: string;
   isOutgoing?: boolean;
@@ -476,14 +519,76 @@ export const ChatMessageContent = memo(function ChatMessageContent({
   };
 
   return (
+    <>
+      {senderName && (
+        <p className={cn("text-sm font-semibold mb-1", isOutgoing && "dark:text-white")}>
+          {senderName}
+        </p>
+      )}
+      <p
+        className={cn(
+          "overflow-wrap-anywhere break-word text-sm whitespace-pre-wrap",
+          isOutgoing && "dark:text-white",
+          className,
+        )}
+      >
+        {renderContent(content)}
+      </p>
+    </>
+  );
+});
+
+/**
+ * Assinatura da mensagem (para mídias - mostra apenas o nome do sender)
+ */
+export const ChatMessageSignature = memo(function ChatMessageSignature({
+  senderName,
+  isOutgoing,
+  className,
+}: {
+  senderName?: string;
+  isOutgoing?: boolean;
+  className?: string;
+}) {
+  if (!senderName) return null;
+
+  return (
     <p
       className={cn(
-        "overflow-wrap-anywhere break-word text-sm whitespace-pre-wrap",
+        "text-sm font-semibold mb-1",
         isOutgoing && "dark:text-white",
         className,
       )}
     >
-      {renderContent(content)}
+      {senderName}
+    </p>
+  );
+});
+
+/**
+ * Caption da mensagem (para mídias - mostra o texto/caption)
+ */
+export const ChatMessageCaption = memo(function ChatMessageCaption({
+  content,
+  isOutgoing,
+  className,
+}: {
+  content: string;
+  isOutgoing?: boolean;
+  className?: string;
+}) {
+  // Se não há caption, não renderizar nada
+  if (!content.trim()) return null;
+
+  return (
+    <p
+      className={cn(
+        "overflow-wrap-anywhere break-word text-sm whitespace-pre-wrap mt-1",
+        isOutgoing && "dark:text-white",
+        className,
+      )}
+    >
+      {content}
     </p>
   );
 });

@@ -42,6 +42,11 @@ export function ChatWindow({
     })
   );
 
+  // Buscar organização atual
+  const { data: currentOrg } = useQuery(
+    trpc.organization.getCurrent.queryOptions()
+  );
+
   // Encontrar o chat específico
   const chatItem = chatData?.items.find((item) => item.chat.id === chatId);
 
@@ -132,6 +137,8 @@ export function ChatWindow({
           messageSource={chat.source}
           instanceCode={chat.contact.instanceCode}
           organizationName={chat.contact.name}
+          myOrganizationName={currentOrg?.name}
+          myInstanceCode={currentOrg?.instanceCode}
         >
           <ScrollToBottomContext.Provider value={scrollToBottom}>
             <ChatWindowContent

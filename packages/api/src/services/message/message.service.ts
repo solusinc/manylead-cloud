@@ -54,11 +54,6 @@ export class MessageService {
 
     const now = new Date();
 
-    // ✅ Não adicionar assinatura se tiver attachment (imagem/vídeo já é visual)
-    const formattedContent = input.attachmentData
-      ? input.content
-      : `**${agentName}**\n${input.content}`;
-
     // Criar mensagem local
     const [newMessage] = await tenantDb
       .insert(message)
@@ -67,8 +62,9 @@ export class MessageService {
         messageSource: chatRecord.messageSource,
         sender: "agent",
         senderId: input.agentId,
+        senderName: agentName, // Nome do agente no momento do envio
         messageType: input.messageType ?? "text",
-        content: formattedContent,
+        content: input.content, // Conteúdo sem assinatura
         repliedToMessageId: input.repliedToMessageId ?? null,
         metadata: input.tempId
           ? { ...input.metadata, tempId: input.tempId }
@@ -132,7 +128,8 @@ export class MessageService {
         updatedChat, // Usar updatedChat ao invés de chatRecord
         newMessage.id,
         newMessage.timestamp,
-        formattedContent,
+        input.content,
+        agentName,
         input.metadata,
         input.attachmentData,
       );
@@ -154,7 +151,7 @@ export class MessageService {
     chatId: string,
     input: UpdateMessageInput,
   ): Promise<Message> {
-    const { tenantDb, organizationId, agentName } = ctx;
+    const { tenantDb, organizationId } = ctx;
 
     // Buscar mensagem
     const [existingMessage] = await tenantDb
@@ -170,13 +167,12 @@ export class MessageService {
     }
 
     const now = new Date();
-    const formattedContent = `**${agentName}**\n${input.content}`;
 
     // Atualizar mensagem
     const [updatedMessage] = await tenantDb
       .update(message)
       .set({
-        content: formattedContent,
+        content: input.content, // Conteúdo sem assinatura
         isEdited: true,
         editedAt: now,
       })
@@ -222,7 +218,7 @@ export class MessageService {
         tenantDb,
         chatRecord,
         messageId,
-        formattedContent,
+        input.content,
       );
     }
 
@@ -441,6 +437,7 @@ export class MessageService {
     messageId: string,
     messageTimestamp: Date,
     messageContent: string,
+    senderName: string,
     metadata?: Record<string, unknown>,
     attachmentData?: CreateMessageInput["attachmentData"],
   ): Promise<void> {
@@ -457,9 +454,6 @@ export class MessageService {
 
     const isFirstTextMessage = Number(textMessagesCount[0]?.count ?? 0) === 1;
 
-    // Remover assinatura do agente antes de espelhar
-    const contentWithoutSignature = messageContent.replace(/^\*\*.*?\*\*\n/, "");
-
     if (isFirstTextMessage) {
       // Primeira mensagem: criar contact e chat na org target
       await this.crossOrgMirror.mirrorFirstMessage(
@@ -468,7 +462,8 @@ export class MessageService {
         chatRecord,
         messageId,
         messageTimestamp,
-        contentWithoutSignature,
+        messageContent,
+        senderName,
         metadata,
         attachmentData,
       );
@@ -480,7 +475,8 @@ export class MessageService {
         chatRecord,
         messageId,
         messageTimestamp,
-        contentWithoutSignature,
+        messageContent,
+        senderName,
         metadata,
         attachmentData,
       );

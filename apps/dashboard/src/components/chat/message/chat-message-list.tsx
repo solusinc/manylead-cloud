@@ -12,6 +12,7 @@ import { Skeleton } from "@manylead/ui/skeleton";
 
 import type { Message } from "./chat-message";
 import { useChatSocketContext } from "~/components/providers/chat-socket-provider";
+import { useChatReply } from "../providers/chat-reply-provider";
 import { useTRPC } from "~/lib/trpc/react";
 import { ChatMessage } from "./chat-message";
 import { ChatMessageDateDivider } from "./chat-message-date";
@@ -46,6 +47,7 @@ export function ChatMessageList({
 } & React.ComponentProps<"div">) {
   const trpc = useTRPC();
   const socket = useChatSocketContext();
+  const { replyingTo } = useChatReply();
   const containerRef = useRef<HTMLDivElement>(null);
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
 
@@ -324,6 +326,7 @@ export function ChatMessageList({
       {/* Scroll to bottom button */}
       {showScrollButton &&
         !hideScrollButton &&
+        !replyingTo &&
         typeof document !== "undefined" &&
         createPortal(
           <div className="animate-in fade-in slide-in-from-bottom-2 fixed right-8 bottom-24 z-50">

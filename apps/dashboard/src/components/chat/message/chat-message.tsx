@@ -12,6 +12,7 @@ export interface Message {
   id: string;
   content: string;
   sender: "contact" | "agent" | "system";
+  senderName?: string; // Nome do remetente (agent ou contact)
   timestamp: Date;
   status?: "pending" | "sent" | "delivered" | "read";
   messageType?: string;

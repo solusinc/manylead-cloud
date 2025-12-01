@@ -52,7 +52,7 @@ export function ChatInput({
   const router = useRouter();
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-  const { replyingTo, cancelReply, setMediaPreview } = useChatReply();
+  const { replyingTo, cancelReply, setMediaPreview, setFocusInput, myOrganizationName } = useChatReply();
 
   // Custom hooks
   const { data: currentAgent } = useCurrentAgent();
@@ -183,6 +183,19 @@ export function ChatInput({
     }
   };
 
+  // Register focus function in context
+  useEffect(() => {
+    setFocusInput(() => () => {
+      // Usar requestAnimationFrame para garantir que o dropdown fechou
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          textareaRef.current?.focus();
+        });
+      });
+    });
+    return () => setFocusInput(null);
+  }, [setFocusInput, textareaRef]);
+
   // Auto-focus after sending
   useEffect(() => {
     if (shouldFocusRef.current && !isSending) {
@@ -213,6 +226,10 @@ export function ChatInput({
             repliedToMessageId: replyingTo.id,
             repliedToContent: replyingTo.content,
             repliedToSender: replyingTo.senderName,
+            repliedToMessageType: replyingTo.messageType,
+            repliedToOrgName: replyingTo.organizationName,
+            repliedToInstanceCode: replyingTo.instanceCode,
+            repliedToIsCrossOrg: replyingTo.organizationName !== myOrganizationName,
           }
         : undefined,
     })
@@ -223,7 +240,7 @@ export function ChatInput({
         setIsSending(false);
         cancelReply();
       });
-  }, [content, isSending, onTypingStop, clearContent, sendMessage, chatId, replyingTo, cancelReply]);
+  }, [content, isSending, onTypingStop, clearContent, sendMessage, chatId, replyingTo, cancelReply, myOrganizationName]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -467,6 +484,9 @@ export function ChatInput({
                 id: replyingTo.id,
                 content: replyingTo.content,
                 senderName: replyingTo.senderName,
+                messageType: replyingTo.messageType,
+                organizationName: replyingTo.organizationName,
+                instanceCode: replyingTo.instanceCode,
               }
             : null
         }

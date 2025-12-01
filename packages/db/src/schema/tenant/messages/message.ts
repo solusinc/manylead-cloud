@@ -42,6 +42,9 @@ export const message = pgTable(
     senderId: uuid("sender_id"),
     // ID do contact ou agent que enviou
 
+    senderName: varchar("sender_name", { length: 255 }),
+    // Nome do remetente (agent ou contact) no momento do envio
+
     // Conteúdo
     messageType: varchar("message_type", { length: 20 }).notNull(),
     // "text" | "image" | "video" | "audio" | "document" | "system"
