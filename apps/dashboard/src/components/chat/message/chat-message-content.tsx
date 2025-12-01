@@ -472,7 +472,7 @@ export const ChatMessageContent = memo(function ChatMessageContent({
   return (
     <>
       {senderName && (
-        <p className={cn("text-sm font-semibold mb-1", isOutgoing && "dark:text-white")}>
+        <p className={cn("text-sm font-semibold mb-2", isOutgoing && "dark:text-white")}>
           {senderName}
         </p>
       )}
@@ -506,7 +506,7 @@ export const ChatMessageSignature = memo(function ChatMessageSignature({
   return (
     <p
       className={cn(
-        "text-sm font-semibold mb-1",
+        "text-sm font-semibold mb-2",
         isOutgoing && "dark:text-white",
         className,
       )}
