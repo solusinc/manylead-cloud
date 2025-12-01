@@ -179,8 +179,15 @@ export function useChatAccessControl(chatId: string, chatItem: ChatItem | undefi
         updatedAssignedTo &&
         updatedAssignedTo !== currentAgent.id
       ) {
-        // Mostrar modal global e redirecionar
-        showAccessDeniedModal();
+        // Verificar se o usuário ainda está vendo este chat
+        const currentPath = window.location.pathname;
+        const isInThisChat = currentPath.includes(`/chats/${chatId}`);
+
+        // Só mostrar modal se realmente estiver no chat
+        if (isInThisChat) {
+          // Mostrar modal global e redirecionar
+          showAccessDeniedModal();
+        }
       }
     },
     [
