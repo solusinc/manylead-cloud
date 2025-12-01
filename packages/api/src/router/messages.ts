@@ -690,7 +690,7 @@ export const messagesRouter = createTRPCRouter({
     .input(
       z.object({
         id: z.string().uuid(),
-        timestamp: z.date(),
+        timestamp: z.coerce.date(),
         chatId: z.string().uuid(),
         content: z.string().min(1).max(4000),
       }),
@@ -802,7 +802,7 @@ export const messagesRouter = createTRPCRouter({
     .input(
       z.object({
         id: z.string().uuid(),
-        timestamp: z.date(),
+        timestamp: z.coerce.date(),
         chatId: z.string().uuid(),
       }),
     )
