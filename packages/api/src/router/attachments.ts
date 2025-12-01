@@ -8,7 +8,7 @@ import { MEDIA_LIMITS } from "@manylead/shared/constants";
 import { createQueue } from "@manylead/clients/queue";
 import { getRedisClient } from "@manylead/clients/redis";
 
-import { createTRPCRouter, ownerProcedure } from "../trpc";
+import { createTRPCRouter, ownerProcedure, memberProcedure } from "../trpc";
 import { env } from "../env";
 
 /**
@@ -257,7 +257,7 @@ export const attachmentsRouter = createTRPCRouter({
    * Gerar pre-signed URL para upload de arquivo
    * Frontend usa isso para fazer upload direto para R2
    */
-  getSignedUploadUrl: ownerProcedure
+  getSignedUploadUrl: memberProcedure
     .input(
       z.object({
         fileName: z.string().min(1),

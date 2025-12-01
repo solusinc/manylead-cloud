@@ -676,9 +676,9 @@ export const organizationRouter = createTRPCRouter({
       }
 
       // Gerar path único para o logo
-      // Formato: logos/{organizationId}/{timestamp}{ext}
+      // Formato: {organizationId}/logos/{timestamp}{ext}
       const ext = input.fileName.substring(input.fileName.lastIndexOf("."));
-      const storagePath = `logos/${activeOrgId}/${Date.now()}${ext}`;
+      const storagePath = `${activeOrgId}/logos/${Date.now()}${ext}`;
 
       // Gerar pre-signed URL
       const signedUrl = await storage.getSignedUploadUrl(

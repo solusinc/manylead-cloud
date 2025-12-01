@@ -32,11 +32,19 @@ export const userRouter = createTRPCRouter({
     )
     .mutation(async ({ ctx, input }) => {
       const userId = ctx.session.user.id;
+      const activeOrgId = ctx.session.session.activeOrganizationId;
+
+      if (!activeOrgId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Nenhuma organização ativa encontrada",
+        });
+      }
 
       // Gerar path único para o avatar
-      // Formato: avatars/{userId}/{timestamp}{ext}
+      // Formato: {organizationId}/avatars/{userId}/{timestamp}{ext}
       const ext = input.fileName.substring(input.fileName.lastIndexOf("."));
-      const storagePath = `avatars/${userId}/${Date.now()}${ext}`;
+      const storagePath = `${activeOrgId}/avatars/${userId}/${Date.now()}${ext}`;
 
       // Gerar pre-signed URL
       const signedUrl = await storage.getSignedUploadUrl(

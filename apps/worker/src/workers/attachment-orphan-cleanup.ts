@@ -1,7 +1,7 @@
 import type { Job } from "bullmq";
-import { and, attachment, eq, inArray, isNotNull } from "@manylead/db";
+import { and, attachment, eq, inArray, isNotNull, quickReply } from "@manylead/db";
 import { db, organization } from "@manylead/db";
-import { storage } from "@manylead/storage";
+import { storage, extractKeyFromUrl } from "@manylead/storage";
 import { logger } from "~/libs/utils/logger";
 import { tenantManager } from "~/libs/tenant-manager";
 
@@ -156,9 +156,55 @@ async function processOrganizationOrphanCleanup(
       }
     }
 
-    // 4. Buscar arquivos órfãos no R2 (arquivos sem registro no DB)
+    // 4. Buscar quick replies e adicionar seus paths aos válidos
+    const activeQuickReplies = await tenantDb
+      .select({
+        id: quickReply.id,
+        messages: quickReply.messages,
+      })
+      .from(quickReply)
+      .where(eq(quickReply.organizationId, organizationId));
+
+    for (const qr of activeQuickReplies) {
+      const messages = qr.messages;
+      for (const message of messages) {
+        if (message.mediaUrl?.startsWith("http")) {
+          const key = extractKeyFromUrl(message.mediaUrl);
+          if (key) {
+            validPaths.add(key);
+          }
+        }
+      }
+    }
+
+    logger.info(
+      { count: activeQuickReplies.length },
+      "Found quick replies in tenant DB",
+    );
+
+    // 5. Buscar logo da organização e adicionar aos paths válidos
+    const [orgData] = await db
+      .select({ logo: organization.logo })
+      .from(organization)
+      .where(eq(organization.id, organizationId))
+      .limit(1);
+
+    if (orgData?.logo) {
+      const key = extractKeyFromUrl(orgData.logo);
+      if (key) {
+        validPaths.add(key);
+        logger.debug({ key }, "Added organization logo to valid paths");
+      }
+    }
+
+    logger.info(
+      { totalValidPaths: validPaths.size },
+      "Total valid paths from all sources (attachments, quick replies, logos)",
+    );
+
+    // 6. Buscar arquivos órfãos no R2 (arquivos sem registro em NENHUMA tabela)
     // Listar arquivos no prefixo da organização
-    const orgPrefix = `media/${organizationId}/`;
+    const orgPrefix = `${organizationId}/`;
     const r2Objects = await storage.list(orgPrefix);
 
     const orphanedR2Files: string[] = [];
@@ -166,7 +212,7 @@ async function processOrganizationOrphanCleanup(
     for (const obj of r2Objects) {
       if (!obj.key) continue;
 
-      // Se arquivo não está no Set de paths válidos, é órfão
+      // Se arquivo não está no Set de paths válidos de NENHUMA fonte, é órfão
       if (!validPaths.has(obj.key)) {
         orphanedR2Files.push(obj.key);
         logger.warn(
@@ -174,12 +220,12 @@ async function processOrganizationOrphanCleanup(
             key: obj.key,
             size: obj.size,
           },
-          "Found orphaned R2 file (no DB record)",
+          "Found orphaned R2 file (no reference in any table)",
         );
       }
     }
 
-    // 5. Deletar arquivos órfãos do R2
+    // 7. Deletar arquivos órfãos do R2
     if (orphanedR2Files.length > 0) {
       if (dryRun) {
         logger.info(
@@ -217,7 +263,7 @@ async function processOrganizationOrphanCleanup(
       }
     }
 
-    // 6. Summary
+    // 8. Summary
     logger.info(
       {
         jobId,
@@ -225,11 +271,13 @@ async function processOrganizationOrphanCleanup(
         dryRun,
         summary: {
           totalActiveAttachments: activeAttachments.length,
+          totalQuickReplies: activeQuickReplies.length,
+          totalValidPaths: validPaths.size,
           orphanedDbRecords: orphanedDbRecords.length,
           orphanedR2Files: orphanedR2Files.length,
         },
       },
-      "Attachment orphan cleanup completed successfully",
+      "Attachment orphan cleanup completed successfully (validated all sources)",
     );
   } catch (error) {
     logger.error(
