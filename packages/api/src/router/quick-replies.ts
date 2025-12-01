@@ -29,7 +29,7 @@ function getContentPreview(messages: QuickReplyMessage[]): string {
 import { createQueue } from "@manylead/clients/queue";
 import { getRedisClient } from "@manylead/clients/redis";
 import { env } from "../env";
-import { getMessageService } from "../services";
+import { getInternalMessageService } from "@manylead/messaging";
 
 import { createTRPCRouter, memberProcedure, ownerProcedure, tenantManager } from "../trpc";
 
@@ -619,7 +619,7 @@ export const quickRepliesRouter = createTRPCRouter({
       }));
 
       // Inicializar MessageService
-      const messageService = getMessageService({
+      const messageService = getInternalMessageService({
         redisUrl: env.REDIS_URL,
         getTenantConnection: tenantManager.getConnection.bind(tenantManager),
         getCatalogDb: () => db,

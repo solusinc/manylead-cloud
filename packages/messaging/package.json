@@ -1,0 +1,27 @@
+{
+  "name": "@manylead/messaging",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./internal": "./src/internal/index.ts",
+    "./types": "./src/types/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@manylead/core-services": "workspace:*",
+    "@manylead/db": "workspace:*",
+    "@manylead/storage": "workspace:*"
+  },
+  "devDependencies": {
+    "@manylead/eslint-config": "workspace:*",
+    "@manylead/tsconfig": "workspace:*",
+    "@types/node": "catalog:",
+    "eslint": "catalog:",
+    "typescript": "catalog:"
+  }
+}

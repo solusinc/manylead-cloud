@@ -402,6 +402,9 @@ importers:
       '@manylead/evolution-api-client':
         specifier: workspace:^
         version: link:../../packages/evolution-api-client
+      '@manylead/messaging':
+        specifier: workspace:*
+        version: link:../../packages/messaging
       '@manylead/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -457,6 +460,9 @@ importers:
       '@manylead/clients':
         specifier: workspace:*
         version: link:../clients
+      '@manylead/core-services':
+        specifier: workspace:*
+        version: link:../core-services
       '@manylead/db':
         specifier: workspace:*
         version: link:../db
@@ -466,6 +472,9 @@ importers:
       '@manylead/evolution-api-client':
         specifier: workspace:*
         version: link:../evolution-api-client
+      '@manylead/messaging':
+        specifier: workspace:*
+        version: link:../messaging
       '@manylead/permissions':
         specifier: workspace:*
         version: link:../permissions
@@ -592,6 +601,43 @@ importers:
       '@manylead/prettier-config':
         specifier: workspace:*
         version: link:../../tooling/prettier
+      '@manylead/tsconfig':
+        specifier: workspace:*
+        version: link:../../tooling/typescript
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.19.0
+      eslint:
+        specifier: 'catalog:'
+        version: 9.39.1(jiti@2.6.1)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+
+  packages/core-services:
+    dependencies:
+      '@manylead/clients':
+        specifier: workspace:*
+        version: link:../clients
+      '@manylead/db':
+        specifier: workspace:*
+        version: link:../db
+      '@manylead/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@manylead/storage':
+        specifier: workspace:*
+        version: link:../storage
+      '@manylead/tenant-db':
+        specifier: workspace:*
+        version: link:../tenant-db
+      ioredis:
+        specifier: ^5.8.2
+        version: 5.8.2
+    devDependencies:
+      '@manylead/eslint-config':
+        specifier: workspace:*
+        version: link:../../tooling/eslint
       '@manylead/tsconfig':
         specifier: workspace:*
         version: link:../../tooling/typescript
@@ -785,6 +831,34 @@ importers:
       zod:
         specifier: 'catalog:'
         version: 4.1.12
+    devDependencies:
+      '@manylead/eslint-config':
+        specifier: workspace:*
+        version: link:../../tooling/eslint
+      '@manylead/tsconfig':
+        specifier: workspace:*
+        version: link:../../tooling/typescript
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.19.0
+      eslint:
+        specifier: 'catalog:'
+        version: 9.39.1(jiti@2.6.1)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+
+  packages/messaging:
+    dependencies:
+      '@manylead/core-services':
+        specifier: workspace:*
+        version: link:../core-services
+      '@manylead/db':
+        specifier: workspace:*
+        version: link:../db
+      '@manylead/storage':
+        specifier: workspace:*
+        version: link:../storage
     devDependencies:
       '@manylead/eslint-config':
         specifier: workspace:*

@@ -1,4 +1,3 @@
-// Services barrel export
-export * from "./events";
-export * from "./cross-org";
-export * from "./message";
+// Services barrel export - now moved to @manylead/core-services
+export * from "@manylead/core-services/events";
+export * from "@manylead/core-services/cross-org";

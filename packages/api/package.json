@@ -20,9 +20,11 @@
   "dependencies": {
     "@manylead/auth": "workspace:*",
     "@manylead/clients": "workspace:*",
+    "@manylead/core-services": "workspace:*",
     "@manylead/db": "workspace:*",
     "@manylead/emails": "workspace:*",
     "@manylead/evolution-api-client": "workspace:*",
+    "@manylead/messaging": "workspace:*",
     "@manylead/permissions": "workspace:*",
     "@manylead/shared": "workspace:*",
     "@manylead/storage": "workspace:^",

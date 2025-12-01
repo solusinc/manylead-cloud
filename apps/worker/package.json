@@ -18,6 +18,7 @@
     "@manylead/db": "workspace:*",
     "@manylead/error": "workspace:*",
     "@manylead/evolution-api-client": "workspace:^",
+    "@manylead/messaging": "workspace:*",
     "@manylead/shared": "workspace:*",
     "@manylead/storage": "workspace:^",
     "@manylead/tenant-db": "workspace:*",

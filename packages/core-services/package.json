@@ -1,0 +1,30 @@
+{
+  "name": "@manylead/core-services",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./events": "./src/events/index.ts",
+    "./cross-org": "./src/cross-org/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@manylead/clients": "workspace:*",
+    "@manylead/db": "workspace:*",
+    "@manylead/shared": "workspace:*",
+    "@manylead/storage": "workspace:*",
+    "@manylead/tenant-db": "workspace:*",
+    "ioredis": "^5.8.2"
+  },
+  "devDependencies": {
+    "@manylead/eslint-config": "workspace:*",
+    "@manylead/tsconfig": "workspace:*",
+    "@types/node": "catalog:",
+    "eslint": "catalog:",
+    "typescript": "catalog:"
+  }
+}

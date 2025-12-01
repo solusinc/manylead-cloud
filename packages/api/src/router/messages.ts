@@ -18,8 +18,8 @@ const uploadAttachmentSchema = z.object({
 });
 
 import { env } from "../env";
-import { getMessageService } from "../services";
-import type { MessageContext } from "../services";
+import { getInternalMessageService } from "@manylead/messaging";
+import type { MessageContext } from "@manylead/messaging";
 import { createTRPCRouter, memberProcedure, ownerProcedure } from "../trpc";
 
 /**
@@ -386,7 +386,7 @@ export const messagesRouter = createTRPCRouter({
 
       // Inicializar MessageService
       const { tenantManager } = await import("../trpc");
-      const messageService = getMessageService({
+      const messageService = getInternalMessageService({
         redisUrl: env.REDIS_URL,
         getTenantConnection: tenantManager.getConnection.bind(tenantManager),
         getCatalogDb: () => ctx.db,
@@ -491,7 +491,7 @@ export const messagesRouter = createTRPCRouter({
       }
 
       const { tenantManager } = await import("../trpc");
-      const messageService = getMessageService({
+      const messageService = getInternalMessageService({
         redisUrl: env.REDIS_URL,
         getTenantConnection: tenantManager.getConnection.bind(tenantManager),
         getCatalogDb: () => ctx.db,
@@ -609,7 +609,7 @@ export const messagesRouter = createTRPCRouter({
       }
 
       const { tenantManager } = await import("../trpc");
-      const messageService = getMessageService({
+      const messageService = getInternalMessageService({
         redisUrl: env.REDIS_URL,
         getTenantConnection: tenantManager.getConnection.bind(tenantManager),
         getCatalogDb: () => ctx.db,
@@ -769,7 +769,7 @@ export const messagesRouter = createTRPCRouter({
       }
 
       const { tenantManager } = await import("../trpc");
-      const messageService = getMessageService({
+      const messageService = getInternalMessageService({
         redisUrl: env.REDIS_URL,
         getTenantConnection: tenantManager.getConnection.bind(tenantManager),
         getCatalogDb: () => ctx.db,
@@ -890,7 +890,7 @@ export const messagesRouter = createTRPCRouter({
       }
 
       const { tenantManager } = await import("../trpc");
-      const messageService = getMessageService({
+      const messageService = getInternalMessageService({
         redisUrl: env.REDIS_URL,
         getTenantConnection: tenantManager.getConnection.bind(tenantManager),
         getCatalogDb: () => ctx.db,
