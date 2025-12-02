@@ -8,11 +8,22 @@ export async function seedTenantDefaults(
   client: ReturnType<typeof postgres>,
   organizationId: string,
 ): Promise<void> {
-  console.log("[Seed] Creating default tags and endings...");
+  console.log("[Seed] Creating default department, tags and endings...");
 
   try {
     // ============================================================================
-    // 1. CRIAR TAGS PADRÕES
+    // 1. CRIAR DEPARTAMENTO PADRÃO
+    // ============================================================================
+    await client`
+      INSERT INTO department (organization_id, name, is_default, is_active)
+      VALUES (${organizationId}, 'Geral', true, true)
+      ON CONFLICT (organization_id, name) DO NOTHING
+    `;
+
+    console.log("[Seed] ✅ Created default department 'Geral'");
+
+    // ============================================================================
+    // 2. CRIAR TAGS PADRÕES
     // ============================================================================
     const defaultTags = [
       { name: "Aguardando retorno", color: "#22c55e" }, // verde (green-500)
@@ -31,7 +42,7 @@ export async function seedTenantDefaults(
     console.log(`[Seed] ✅ Created ${defaultTags.length} default tags`);
 
     // ============================================================================
-    // 2. CRIAR ENDINGS PADRÕES
+    // 3. CRIAR ENDINGS PADRÕES
     // ============================================================================
     const defaultEndings = [
       { title: "Dúvida" },

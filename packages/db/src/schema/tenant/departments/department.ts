@@ -32,6 +32,9 @@ export const department = pgTable(
     name: varchar("name", { length: 100 }).notNull(),
     // Ex: "Vendas", "Suporte", "Financeiro"
 
+    isDefault: boolean("is_default").default(false).notNull(),
+    // Departamento padrão da organização (sempre deve existir ao menos um)
+
     isActive: boolean("is_active").default(true).notNull(),
 
     // Timestamps
@@ -42,6 +45,7 @@ export const department = pgTable(
     unique("department_org_name_unique").on(table.organizationId, table.name),
     index("department_org_idx").on(table.organizationId),
     index("department_active_idx").on(table.isActive),
+    index("department_default_idx").on(table.isDefault),
   ],
 );
 

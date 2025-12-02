@@ -60,15 +60,19 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
   return (
     <QuickActions
       actions={actions}
-      deleteAction={{
-        title: row.original.name,
-        confirmationValue: "deletar departamento",
-        submitAction: async () => {
-          await deleteDepartmentMutation.mutateAsync({
-            id: row.original.id,
-          });
-        },
-      }}
+      deleteAction={
+        row.original.isDefault
+          ? undefined
+          : {
+              title: row.original.name,
+              confirmationValue: "deletar departamento",
+              submitAction: async () => {
+                await deleteDepartmentMutation.mutateAsync({
+                  id: row.original.id,
+                });
+              },
+            }
+      }
     />
   );
 }

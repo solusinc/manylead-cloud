@@ -1,6 +1,6 @@
 "use client";
 
-import { Checkbox } from "@manylead/ui/checkbox";
+import { Badge, Checkbox } from "@manylead/ui";
 import type { ColumnDef } from "@tanstack/react-table";
 import { DataTableColumnHeader } from "~/components/ui/data-table/data-table-column-header";
 import type { Department } from "@manylead/db";
@@ -10,21 +10,37 @@ import { DataTableRowActions } from "./data-table-row-actions";
 import { TableCellDate } from "~/components/data-table/table-cell-date";
 import { usePermissions } from "~/lib/permissions";
 
-function DepartmentNameCell({ departmentId, name }: { departmentId: string; name: string }) {
+function DepartmentNameCell({ departmentId, name, isDefault }: { departmentId: string; name: string; isDefault: boolean }) {
   const { can } = usePermissions();
 
   if (can("manage", "Department")) {
     return (
-      <a
-        href={`/settings/departments/${departmentId}/edit`}
-        className="font-medium hover:underline"
-      >
-        {name}
-      </a>
+      <div className="flex items-center gap-2">
+        <a
+          href={`/settings/departments/${departmentId}/edit`}
+          className="font-medium hover:underline"
+        >
+          {name}
+        </a>
+        {isDefault && (
+          <Badge variant="secondary" className="text-xs">
+            Padrão
+          </Badge>
+        )}
+      </div>
     );
   }
 
-  return <span className="font-medium">{name}</span>;
+  return (
+    <div className="flex items-center gap-2">
+      <span className="font-medium">{name}</span>
+      {isDefault && (
+        <Badge variant="secondary" className="text-xs">
+          Padrão
+        </Badge>
+      )}
+    </div>
+  );
 }
 
 export const columns: ColumnDef<Department>[] = [
@@ -60,6 +76,7 @@ export const columns: ColumnDef<Department>[] = [
         <DepartmentNameCell
           departmentId={row.original.id}
           name={row.getValue("name")}
+          isDefault={row.original.isDefault}
         />
       );
     },

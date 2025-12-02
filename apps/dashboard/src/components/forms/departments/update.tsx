@@ -37,6 +37,7 @@ export function FormDepartmentUpdate() {
       <FormGeneral
         defaultValues={{
           name: department.name,
+          isDefault: department.isDefault,
         }}
         onSubmitAction={async (values) => {
           await updateMutation.mutateAsync({

@@ -105,6 +105,19 @@ export const departmentsRouter = createTRPCRouter({
         });
       }
 
+      // Se está criando como padrão, desmarcar outros departamentos
+      if (input.isDefault) {
+        await tenantDb
+          .update(department)
+          .set({ isDefault: false, updatedAt: new Date() })
+          .where(
+            and(
+              eq(department.organizationId, organizationId),
+              eq(department.isDefault, true),
+            ),
+          );
+      }
+
       const [newDept] = await tenantDb
         .insert(department)
         .values({
@@ -179,6 +192,43 @@ export const departmentsRouter = createTRPCRouter({
         }
       }
 
+      // Validações do departamento padrão
+      if (input.data.isDefault !== undefined) {
+        // Se está desmarcando como padrão
+        if (!input.data.isDefault && existing.isDefault) {
+          // Verificar se existe outro departamento padrão
+          const allDepts = await tenantDb
+            .select()
+            .from(department)
+            .where(eq(department.organizationId, organizationId));
+
+          const hasOtherDefault = allDepts.some(
+            (d) => d.id !== input.id && d.isDefault,
+          );
+
+          if (!hasOtherDefault) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message:
+                "Não é possível desmarcar o único departamento padrão. Marque outro departamento como padrão primeiro.",
+            });
+          }
+        }
+
+        // Se está marcando como padrão, desmarcar outros
+        if (input.data.isDefault && !existing.isDefault) {
+          await tenantDb
+            .update(department)
+            .set({ isDefault: false, updatedAt: new Date() })
+            .where(
+              and(
+                eq(department.organizationId, organizationId),
+                eq(department.isDefault, true),
+              ),
+            );
+        }
+      }
+
       const [updated] = await tenantDb
         .update(department)
         .set({
@@ -213,6 +263,26 @@ export const departmentsRouter = createTRPCRouter({
       }
 
       const tenantDb = await tenantManager.getConnection(organizationId);
+
+      // Se está desativando, verificar se algum é o padrão
+      if (!input.isActive) {
+        const depts = await tenantDb
+          .select()
+          .from(department)
+          .where(eq(department.organizationId, organizationId));
+
+        const hasDefaultInSelection = depts.some(
+          (d) => input.ids.includes(d.id) && d.isDefault,
+        );
+
+        if (hasDefaultInSelection) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              "Não é possível desativar o departamento padrão. Marque outro departamento como padrão primeiro.",
+          });
+        }
+      }
 
       // Atualizar todos os departamentos
       await Promise.all(
@@ -256,6 +326,24 @@ export const departmentsRouter = createTRPCRouter({
       }
 
       const tenantDb = await tenantManager.getConnection(organizationId);
+
+      // Verificar se algum dos departamentos é o padrão
+      const depts = await tenantDb
+        .select()
+        .from(department)
+        .where(eq(department.organizationId, organizationId));
+
+      const hasDefaultInSelection = depts.some(
+        (d) => input.ids.includes(d.id) && d.isDefault,
+      );
+
+      if (hasDefaultInSelection) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "Não é possível deletar o departamento padrão. Marque outro departamento como padrão primeiro.",
+        });
+      }
 
       // Deletar todos os departamentos
       await Promise.all(
@@ -308,6 +396,15 @@ export const departmentsRouter = createTRPCRouter({
         throw new TRPCError({
           code: "NOT_FOUND",
           message: "Departamento não encontrado",
+        });
+      }
+
+      // Não pode deletar o departamento padrão
+      if (existing.isDefault) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "Não é possível deletar o departamento padrão. Marque outro departamento como padrão primeiro.",
         });
       }
 

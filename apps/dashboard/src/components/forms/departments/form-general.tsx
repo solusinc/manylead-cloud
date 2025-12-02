@@ -10,6 +10,7 @@ import {
   Button,
   Input,
   Label,
+  Switch,
 } from "@manylead/ui";
 
 import {
@@ -27,6 +28,7 @@ const schema = z.object({
     .string()
     .min(1, "Nome é obrigatório")
     .max(100, "Nome deve ter no máximo 100 caracteres"),
+  isDefault: z.boolean().optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -43,6 +45,7 @@ export function FormGeneral({
   const form = useForm({
     defaultValues: {
       name: defaultValues?.name ?? "",
+      isDefault: defaultValues?.isDefault ?? false,
     },
     onSubmit: ({ value }) => {
       if (isPending) return;
@@ -116,6 +119,24 @@ export function FormGeneral({
                       {field.state.meta.errors[0]}
                     </p>
                   ) : null}
+                </div>
+              )}
+            </form.Field>
+
+            <form.Field name="isDefault">
+              {(field) => (
+                <div className="flex items-center justify-between space-x-2 rounded-lg border p-4">
+                  <div className="space-y-0.5">
+                    <Label htmlFor={field.name}>Departamento Padrão</Label>
+                    <p className="text-muted-foreground text-sm">
+                      Define este departamento como padrão da organização
+                    </p>
+                  </div>
+                  <Switch
+                    id={field.name}
+                    checked={field.state.value}
+                    onCheckedChange={(checked) => field.handleChange(checked)}
+                  />
                 </div>
               )}
             </form.Field>
