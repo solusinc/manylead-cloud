@@ -12,6 +12,7 @@ import type {
   RecordingStartEvent,
   RecordingStopEvent,
   ContactLogoUpdatedEvent,
+  ScheduledMessageSentEvent,
   UseChatSocketReturn,
 } from "~/hooks/use-chat-socket";
 
@@ -30,6 +31,7 @@ interface SocketEventMap {
   onRecordingStart: RecordingStartEvent;
   onRecordingStop: RecordingStopEvent;
   onContactLogoUpdated: ContactLogoUpdatedEvent;
+  onScheduledMessageSent: ScheduledMessageSentEvent;
 }
 
 /**

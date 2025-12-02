@@ -1527,9 +1527,10 @@ export const messagesRouter = createTRPCRouter({
         });
       }
 
-      // Verificar se o comentário pertence ao agent logado
+      // Verificar permissão: members só podem deletar seus próprios comentários
+      // Admins e owners podem deletar qualquer comentário
       const metadata = existingMessage.metadata as { agentId?: string } | null;
-      if (metadata?.agentId !== currentAgent.id) {
+      if (currentAgent.role === "member" && metadata?.agentId !== currentAgent.id) {
         throw new TRPCError({
           code: "FORBIDDEN",
           message: "Você não tem permissão para deletar este comentário",

@@ -148,6 +148,9 @@ export async function processScheduledMessage(
       messageType: contentType === "comment" ? "comment" : "text",
       agentId: createdByAgentId,
       agentName: userRecord.name,
+      metadata: {
+        agentId: createdByAgentId,
+      },
     });
 
     // 7. Atualizar como enviado

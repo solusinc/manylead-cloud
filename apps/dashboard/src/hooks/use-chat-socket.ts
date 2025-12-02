@@ -60,6 +60,13 @@ export interface ContactLogoUpdatedEvent {
   contactsUpdated: number;
 }
 
+export interface ScheduledMessageSentEvent {
+  scheduledMessageId: string;
+  messageId: string;
+  chatId: string;
+  contentType: "message" | "comment";
+}
+
 export interface UseChatSocketReturn {
   // Connection state
   isConnected: boolean;
@@ -80,6 +87,7 @@ export interface UseChatSocketReturn {
   onRecordingStart: (callback: (data: RecordingStartEvent) => void) => () => void;
   onRecordingStop: (callback: (data: RecordingStopEvent) => void) => () => void;
   onContactLogoUpdated: (callback: (data: ContactLogoUpdatedEvent) => void) => () => void;
+  onScheduledMessageSent: (callback: (data: ScheduledMessageSentEvent) => void) => () => void;
 
   // Typing indicators
   emitTypingStart: (chatId: string) => void;
@@ -328,6 +336,18 @@ export function useChatSocket(): UseChatSocketReturn {
     };
   };
 
+  const onScheduledMessageSent = (callback: (data: ScheduledMessageSentEvent) => void) => {
+    if (!socketRef.current) {
+      return () => {
+        // No-op
+      };
+    }
+    socketRef.current.on("scheduled:sent", callback);
+    return () => {
+      socketRef.current?.off("scheduled:sent", callback);
+    };
+  };
+
   // Emit typing events
   const emitTypingStart = (chatId: string) => {
     if (socketRef.current?.connected) {
@@ -376,6 +396,7 @@ export function useChatSocket(): UseChatSocketReturn {
     onRecordingStart,
     onRecordingStop,
     onContactLogoUpdated,
+    onScheduledMessageSent,
     emitTypingStart,
     emitTypingStop,
     emitRecordingStart,

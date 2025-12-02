@@ -31,9 +31,7 @@ export const scheduledMessagesRouter = createTRPCRouter({
         chatCreatedAt: z.coerce.date(),
         contentType: z.enum(["message", "comment"]).default("message"),
         content: z.string().min(1, "Conteúdo é obrigatório").max(4000),
-        scheduledAt: z.coerce
-          .date()
-          .refine((date) => date > new Date(), "Data deve ser no futuro"),
+        scheduledAt: z.coerce.date(),
         timezone: z.string().min(1, "Timezone é obrigatório"),
         cancelOnContactMessage: z.boolean().default(false),
         cancelOnAgentMessage: z.boolean().default(false),
@@ -224,10 +222,7 @@ export const scheduledMessagesRouter = createTRPCRouter({
       z.object({
         id: z.string().uuid(),
         content: z.string().min(1).max(4000).optional(),
-        scheduledAt: z.coerce
-          .date()
-          .refine((date) => date > new Date(), "Data deve ser no futuro")
-          .optional(),
+        scheduledAt: z.coerce.date().optional(),
         cancelOnContactMessage: z.boolean().optional(),
         cancelOnAgentMessage: z.boolean().optional(),
         cancelOnChatClose: z.boolean().optional(),
