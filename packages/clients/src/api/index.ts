@@ -29,10 +29,6 @@ export function createAPIClient(options: CreateAPIClientOptions) {
     ): Promise<T> {
       const url = `${baseURL}${path}`;
 
-      if (logger) {
-        logger.debug({ method, path }, "API request");
-      }
-
       const response = await fetch(url, {
         method,
         headers: {

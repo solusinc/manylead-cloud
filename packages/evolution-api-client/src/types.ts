@@ -9,6 +9,7 @@ export interface EvolutionInstance {
   instanceName: string;
   status: string;
   state?: ConnectionState;
+  connectionStatus?: ConnectionState; // Real field from Evolution API
   qrcode?: {
     code: string;
     base64?: string;

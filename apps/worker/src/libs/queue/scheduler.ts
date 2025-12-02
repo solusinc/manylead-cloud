@@ -123,6 +123,38 @@ export async function setupCronJobs() {
       `Cron job configured: quick-reply-orphan-cleanup (${isTestMode ? `every 30s (TEST MODE${dryRun ? " - DRY RUN" : ""})` : "weekly saturdays at 4am"})`
     );
 
+    // 4. Channel Status Reconciliation
+    const reconciliationQueue = createQueue({
+      name: "channel-status-reconciliation",
+      connection,
+      preset: "default",
+    });
+
+    // Remove existing repeatable jobs to prevent duplicates
+    const existingReconciliationJobs = await reconciliationQueue.getRepeatableJobs();
+    for (const job of existingReconciliationJobs) {
+      await reconciliationQueue.removeRepeatableByKey(job.key);
+      logger.info(
+        { jobKey: job.key, jobName: job.name },
+        "Removed existing repeatable job before creating new one"
+      );
+    }
+
+    await reconciliationQueue.add(
+      "reconcile-all-channels",
+      {},
+      {
+        repeat: {
+          pattern: isTestMode ? "*/30 * * * * *" : "*/5 * * * *", // Test: 30s | Prod: Every 5 minutes
+        },
+        jobId: "channel-status-reconciliation",
+      }
+    );
+
+    logger.info(
+      `Cron job configured: channel-status-reconciliation (${isTestMode ? "every 30s (TEST MODE)" : "every 5 minutes"})`
+    );
+
     if (isTestMode) {
       logger.warn(`⚠️  TEST MODE ENABLED - Cron jobs running every 30 seconds${dryRun ? " with dry-run" : ""}`);
     }
@@ -162,6 +194,11 @@ export async function removeCronJobs() {
       connection,
     });
 
+    const reconciliationQueue = createQueue({
+      name: "channel-status-reconciliation",
+      connection,
+    });
+
     await cleanupQueue.removeRepeatable("daily-cleanup", {
       pattern: "0 3 * * *",
     });
@@ -172,6 +209,10 @@ export async function removeCronJobs() {
 
     await quickReplyOrphanQueue.removeRepeatable("weekly-quick-reply-orphan-cleanup", {
       pattern: "0 4 * * 6",
+    });
+
+    await reconciliationQueue.removeRepeatable("reconcile-all-channels", {
+      pattern: "*/5 * * * *",
     });
 
     logger.info("Cron jobs removed successfully");

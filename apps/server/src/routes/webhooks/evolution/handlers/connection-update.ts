@@ -29,6 +29,18 @@ export async function handleConnectionUpdate(
   let newStatus = ch.status;
   const { state, statusReason, wuid, profileName, profilePictureUrl } = data;
 
+  // LOG: Estado atual vs novo
+  logger.info("Processing connection.update webhook", {
+    channelId: ch.id,
+    instanceName,
+    currentDbStatus: ch.status,
+    currentDbState: ch.evolutionConnectionState,
+    incomingState: state,
+    hasWuid: !!wuid,
+    hasProfileName: !!profileName,
+    statusReason: statusReason ?? null,
+  });
+
   switch (state) {
     case "open":
       newStatus = CHANNEL_STATUS.CONNECTED;
@@ -89,6 +101,17 @@ export async function handleConnectionUpdate(
       updatedAt: new Date(),
     })
     .where(eq(channel.id, ch.id));
+
+  // LOG: Resultado da atualização
+  logger.info("Connection status updated in database", {
+    channelId: ch.id,
+    oldStatus: ch.status,
+    newStatus,
+    oldState: ch.evolutionConnectionState,
+    newState: state,
+    phoneNumber,
+    displayName: finalProfileName,
+  });
 
   // Emitir evento via Socket.io
   const socketManager = getSocketManager();

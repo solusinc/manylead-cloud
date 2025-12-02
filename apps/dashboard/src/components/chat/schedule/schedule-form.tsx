@@ -5,13 +5,13 @@ import { useForm } from "@tanstack/react-form";
 import { useQuery } from "@tanstack/react-query";
 import { isTRPCClientError } from "@trpc/client";
 import { addHours, format } from "date-fns";
+import { ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 
 import type { ScheduledMessage } from "@manylead/db";
 import { Button } from "@manylead/ui/button";
 import { Checkbox } from "@manylead/ui/checkbox";
 import { Label } from "@manylead/ui/label";
-import { RadioGroup, RadioGroupItem } from "@manylead/ui/radio-group";
 import { Textarea } from "@manylead/ui/textarea";
 
 import { useTRPC } from "~/lib/trpc/react";
@@ -19,6 +19,7 @@ import { useChat } from "../providers/chat-context";
 import { useScheduleMutations } from "./hooks";
 
 interface ScheduleFormProps {
+  contentType: "message" | "comment";
   onCancel: () => void;
   onSuccess: () => void;
   editingItem?: {
@@ -28,6 +29,7 @@ interface ScheduleFormProps {
 }
 
 export function ScheduleForm({
+  contentType,
   onCancel,
   onSuccess,
   editingItem,
@@ -51,7 +53,6 @@ export function ScheduleForm({
 
   const form = useForm({
     defaultValues: {
-      contentType: schedule?.contentType ?? "message",
       content: schedule?.content ?? "",
       scheduledAt: defaultDateTime,
       cancelOnContactMessage: schedule?.cancelOnContactMessage ?? false,
@@ -106,7 +107,7 @@ export function ScheduleForm({
             const promise = create.mutateAsync({
               chatId: chat.id,
               chatCreatedAt: chat.createdAt,
-              contentType: value.contentType,
+              contentType,
               content: value.content,
               scheduledAt: new Date(value.scheduledAt),
               timezone,
@@ -145,45 +146,22 @@ export function ScheduleForm({
         e.stopPropagation();
         void form.handleSubmit();
       }}
-      className="space-y-6 px-2"
+      className="space-y-6 p-4"
     >
-      {/* Tipo: Mensagem ou Nota */}
-      <form.Field name="contentType">
-        {(field) => (
-          <div className="space-y-2">
-            <Label>Tipo</Label>
-            <RadioGroup
-              value={field.state.value}
-              onValueChange={(value) =>
-                field.handleChange(value as "message" | "comment")
-              }
-              className="flex gap-4"
-            >
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="message" id="message" />
-                <Label htmlFor="message" className="cursor-pointer font-normal">
-                  Mensagem
-                </Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="comment" id="comment" />
-                <Label htmlFor="comment" className="cursor-pointer font-normal">
-                  Nota (interno)
-                </Label>
-              </div>
-            </RadioGroup>
-          </div>
-        )}
-      </form.Field>
-
       {/* Conteúdo */}
       <form.Field name="content">
         {(field) => (
           <div className="space-y-2">
-            <Label htmlFor="content">Conteúdo</Label>
+            <Label htmlFor="content">
+              {contentType === "message" ? "Mensagem" : "Nota"}
+            </Label>
             <Textarea
               id="content"
-              placeholder="Digite sua mensagem..."
+              placeholder={
+                contentType === "message"
+                  ? "Digite sua mensagem..."
+                  : "Digite sua nota interna..."
+              }
               className="min-h-[100px] resize-none"
               value={field.state.value}
               onChange={(e) => field.handleChange(e.target.value)}
@@ -208,72 +186,74 @@ export function ScheduleForm({
         )}
       </form.Field>
 
-      {/* Opções de cancelamento automático */}
-      <div className="space-y-3">
-        <Label className="text-sm font-medium">
-          Cancelar automaticamente se:
-        </Label>
+      {/* Opções de cancelamento automático - apenas para mensagens */}
+      {contentType === "message" && (
+        <div className="space-y-3 rounded-lg border p-4">
+          <Label className="text-sm font-medium">
+            Cancelar automaticamente se:
+          </Label>
 
-        <form.Field name="cancelOnContactMessage">
-          {(field) => (
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="cancelOnContactMessage"
-                checked={field.state.value}
-                onCheckedChange={(checked) =>
-                  field.handleChange(checked === true)
-                }
-              />
-              <Label
-                htmlFor="cancelOnContactMessage"
-                className="cursor-pointer text-sm leading-none font-normal peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-              >
-                Contato enviar nova mensagem
-              </Label>
-            </div>
-          )}
-        </form.Field>
+          <form.Field name="cancelOnContactMessage">
+            {(field) => (
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="cancelOnContactMessage"
+                  checked={field.state.value}
+                  onCheckedChange={(checked) =>
+                    field.handleChange(checked === true)
+                  }
+                />
+                <Label
+                  htmlFor="cancelOnContactMessage"
+                  className="cursor-pointer text-sm leading-none font-normal peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                >
+                  Contato enviar nova mensagem
+                </Label>
+              </div>
+            )}
+          </form.Field>
 
-        <form.Field name="cancelOnAgentMessage">
-          {(field) => (
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="cancelOnAgentMessage"
-                checked={field.state.value}
-                onCheckedChange={(checked) =>
-                  field.handleChange(checked === true)
-                }
-              />
-              <Label
-                htmlFor="cancelOnAgentMessage"
-                className="cursor-pointer text-sm leading-none font-normal peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-              >
-                Atendente enviar nova mensagem
-              </Label>
-            </div>
-          )}
-        </form.Field>
+          <form.Field name="cancelOnAgentMessage">
+            {(field) => (
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="cancelOnAgentMessage"
+                  checked={field.state.value}
+                  onCheckedChange={(checked) =>
+                    field.handleChange(checked === true)
+                  }
+                />
+                <Label
+                  htmlFor="cancelOnAgentMessage"
+                  className="cursor-pointer text-sm leading-none font-normal peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                >
+                  Atendente enviar nova mensagem
+                </Label>
+              </div>
+            )}
+          </form.Field>
 
-        <form.Field name="cancelOnChatClose">
-          {(field) => (
-            <div className="flex items-center space-x-2">
-              <Checkbox
-                id="cancelOnChatClose"
-                checked={field.state.value}
-                onCheckedChange={(checked) =>
-                  field.handleChange(checked === true)
-                }
-              />
-              <Label
-                htmlFor="cancelOnChatClose"
-                className="cursor-pointer text-sm leading-none font-normal peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-              >
-                Conversa for finalizada
-              </Label>
-            </div>
-          )}
-        </form.Field>
-      </div>
+          <form.Field name="cancelOnChatClose">
+            {(field) => (
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="cancelOnChatClose"
+                  checked={field.state.value}
+                  onCheckedChange={(checked) =>
+                    field.handleChange(checked === true)
+                  }
+                />
+                <Label
+                  htmlFor="cancelOnChatClose"
+                  className="cursor-pointer text-sm leading-none font-normal peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                >
+                  Conversa for finalizada
+                </Label>
+              </div>
+            )}
+          </form.Field>
+        </div>
+      )}
 
       {/* Botões */}
       <div className="flex gap-2">
@@ -283,7 +263,8 @@ export function ScheduleForm({
           onClick={onCancel}
           disabled={isPending}
         >
-          Cancelar
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Voltar
         </Button>
         <Button type="submit" disabled={isPending} className="flex-1">
           {isPending
@@ -291,7 +272,7 @@ export function ScheduleForm({
               ? "Salvando..."
               : "Agendando..."
             : editingItem
-              ? "Salvar"
+              ? "Salvar alterações"
               : "Agendar"}
         </Button>
       </div>

@@ -9,6 +9,7 @@ import type { AttachmentOrphanCleanupJobData } from "~/workers/attachment-orphan
 import type { QuickReplyOrphanCleanupJobData } from "~/workers/quick-reply-orphan-cleanup";
 import type { CrossOrgLogoSyncJobData } from "~/workers/cross-org-logo-sync";
 import type { ScheduledMessageJobData } from "~/workers/scheduled-message";
+import type { ChannelStatusReconciliationJobData } from "~/workers/channel-status-reconciliation";
 import { env } from "~/env";
 import { getRedisClient } from "~/libs/cache/redis";
 import { processTenantProvisioning } from "~/workers/tenant-provisioning";
@@ -19,6 +20,7 @@ import { processAttachmentOrphanCleanup } from "~/workers/attachment-orphan-clea
 import { processQuickReplyOrphanCleanup } from "~/workers/quick-reply-orphan-cleanup";
 import { processCrossOrgLogoSync } from "~/workers/cross-org-logo-sync";
 import { processScheduledMessage } from "~/workers/scheduled-message";
+import { processChannelStatusReconciliation } from "~/workers/channel-status-reconciliation";
 
 const logger = createLogger("Worker:Queue");
 
@@ -275,6 +277,28 @@ export function createWorkers(): Worker[] {
   workers.push(scheduledMessageWorker);
 
   /**
+   * Channel Status Reconciliation Worker (Cron)
+   * Verifica periodicamente o status dos canais na Evolution API
+   * e sincroniza com o banco de dados caso haja divergência
+   */
+  logger.info("Creating worker for queue: channel-status-reconciliation");
+
+  const channelStatusReconciliationWorker = createWorker<ChannelStatusReconciliationJobData>({
+    name: "channel-status-reconciliation",
+    processor: processChannelStatusReconciliation,
+    connection,
+    concurrency: 1, // Process one reconciliation at a time
+    logger,
+  });
+
+  attachEventListeners(channelStatusReconciliationWorker, {
+    queueName: "channel-status-reconciliation",
+  });
+
+  logger.info("Worker created for queue: channel-status-reconciliation");
+  workers.push(channelStatusReconciliationWorker);
+
+  /**
    * TODO (FASE 4): Add Tenant Migration Worker
    * const tenantMigrationWorker = new Worker(...)
    */
@@ -321,6 +345,10 @@ export function createQueuesForMonitoring(): { name: string; queue: Queue }[] {
     {
       name: "scheduled-message",
       queue: createQueue({ name: "scheduled-message", connection }),
+    },
+    {
+      name: "channel-status-reconciliation",
+      queue: createQueue({ name: "channel-status-reconciliation", connection }),
     },
   ];
 }

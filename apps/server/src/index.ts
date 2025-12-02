@@ -12,6 +12,7 @@ import { v1 } from "~/routes/v1";
 import { webhooks } from "~/routes/webhooks";
 import { SocketManager, setSocketManager } from "~/socket";
 import { createLogger } from "~/libs/utils/logger";
+import { syncAllChannelsStatus } from "~/libs/evolution/sync-channels-status";
 
 const log = createLogger("Server");
 
@@ -112,6 +113,12 @@ setSocketManager(socketManager); // Set singleton instance
 const socketPort = port + 1;
 httpServer.listen(socketPort, () => {
   log.info({ port: socketPort }, "🔌 Socket.io server listening");
+
+  // Sync channel status with Evolution API after server starts
+  // Wait 2 seconds for server to stabilize
+  setTimeout(() => {
+    void syncAllChannelsStatus();
+  }, 2000);
 });
 
 /**
