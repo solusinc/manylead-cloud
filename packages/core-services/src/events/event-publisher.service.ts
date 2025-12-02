@@ -63,9 +63,9 @@ export class EventPublisher {
     await publishMessageEvent(event, this.redisUrl);
 
     // Publicar evento para auto-cancelamento (canal chat:events)
-    // Determinar se é mensagem de contato ou agente local
-    // - senderId NULL = contato (ou agente remoto em cross-org)
-    // - senderId preenchido = agente local
+    // Usar senderId para distinguir entre interno (minha org) vs externo (outra org ou WhatsApp):
+    // - senderId NULL = externo (contato WhatsApp OU agente de outra org) → "contact"
+    // - senderId preenchido = interno (agente da minha org) → "agent"
     const senderType: "contact" | "agent" =
       message.senderId ? "agent" : "contact";
 

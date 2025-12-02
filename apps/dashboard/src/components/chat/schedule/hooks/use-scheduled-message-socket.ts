@@ -22,7 +22,7 @@ export function useScheduledMessageSocket(
       // Apenas processar se for do chat atual
       if (event.chatId !== chatId) return;
 
-      // Invalidar queries de scheduled messages para atualizar as tabs
+      // Invalidar todas as queries que começam com scheduledMessages
       void queryClient.invalidateQueries({
         queryKey: [["scheduledMessages"]],
       });
@@ -38,7 +38,7 @@ export function useScheduledMessageSocket(
       // Apenas processar se for do chat atual
       if (event.chatId !== chatId) return;
 
-      // Invalidar queries de scheduled messages para atualizar as tabs
+      // Invalidar todas as queries que começam com scheduledMessages
       void queryClient.invalidateQueries({
         queryKey: [["scheduledMessages"]],
       });

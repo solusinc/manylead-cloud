@@ -33,7 +33,7 @@ export interface ChannelSyncEvent {
  * Chat events
  */
 export interface ChatEvent {
-  type: "chat:created" | "chat:updated" | "chat:deleted" | "contact:logo:updated";
+  type: "chat:created" | "chat:updated" | "chat:deleted" | "contact:logo:updated" | "scheduled-message:cancelled" | "scheduled:sent";
   organizationId: string;
   chatId?: string;
   targetAgentId?: string; // Para enviar evento apenas para um agent específico
@@ -44,6 +44,11 @@ export interface ChatEvent {
     sourceOrganizationId?: string;
     logoUrl?: string | null;
     contactsUpdated?: number;
+    scheduledMessageId?: string;
+    messageId?: string;
+    reason?: string;
+    contentType?: string;
+    chatId?: string; // Para eventos de scheduled-message
   };
 }
 
