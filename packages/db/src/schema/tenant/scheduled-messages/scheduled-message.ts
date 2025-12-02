@@ -31,6 +31,7 @@ export const scheduledStatusEnum = pgEnum("scheduled_status", [
   "sent",
   "failed",
   "cancelled",
+  "expired",
 ]);
 
 /**

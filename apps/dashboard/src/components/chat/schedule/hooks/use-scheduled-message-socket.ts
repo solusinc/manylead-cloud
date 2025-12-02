@@ -29,4 +29,20 @@ export function useScheduledMessageSocket(
     },
     [chatId, queryClient],
   );
+
+  // Escutar evento de mensagem agendada cancelada automaticamente
+  useSocketListener(
+    socket,
+    "onScheduledMessageCancelled",
+    (event) => {
+      // Apenas processar se for do chat atual
+      if (event.chatId !== chatId) return;
+
+      // Invalidar queries de scheduled messages para atualizar as tabs
+      void queryClient.invalidateQueries({
+        queryKey: [["scheduledMessages"]],
+      });
+    },
+    [chatId, queryClient],
+  );
 }

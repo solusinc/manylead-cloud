@@ -304,15 +304,21 @@ export class WhatsAppMessageProcessor {
         process.env.REDIS_URL ?? "redis://localhost:6379",
       );
 
-      await mediaQueue.add("download-media", {
-        organizationId,
-        messageId,
-        attachmentId: newAttachment.id,
-        whatsappMediaId: whatsappMessageId,
-        instanceName,
-        fileName,
-        mimeType,
-      });
+      await mediaQueue.add(
+        "download-media",
+        {
+          organizationId,
+          messageId,
+          attachmentId: newAttachment.id,
+          whatsappMediaId: whatsappMessageId,
+          instanceName,
+          fileName,
+          mimeType,
+        },
+        {
+          jobId: `media-download-${organizationId}-${newAttachment.id}`,
+        },
+      );
 
       log.info({ attachmentId: newAttachment.id }, "Download job enqueued");
     }

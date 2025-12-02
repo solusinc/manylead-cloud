@@ -5,6 +5,7 @@ import { createQueue } from "@manylead/clients/queue";
 import { getRedisClient } from "~/libs/cache/redis";
 import { tenantManager } from "~/libs/tenant-manager";
 import { createLogger } from "~/libs/utils/logger";
+import { eventPublisher } from "~/libs/cache/event-publisher";
 import { env } from "~/env";
 
 const logger = createLogger("Listener:ScheduledMessageAutoCancel");
@@ -209,6 +210,17 @@ async function cancelPendingScheduledMessages(
         },
         "Scheduled message cancelled automatically",
       );
+
+      // Emitir evento para invalidar queries no frontend
+      await eventPublisher.publish("chat:events", {
+        type: "scheduled-message:cancelled",
+        organizationId,
+        chatId,
+        data: {
+          scheduledMessageId: schedule.id,
+          reason: rule,
+        },
+      });
     } catch (error) {
       logger.error(
         {

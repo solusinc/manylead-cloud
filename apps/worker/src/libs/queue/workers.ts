@@ -9,6 +9,7 @@ import type { AttachmentOrphanCleanupJobData } from "~/workers/attachment-orphan
 import type { QuickReplyOrphanCleanupJobData } from "~/workers/quick-reply-orphan-cleanup";
 import type { CrossOrgLogoSyncJobData } from "~/workers/cross-org-logo-sync";
 import type { ScheduledMessageJobData } from "~/workers/scheduled-message";
+import type { ScheduledMessageRecoveryJobData } from "~/workers/scheduled-message-recovery";
 import type { ChannelStatusReconciliationJobData } from "~/workers/channel-status-reconciliation";
 import { env } from "~/env";
 import { getRedisClient } from "~/libs/cache/redis";
@@ -20,6 +21,7 @@ import { processAttachmentOrphanCleanup } from "~/workers/attachment-orphan-clea
 import { processQuickReplyOrphanCleanup } from "~/workers/quick-reply-orphan-cleanup";
 import { processCrossOrgLogoSync } from "~/workers/cross-org-logo-sync";
 import { processScheduledMessage } from "~/workers/scheduled-message";
+import { recoverMissedSchedules } from "~/workers/scheduled-message-recovery";
 import { processChannelStatusReconciliation } from "~/workers/channel-status-reconciliation";
 
 const logger = createLogger("Worker:Queue");
@@ -277,6 +279,28 @@ export function createWorkers(): Worker[] {
   workers.push(scheduledMessageWorker);
 
   /**
+   * Scheduled Message Recovery Worker (Cron)
+   * Recupera mensagens agendadas que perderam seus jobs no Redis
+   * ou expira mensagens com mais de 24h de atraso
+   */
+  logger.info("Creating worker for queue: scheduled-message-recovery");
+
+  const scheduledMessageRecoveryWorker = createWorker<ScheduledMessageRecoveryJobData>({
+    name: "scheduled-message-recovery",
+    processor: recoverMissedSchedules,
+    connection,
+    concurrency: 1, // Process one recovery at a time
+    logger,
+  });
+
+  attachEventListeners(scheduledMessageRecoveryWorker, {
+    queueName: "scheduled-message-recovery",
+  });
+
+  logger.info("Worker created for queue: scheduled-message-recovery");
+  workers.push(scheduledMessageRecoveryWorker);
+
+  /**
    * Channel Status Reconciliation Worker (Cron)
    * Verifica periodicamente o status dos canais na Evolution API
    * e sincroniza com o banco de dados caso haja divergência
@@ -345,6 +369,10 @@ export function createQueuesForMonitoring(): { name: string; queue: Queue }[] {
     {
       name: "scheduled-message",
       queue: createQueue({ name: "scheduled-message", connection }),
+    },
+    {
+      name: "scheduled-message-recovery",
+      queue: createQueue({ name: "scheduled-message-recovery", connection }),
     },
     {
       name: "channel-status-reconciliation",

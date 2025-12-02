@@ -1,7 +1,9 @@
 import {
   publishChatEvent,
   publishMessageEvent,
+  REDIS_CHANNELS,
 } from "@manylead/shared";
+import { createRedisClient } from "@manylead/clients/redis";
 
 import type { ChatEvent as SharedChatEvent, MessageEvent as SharedMessageEvent } from "@manylead/shared";
 import type { Message, Chat, Contact, Agent } from "@manylead/db";
@@ -18,9 +20,11 @@ export interface EventPublisherConfig {
  */
 export class EventPublisher {
   private redisUrl: string;
+  private redis: ReturnType<typeof createRedisClient>;
 
   constructor(config: EventPublisherConfig) {
     this.redisUrl = config.redisUrl;
+    this.redis = createRedisClient({ url: config.redisUrl, preset: "pubsub" });
   }
 
   /**
@@ -55,7 +59,17 @@ export class EventPublisher {
       },
     };
 
+    // Publicar evento para WebSocket (canal message:events)
     await publishMessageEvent(event, this.redisUrl);
+
+    // Publicar evento para auto-cancelamento (canal chat:events)
+    // Determinar se é mensagem de contato ou agente local
+    // - senderId NULL = contato (ou agente remoto em cross-org)
+    // - senderId preenchido = agente local
+    const senderType: "contact" | "agent" =
+      message.senderId ? "agent" : "contact";
+
+    await this.publishAutoCancelEvent(organizationId, chatId, message.id, senderType);
   }
 
   /**
@@ -108,6 +122,29 @@ export class EventPublisher {
     };
 
     await publishMessageEvent(event, this.redisUrl);
+  }
+
+  /**
+   * Publica evento para auto-cancelamento de scheduled messages
+   * @private
+   */
+  private async publishAutoCancelEvent(
+    organizationId: string,
+    chatId: string,
+    messageId: string,
+    sender: "contact" | "agent",
+  ): Promise<void> {
+    const event = {
+      type: "message:created",
+      organizationId,
+      chatId,
+      data: {
+        messageId,
+        sender,
+      },
+    };
+
+    await this.redis.publish(REDIS_CHANNELS.CHAT, JSON.stringify(event));
   }
 
   /**

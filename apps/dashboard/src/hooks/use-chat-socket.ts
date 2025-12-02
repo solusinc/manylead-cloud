@@ -67,6 +67,12 @@ export interface ScheduledMessageSentEvent {
   contentType: "message" | "comment";
 }
 
+export interface ScheduledMessageCancelledEvent {
+  scheduledMessageId: string;
+  chatId: string;
+  reason: string;
+}
+
 export interface UseChatSocketReturn {
   // Connection state
   isConnected: boolean;
@@ -88,6 +94,7 @@ export interface UseChatSocketReturn {
   onRecordingStop: (callback: (data: RecordingStopEvent) => void) => () => void;
   onContactLogoUpdated: (callback: (data: ContactLogoUpdatedEvent) => void) => () => void;
   onScheduledMessageSent: (callback: (data: ScheduledMessageSentEvent) => void) => () => void;
+  onScheduledMessageCancelled: (callback: (data: ScheduledMessageCancelledEvent) => void) => () => void;
 
   // Typing indicators
   emitTypingStart: (chatId: string) => void;
@@ -348,6 +355,18 @@ export function useChatSocket(): UseChatSocketReturn {
     };
   };
 
+  const onScheduledMessageCancelled = (callback: (data: ScheduledMessageCancelledEvent) => void) => {
+    if (!socketRef.current) {
+      return () => {
+        // No-op
+      };
+    }
+    socketRef.current.on("scheduled-message:cancelled", callback);
+    return () => {
+      socketRef.current?.off("scheduled-message:cancelled", callback);
+    };
+  };
+
   // Emit typing events
   const emitTypingStart = (chatId: string) => {
     if (socketRef.current?.connected) {
@@ -397,6 +416,7 @@ export function useChatSocket(): UseChatSocketReturn {
     onRecordingStop,
     onContactLogoUpdated,
     onScheduledMessageSent,
+    onScheduledMessageCancelled,
     emitTypingStart,
     emitTypingStop,
     emitRecordingStart,

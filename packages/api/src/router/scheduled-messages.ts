@@ -122,7 +122,7 @@ export const scheduledMessagesRouter = createTRPCRouter({
         },
         {
           delay,
-          jobId: `scheduled-${schedule.id}`,
+          jobId: `scheduled-${organizationId}-${schedule.id}`,
           attempts: 3,
           backoff: {
             type: "exponential",
@@ -155,7 +155,7 @@ export const scheduledMessagesRouter = createTRPCRouter({
         chatId: z.string().uuid(),
         chatCreatedAt: z.coerce.date(),
         status: z
-          .enum(["pending", "processing", "sent", "failed", "cancelled"])
+          .enum(["pending", "processing", "sent", "failed", "cancelled", "expired"])
           .optional(),
       }),
     )
@@ -344,7 +344,7 @@ export const scheduledMessagesRouter = createTRPCRouter({
           },
           {
             delay,
-            jobId: `scheduled-${updated.id}`,
+            jobId: `scheduled-${organizationId}-${updated.id}`,
             attempts: 3,
             backoff: {
               type: "exponential",

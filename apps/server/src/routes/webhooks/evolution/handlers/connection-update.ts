@@ -41,6 +41,15 @@ export async function handleConnectionUpdate(
     statusReason: statusReason ?? null,
   });
 
+  // SKIP: Se o estado não mudou, ignorar webhook (evita loop infinito)
+  if (ch.evolutionConnectionState === state) {
+    logger.info("State unchanged - skipping update", {
+      state,
+      statusReason: statusReason ?? null,
+    });
+    return;
+  }
+
   switch (state) {
     case "open":
       newStatus = CHANNEL_STATUS.CONNECTED;
@@ -138,7 +147,7 @@ export async function handleConnectionUpdate(
         organizationId: ch.organizationId,
       },
       {
-        jobId: `channel-sync-${ch.id}`,
+        jobId: `channel-sync-${ch.organizationId}-${ch.id}`,
         removeOnComplete: true,
         removeOnFail: false,
       }
