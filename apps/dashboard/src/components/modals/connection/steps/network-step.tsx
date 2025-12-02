@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { FaWhatsapp, FaFacebook, FaInstagram } from "react-icons/fa";
 import { Button } from "@manylead/ui/button";
 import { Badge } from "@manylead/ui/badge";
+import { Skeleton } from "@manylead/ui/skeleton";
 import { useQuery } from "@tanstack/react-query";
 
 import { useConnectionModalStore } from "~/stores/use-connection-modal-store";
@@ -61,7 +62,7 @@ export function NetworkStep() {
   const { status } = useChannelSocket();
 
   // Buscar canal WhatsApp QR Code
-  const { data: whatsappChannel, refetch } = useQuery({
+  const { data: whatsappChannel, refetch, isLoading } = useQuery({
     ...trpc.channels.getByType.queryOptions({ channelType: "qr_code" }),
   });
 
@@ -116,11 +117,23 @@ export function NetworkStep() {
 
                 <div className="flex justify-center sm:justify-end sm:shrink-0">
                   {network.enabled ? (
-                    network.id === "whatsapp" &&
-                    whatsappChannel?.status === "connected" ? (
-                      <Badge variant="default" className="bg-green-600">
-                        Conectado
-                      </Badge>
+                    network.id === "whatsapp" ? (
+                      isLoading ? (
+                        <Skeleton className="h-9 w-24" />
+                      ) : whatsappChannel?.status === "connected" ? (
+                        <Badge variant="default" className="bg-green-600">
+                          Conectado
+                        </Badge>
+                      ) : (
+                        <Button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSelect(network.id);
+                          }}
+                        >
+                          Conectar
+                        </Button>
+                      )
                     ) : (
                       <Button
                         onClick={(e) => {
