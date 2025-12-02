@@ -1,19 +1,24 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 import {
+  agent,
   and,
+  asc,
+  chat,
+  contact,
   count,
   desc,
   eq,
+  gte,
   inArray,
+  lte,
   scheduledMessage,
-  agent,
 } from "@manylead/db";
 import { createQueue } from "@manylead/clients/queue";
 import { getRedisClient } from "@manylead/clients/redis";
 
-import { createTRPCRouter, memberProcedure } from "../trpc";
 import { env } from "../env";
+import { createTRPCRouter, memberProcedure } from "../trpc";
 
 /**
  * Scheduled Messages Router
@@ -155,7 +160,14 @@ export const scheduledMessagesRouter = createTRPCRouter({
         chatId: z.string().uuid(),
         chatCreatedAt: z.coerce.date(),
         status: z
-          .enum(["pending", "processing", "sent", "failed", "cancelled", "expired"])
+          .enum([
+            "pending",
+            "processing",
+            "sent",
+            "failed",
+            "cancelled",
+            "expired",
+          ])
           .optional(),
       }),
     )
@@ -175,10 +187,7 @@ export const scheduledMessagesRouter = createTRPCRouter({
           createdByAgent: agent,
         })
         .from(scheduledMessage)
-        .leftJoin(
-          agent,
-          eq(scheduledMessage.createdByAgentId, agent.id),
-        )
+        .leftJoin(agent, eq(scheduledMessage.createdByAgentId, agent.id))
         .where(and(...conditions))
         .orderBy(desc(scheduledMessage.scheduledAt));
 
@@ -197,10 +206,7 @@ export const scheduledMessagesRouter = createTRPCRouter({
           createdByAgent: agent,
         })
         .from(scheduledMessage)
-        .leftJoin(
-          agent,
-          eq(scheduledMessage.createdByAgentId, agent.id),
-        )
+        .leftJoin(agent, eq(scheduledMessage.createdByAgentId, agent.id))
         .where(eq(scheduledMessage.id, input.id))
         .limit(1);
 
@@ -446,6 +452,118 @@ export const scheduledMessagesRouter = createTRPCRouter({
     }),
 
   /**
+   * Listar agendamentos por organização (página global /schedules)
+   */
+  listByOrganization: memberProcedure
+    .input(
+      z.object({
+        // Filtros
+        status: z
+          .enum([
+            "pending",
+            "processing",
+            "sent",
+            "failed",
+            "cancelled",
+            "expired",
+          ])
+          .optional(),
+        contentType: z.enum(["message", "comment"]).optional(),
+
+        // Filtros de data
+        dateFrom: z.coerce.date().optional(),
+        dateTo: z.coerce.date().optional(),
+
+        // Paginação
+        page: z.number().min(1).default(1),
+        pageSize: z.number().min(1).max(100).default(50),
+
+        // Ordenação
+        sortBy: z
+          .enum(["scheduledAt", "createdAt", "updatedAt"])
+          .default("scheduledAt"),
+        sortOrder: z.enum(["asc", "desc"]).default("asc"),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const organizationId = ctx.session.session.activeOrganizationId;
+
+      if (!organizationId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Nenhuma organização ativa",
+        });
+      }
+
+      // Build conditions
+      const conditions = [eq(scheduledMessage.organizationId, organizationId)];
+
+      if (input.status) {
+        conditions.push(eq(scheduledMessage.status, input.status));
+      }
+
+      if (input.contentType) {
+        conditions.push(eq(scheduledMessage.contentType, input.contentType));
+      }
+
+      if (input.dateFrom) {
+        conditions.push(gte(scheduledMessage.scheduledAt, input.dateFrom));
+      }
+
+      if (input.dateTo) {
+        conditions.push(lte(scheduledMessage.scheduledAt, input.dateTo));
+      }
+
+      // Calculate pagination
+      const offset = (input.page - 1) * input.pageSize;
+
+      // Execute query with joins
+      const items = await ctx.tenantDb
+        .select({
+          scheduledMessage,
+          createdByAgent: agent,
+          chat,
+          contact,
+        })
+        .from(scheduledMessage)
+        .leftJoin(agent, eq(scheduledMessage.createdByAgentId, agent.id))
+        .leftJoin(
+          chat,
+          and(
+            eq(scheduledMessage.chatId, chat.id),
+            eq(scheduledMessage.chatCreatedAt, chat.createdAt),
+          ),
+        )
+        .leftJoin(contact, eq(chat.contactId, contact.id))
+        .where(and(...conditions))
+        .orderBy(
+          input.sortOrder === "desc"
+            ? desc(scheduledMessage[input.sortBy])
+            : asc(scheduledMessage[input.sortBy]),
+        )
+        .limit(input.pageSize)
+        .offset(offset);
+
+      // Get total count for pagination
+      const [countResult] = await ctx.tenantDb
+        .select({ total: count() })
+        .from(scheduledMessage)
+        .where(and(...conditions));
+
+      const total = countResult?.total ?? 0;
+
+      return {
+        items,
+        pagination: {
+          page: input.page,
+          pageSize: input.pageSize,
+          total,
+          totalPages: Math.ceil(total / input.pageSize),
+        },
+      };
+    }),
+
+  /**
    * Estatísticas por chat
    */
   stats: memberProcedure
@@ -480,7 +598,11 @@ export const scheduledMessagesRouter = createTRPCRouter({
       };
 
       for (const result of results) {
-        if (result.status === "pending" || result.status === "sent" || result.status === "cancelled") {
+        if (
+          result.status === "pending" ||
+          result.status === "sent" ||
+          result.status === "cancelled"
+        ) {
           stats[result.status] = result.count;
         }
       }
