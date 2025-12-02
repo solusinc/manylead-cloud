@@ -5,7 +5,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowRightLeft,
   ChevronDown,
-  MessageCircle,
+  StickyNote,
   Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -39,13 +39,13 @@ export function ChatMessageComment({
   return (
     <div className={cn("group mb-4 flex justify-center", className)}>
       <div
-        className="relative flex max-w-2xl items-start gap-2 rounded-lg bg-emerald-50 px-4 py-3 text-sm shadow-sm dark:bg-emerald-950/80"
+        className="relative flex max-w-2xl items-start gap-2 rounded-lg border-2 border-amber-300 bg-amber-50 px-4 py-3 text-sm dark:border-[#faad14] dark:bg-[#453316]"
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
-        <MessageCircle className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+        <StickyNote className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
         <div className="flex-1 space-y-1">
-          <p className="font-semibold text-emerald-700 dark:text-emerald-300">
+          <p className="font-semibold text-amber-700 dark:text-amber-300">
             {agentName ?? "Agente"}
           </p>
           <p className="text-foreground whitespace-pre-wrap">
@@ -53,7 +53,7 @@ export function ChatMessageComment({
           </p>
         </div>
         {(isHovered || isMenuOpen) && (
-          <div className="absolute top-1 right-1 rounded-full bg-emerald-50/80 p-0.5 transition-all duration-200 dark:bg-emerald-950/90">
+          <div className="absolute top-1 right-1 rounded-full bg-amber-50/80 p-0.5 transition-all duration-200 dark:bg-amber-950/90">
             <ChatCommentActions
               message={message}
               onOpenChange={setIsMenuOpen}
@@ -110,7 +110,7 @@ export function ChatCommentActions({
           variant="ghost"
           size="icon"
           className={cn(
-            "h-6 w-6 rounded-sm text-emerald-600 hover:bg-transparent! hover:text-current! dark:text-emerald-400",
+            "h-6 w-6 rounded-sm text-amber-600 hover:bg-transparent! hover:text-current! dark:text-amber-400",
             "data-[state=open]:bg-transparent! focus-visible:ring-0 focus-visible:ring-offset-0",
             className,
           )}

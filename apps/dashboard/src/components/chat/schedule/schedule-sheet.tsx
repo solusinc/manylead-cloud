@@ -86,7 +86,7 @@ export function ScheduleSheet({ open, onOpenChange }: ScheduleSheetProps) {
 
   return (
     <Sheet open={open} onOpenChange={handleOpenChange}>
-      <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-2xl">
+      <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-md">
         <SheetHeader className="border-b p-4">
           <SheetTitle>Agendamentos</SheetTitle>
         </SheetHeader>
@@ -103,23 +103,27 @@ export function ScheduleSheet({ open, onOpenChange }: ScheduleSheetProps) {
               <Plus className="h-4 w-4" />
               Agendar
             </TabsTrigger>
-            <TabsTrigger value="scheduled" className="gap-2">
-              <Clock className="h-4 w-4" />
-              Agendadas
-              {stats && stats.pending > 0 && (
-                <Badge variant="default" className="ml-1 h-5 min-w-5 px-1.5 text-xs">
-                  {stats.pending}
-                </Badge>
-              )}
+            <TabsTrigger value="scheduled">
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4" />
+                <span>Agendadas</span>
+                {stats && stats.pending > 0 && (
+                  <Badge variant="secondary" className="h-5 min-w-5 px-1.5 text-xs">
+                    {stats.pending}
+                  </Badge>
+                )}
+              </div>
             </TabsTrigger>
-            <TabsTrigger value="completed" className="gap-2">
-              <CheckCircle2 className="h-4 w-4" />
-              Concluídas
-              {stats && stats.sent > 0 && (
-                <Badge variant="secondary" className="ml-1 h-5 min-w-5 px-1.5 text-xs">
-                  {stats.sent}
-                </Badge>
-              )}
+            <TabsTrigger value="completed">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4" />
+                <span>Concluídas</span>
+                {stats && stats.sent > 0 && (
+                  <Badge variant="secondary" className="h-5 min-w-5 px-1.5 text-xs">
+                    {stats.sent}
+                  </Badge>
+                )}
+              </div>
             </TabsTrigger>
           </TabsList>
 

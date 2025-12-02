@@ -1,5 +1,11 @@
-import { ChevronRight, MessageSquare, StickyNote } from "lucide-react";
-import { Card, CardContent } from "@manylead/ui/card";
+import { MessageSquare, StickyNote } from "lucide-react";
+import {
+  ActionCard,
+  ActionCardDescription,
+  ActionCardGroup,
+  ActionCardHeader,
+  ActionCardTitle,
+} from "~/components/content/action-card";
 
 interface ScheduleTypeSelectorProps {
   onSelect: (type: "message" | "comment") => void;
@@ -7,44 +13,48 @@ interface ScheduleTypeSelectorProps {
 
 export function ScheduleTypeSelector({ onSelect }: ScheduleTypeSelectorProps) {
   return (
-    <div className="grid gap-4 p-4">
-      {/* Card 1: Agendar Mensagem */}
-      <Card
-        className="cursor-pointer transition-colors hover:border-primary"
-        onClick={() => onSelect("message")}
-      >
-        <CardContent className="flex items-center gap-4 p-6">
-          <div className="rounded-lg bg-primary/10 p-3">
-            <MessageSquare className="h-6 w-6 text-primary" />
-          </div>
-          <div className="flex-1">
-            <h3 className="font-semibold">Agendar mensagem</h3>
-            <p className="text-sm text-muted-foreground">
-              Enviar uma mensagem para o contato no horário agendado
-            </p>
-          </div>
-          <ChevronRight className="h-5 w-5 text-muted-foreground" />
-        </CardContent>
-      </Card>
+    <div className="p-4">
+      <ActionCardGroup>
+        {/* Card 1: Agendar Mensagem */}
+        <ActionCard
+          className="h-full w-full cursor-pointer transition-colors hover:bg-accent"
+          onClick={() => onSelect("message")}
+        >
+          <ActionCardHeader>
+            <div className="flex gap-3">
+              <div className="flex items-center justify-center">
+                <MessageSquare className="h-5 w-5 shrink-0 text-muted-foreground" />
+              </div>
+              <div className="flex flex-col gap-1">
+                <ActionCardTitle>Agendar mensagem</ActionCardTitle>
+                <ActionCardDescription>
+                  Enviar uma mensagem para o contato no horário agendado
+                </ActionCardDescription>
+              </div>
+            </div>
+          </ActionCardHeader>
+        </ActionCard>
 
-      {/* Card 2: Agendar Nota */}
-      <Card
-        className="cursor-pointer transition-colors hover:border-primary"
-        onClick={() => onSelect("comment")}
-      >
-        <CardContent className="flex items-center gap-4 p-6">
-          <div className="rounded-lg bg-amber-500/10 p-3">
-            <StickyNote className="h-6 w-6 text-amber-600" />
-          </div>
-          <div className="flex-1">
-            <h3 className="font-semibold">Agendar uma nota</h3>
-            <p className="text-sm text-muted-foreground">
-              Criar uma nota interna visível apenas para a equipe
-            </p>
-          </div>
-          <ChevronRight className="h-5 w-5 text-muted-foreground" />
-        </CardContent>
-      </Card>
+        {/* Card 2: Agendar Nota */}
+        <ActionCard
+          className="h-full w-full cursor-pointer transition-colors hover:bg-accent"
+          onClick={() => onSelect("comment")}
+        >
+          <ActionCardHeader>
+            <div className="flex gap-3">
+              <div className="flex items-center justify-center">
+                <StickyNote className="h-5 w-5 shrink-0 text-muted-foreground" />
+              </div>
+              <div className="flex flex-col gap-1">
+                <ActionCardTitle>Agendar uma nota</ActionCardTitle>
+                <ActionCardDescription>
+                  Criar uma nota interna visível apenas para a equipe
+                </ActionCardDescription>
+              </div>
+            </div>
+          </ActionCardHeader>
+        </ActionCard>
+      </ActionCardGroup>
     </div>
   );
 }

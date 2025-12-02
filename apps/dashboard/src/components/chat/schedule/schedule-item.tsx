@@ -2,15 +2,12 @@
 
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Calendar, MessageSquare, Pencil, StickyNote, Trash2, X } from "lucide-react";
+import { MessageSquare, Pencil, StickyNote, Trash2 } from "lucide-react";
 
-import { Badge } from "@manylead/ui/badge";
 import { Button } from "@manylead/ui/button";
-import { Card } from "@manylead/ui/card";
 import {
   Tooltip,
   TooltipContent,
-  TooltipProvider,
   TooltipTrigger,
 } from "@manylead/ui/tooltip";
 
@@ -39,127 +36,129 @@ export function ScheduleItem({ item, onEdit }: ScheduleItemProps) {
   };
 
   const formatDateTime = (date: Date) => {
-    return format(new Date(date), "dd/MMM 'às' HH:mm", { locale: ptBR });
+    return format(new Date(date), "dd/MM/yyyy hh:mm a", { locale: ptBR });
   };
 
   const isPending = schedule.status === "pending";
   const isSent = schedule.status === "sent";
   const isCancelled = schedule.status === "cancelled";
 
-  const autoCancelFlags = [
-    schedule.cancelOnContactMessage && "Contato responder",
-    schedule.cancelOnAgentMessage && "Atendente enviar msg",
-    schedule.cancelOnChatClose && "Chat finalizar",
-  ].filter(Boolean) as string[];
+  const isMessage = schedule.contentType === "message";
 
   return (
-    <Card className="p-4">
-      <div className="flex flex-col gap-3">
-        {/* Header: Type badge + Actions */}
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center gap-2">
-            {schedule.contentType === "message" ? (
-              <MessageSquare className="text-muted-foreground size-4" />
-            ) : (
-              <StickyNote className="text-muted-foreground size-4" />
+    <div className="space-y-3 rounded-lg border bg-card p-4">
+      {/* Header */}
+      <div className="flex items-start justify-between">
+        <div className="flex items-center gap-2">
+          {/* Icon */}
+          {isMessage ? (
+            <MessageSquare className="h-4 w-4 text-muted-foreground" />
+          ) : (
+            <StickyNote className="h-4 w-4 text-muted-foreground" />
+          )}
+
+          {/* Title */}
+          <h3 className="text-sm font-medium">
+            {isMessage ? "Mensagem" : "Nota"}
+          </h3>
+        </div>
+
+        {/* Actions - only show for pending */}
+        {isPending && (
+          <div className="flex items-center gap-1">
+            {onEdit && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9"
+                    onClick={() => onEdit(item)}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Editar</p>
+                </TooltipContent>
+              </Tooltip>
             )}
-            <Badge variant={schedule.contentType === "message" ? "default" : "secondary"}>
-              {schedule.contentType === "message" ? "Mensagem" : "Nota"}
-            </Badge>
-            <Badge
-              variant={isPending ? "outline" : isSent ? "default" : "destructive"}
-              className="text-xs"
-            >
-              {isPending && "Agendado"}
-              {isSent && "Enviado"}
-              {isCancelled && "Cancelado"}
-            </Badge>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9"
+                  onClick={handleCancel}
+                  disabled={cancel.isPending}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Cancelar</p>
+              </TooltipContent>
+            </Tooltip>
           </div>
-
-          {isPending && (
-            <div className="flex items-center gap-1">
-              {onEdit && (
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="size-7"
-                        onClick={() => onEdit(item)}
-                      >
-                        <Pencil className="size-3.5" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Editar</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              )}
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="size-7"
-                      onClick={handleCancel}
-                      disabled={cancel.isPending}
-                    >
-                      <Trash2 className="size-3.5" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>Cancelar</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-          )}
-        </div>
-
-        {/* Content */}
-        <p className="text-sm line-clamp-3">{schedule.content}</p>
-
-        {/* Scheduled time */}
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Calendar className="size-3.5" />
-          {isPending && <span>Agendado para {formatDateTime(schedule.scheduledAt)}</span>}
-          {isSent && schedule.sentAt && <span>Enviado em {formatDateTime(schedule.sentAt)}</span>}
-          {isCancelled && schedule.cancelledAt && (
-            <span>Cancelado em {formatDateTime(schedule.cancelledAt)}</span>
-          )}
-        </div>
-
-        {/* Auto-cancel flags (only for pending) */}
-        {isPending && autoCancelFlags.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {autoCancelFlags.map((flag) => (
-              <Badge key={flag} variant="outline" className="text-xs">
-                <X className="mr-1 size-3" />
-                {flag}
-              </Badge>
-            ))}
-          </div>
-        )}
-
-        {/* Cancellation reason */}
-        {isCancelled && schedule.cancellationReason && (
-          <p className="text-muted-foreground text-xs">
-            Motivo:{" "}
-            {schedule.cancellationReason === "manual"
-              ? "Cancelado manualmente"
-              : schedule.cancellationReason === "contact_message"
-                ? "Contato enviou mensagem"
-                : schedule.cancellationReason === "agent_message"
-                  ? "Atendente enviou mensagem"
-                  : schedule.cancellationReason === "chat_closed"
-                    ? "Chat foi finalizado"
-                    : schedule.cancellationReason}
-          </p>
         )}
       </div>
-    </Card>
+
+      {/* Info */}
+      <div className="space-y-1 text-sm">
+        <p>
+          <span className="font-medium">Agendado para:</span>{" "}
+          {isPending && formatDateTime(schedule.scheduledAt)}
+          {isSent && schedule.sentAt && formatDateTime(schedule.sentAt)}
+          {isCancelled && schedule.cancelledAt && formatDateTime(schedule.cancelledAt)}
+        </p>
+
+        {/* Canal - só mostrar se tiver informação disponível */}
+        {/* <p>
+          <span className="font-medium">Canal:</span> 👋 Boas vindas
+        </p> */}
+
+        {/* Atendente - se tiver createdByAgent disponível */}
+        {/* <p>
+          <span className="font-medium">Atendente:</span> {createdByAgent?.name}
+        </p> */}
+      </div>
+
+      {/* Content box */}
+      <div
+        className={`rounded-lg border p-4 ${
+          isMessage
+            ? "border-border bg-muted"
+            : "border-amber-300 bg-amber-50 dark:border-[#faad14] dark:bg-[#453316]"
+        }`}
+      >
+        {isMessage && (
+          <p className="mb-1 text-sm font-medium">
+            {/* Atendente: Pode adicionar nome do agente aqui */}
+          </p>
+        )}
+        <p className="text-sm leading-relaxed">{schedule.content}</p>
+      </div>
+
+      {/* Status badge e info adicional */}
+      {(isSent || isCancelled) && (
+        <div className="text-xs text-muted-foreground">
+          {isSent && <span>✓ Enviado</span>}
+          {isCancelled && schedule.cancellationReason && (
+            <span>
+              ✗ Cancelado
+              {schedule.cancellationReason === "manual"
+                ? " manualmente"
+                : schedule.cancellationReason === "contact_message"
+                  ? " - contato respondeu"
+                  : schedule.cancellationReason === "agent_message"
+                    ? " - atendente enviou msg"
+                    : schedule.cancellationReason === "chat_closed"
+                      ? " - chat finalizado"
+                      : ""}
+            </span>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
