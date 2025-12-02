@@ -2,10 +2,10 @@ import { and, attachment, chat, eq, message, or, sql } from "@manylead/db";
 import type { TenantDB, Chat, Message } from "@manylead/db";
 import { storage } from "@manylead/storage";
 
-import { getEventPublisher } from "../events";
-import type { EventPublisher } from "../events";
-import { getCrossOrgMirrorService } from "../cross-org";
-import type { CrossOrgMirrorService } from "../cross-org";
+import { getEventPublisher } from "@manylead/core-services/events";
+import type { EventPublisher } from "@manylead/core-services/events";
+import { getCrossOrgMirrorService } from "@manylead/core-services/cross-org";
+import type { CrossOrgMirrorService } from "@manylead/core-services/cross-org";
 import type {
   MessageServiceConfig,
   CreateMessageInput,

@@ -3,8 +3,8 @@ import type { TenantDB, Chat } from "@manylead/db";
 import { TRPCError } from "@trpc/server";
 import { formatTime, formatDateTime, calculateDuration } from "@manylead/shared";
 
-import { getEventPublisher } from "../events";
-import type { EventPublisher } from "../events";
+import { getEventPublisher } from "@manylead/core-services/events";
+import type { EventPublisher } from "@manylead/core-services/events";
 import { ChatParticipantService } from "./chat-participant.service";
 import type {
   ChatServiceConfig,

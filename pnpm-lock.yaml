@@ -40,7 +40,7 @@ catalogs:
       specifier: ^11.7.0
       version: 11.7.1
     '@trpc/server':
-      specifier: ^11.7.0
+      specifier: 11.7.1
       version: 11.7.1
     '@trpc/tanstack-react-query':
       specifier: ^11.7.0
@@ -329,6 +329,9 @@ importers:
       '@manylead/clients':
         specifier: workspace:*
         version: link:../../packages/clients
+      '@manylead/core-services':
+        specifier: workspace:*
+        version: link:../../packages/core-services
       '@manylead/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -631,6 +634,9 @@ importers:
       '@manylead/tenant-db':
         specifier: workspace:*
         version: link:../tenant-db
+      '@trpc/server':
+        specifier: 'catalog:'
+        version: 11.7.1(typescript@5.9.3)
       ioredis:
         specifier: ^5.8.2
         version: 5.8.2

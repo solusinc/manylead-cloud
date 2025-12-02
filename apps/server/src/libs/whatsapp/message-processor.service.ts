@@ -2,6 +2,7 @@ import type { Channel, TenantDB } from "@manylead/db";
 import type { TenantDatabaseManager } from "@manylead/tenant-db";
 import { and, attachment, chat, contact, eq, message, sql } from "@manylead/db";
 import { createMediaDownloadQueue } from "@manylead/shared/queue";
+import { getDefaultDepartment } from "@manylead/core-services";
 
 import type { MessageContent, MessageType } from "./message-content-extractor";
 import type { MessageData } from "~/routes/webhooks/evolution/types";
@@ -222,6 +223,12 @@ export class WhatsAppMessageProcessor {
     if (!chatRecord) {
       log.info({ contactId }, "Creating new chat");
 
+      // Buscar departamento padrão
+      const defaultDepartmentId = await getDefaultDepartment(
+        tenantDb,
+        organizationId,
+      );
+
       const [newChat] = await tenantDb
         .insert(chat)
         .values({
@@ -230,6 +237,7 @@ export class WhatsAppMessageProcessor {
           channelId,
           messageSource: "whatsapp",
           status: "open",
+          departmentId: defaultDepartmentId,
         })
         .returning();
 
@@ -238,8 +246,6 @@ export class WhatsAppMessageProcessor {
       }
 
       chatRecord = newChat;
-
-      // TODO: Aplicar auto-assignment (próxima fase)
     }
 
     return chatRecord;

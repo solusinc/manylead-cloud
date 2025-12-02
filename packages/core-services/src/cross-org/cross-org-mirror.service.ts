@@ -16,6 +16,7 @@ import type { TenantDB, CatalogDB, Chat, Contact } from "@manylead/db";
 import type { EventPublisher } from "../events";
 import type { CrossOrgMirrorConfig } from "./cross-org.types";
 import { getEventPublisher } from "../events";
+import { getDefaultDepartment } from "../department";
 
 /**
  * CrossOrgMirrorService
@@ -130,6 +131,12 @@ export class CrossOrgMirrorService {
 
     // Se não encontrar chat ativo, criar novo
     if (!mirroredChat) {
+      // Buscar departamento padrão da org target
+      const defaultDepartmentId = await getDefaultDepartment(
+        targetTenantDb,
+        targetOrgId,
+      );
+
       const [newChat] = await targetTenantDb
         .insert(chat)
         .values({
@@ -139,6 +146,7 @@ export class CrossOrgMirrorService {
           messageSource: "internal",
           initiatorAgentId: null,
           assignedTo: null,
+          departmentId: defaultDepartmentId,
           status: "pending",
           createdAt: now,
           updatedAt: now,
@@ -310,6 +318,12 @@ export class CrossOrgMirrorService {
 
     // Se não encontrar chat ativo, criar nova sessão
     if (!mirroredChat) {
+      // Buscar departamento padrão da org target
+      const defaultDepartmentId = await getDefaultDepartment(
+        targetTenantDb,
+        targetOrgId,
+      );
+
       const [newChat] = await targetTenantDb
         .insert(chat)
         .values({
@@ -318,6 +332,7 @@ export class CrossOrgMirrorService {
           messageSource: "internal",
           status: "pending",
           assignedTo: null,
+          departmentId: defaultDepartmentId,
           unreadCount: 0,
           totalMessages: 0,
           createdAt: now,

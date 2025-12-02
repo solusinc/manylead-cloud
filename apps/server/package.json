@@ -16,6 +16,7 @@
     "@hono/zod-validator": "^0.2.2",
     "@manylead/auth": "workspace:*",
     "@manylead/clients": "workspace:*",
+    "@manylead/core-services": "workspace:*",
     "@manylead/db": "workspace:*",
     "@manylead/error": "workspace:*",
     "@manylead/evolution-api-client": "workspace:*",

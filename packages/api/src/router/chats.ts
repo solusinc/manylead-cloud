@@ -27,14 +27,15 @@ import {
   ownerProcedure,
   tenantManager,
 } from "../trpc";
+import { getDefaultDepartment } from "@manylead/core-services";
 import {
   ChatPermissionsService,
   ChatParticipantService,
   getChatService,
   ChatCrossOrgService,
   getChatQueryBuilderService,
-} from "../services/chat";
-import type { ChatContext } from "../services/chat";
+} from "@manylead/core-services/chat";
+import type { ChatContext } from "@manylead/core-services/chat";
 
 /**
  * Chats Router
@@ -213,6 +214,11 @@ export const chatsRouter = createTRPCRouter({
 
       const now = new Date();
 
+      // Se departmentId não foi fornecido, usar o padrão
+      const finalDepartmentId =
+        input.departmentId ??
+        (await getDefaultDepartment(ctx.tenantDb, organizationId));
+
       // Drizzle gera ID automaticamente
       const [newChat] = await ctx.tenantDb
         .insert(chat)
@@ -222,7 +228,7 @@ export const chatsRouter = createTRPCRouter({
           channelId: input.channelId,
           messageSource: input.messageSource,
           assignedTo: input.assignedTo,
-          departmentId: input.departmentId,
+          departmentId: finalDepartmentId,
           initiatorAgentId: input.initiatorAgentId,
           status: "open",
           createdAt: now,
@@ -378,6 +384,13 @@ export const chatsRouter = createTRPCRouter({
       // 6. Criar novo chat cross-org NO BANCO DA SOURCE
       const currentAgent = ctx.agent;
       const now = new Date();
+
+      // Buscar departamento padrão da org de origem
+      const sourceDepartmentId = await getDefaultDepartment(
+        sourceTenantDb,
+        sourceOrganizationId,
+      );
+
       const [newChat] = await sourceTenantDb
         .insert(chat)
         .values({
@@ -387,6 +400,7 @@ export const chatsRouter = createTRPCRouter({
           messageSource: "internal",
           initiatorAgentId: currentAgent.id,
           assignedTo: currentAgent.id, // Auto-atribuir para quem criou
+          departmentId: sourceDepartmentId,
           status: "open",
           createdAt: now,
           updatedAt: now,
