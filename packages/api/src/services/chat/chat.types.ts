@@ -104,6 +104,7 @@ export interface ChatListFilters {
   unreadOnly?: boolean;
   tagIds?: string[];
   endingIds?: string[];
+  isArchived?: boolean;
   limit: number;
   offset: number;
 }

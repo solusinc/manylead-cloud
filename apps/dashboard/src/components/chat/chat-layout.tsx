@@ -194,6 +194,11 @@ function ChatLayoutInner({
         refetchType: "active",
       });
 
+      // Invalidate archived count to update badge
+      void queryClient.invalidateQueries({
+        queryKey: [["chats", "getArchivedCount"]],
+      });
+
       // Invalidate messages to fetch system messages (transfer, assignment, etc)
       void queryClient.invalidateQueries({
         queryKey: [["messages"]],

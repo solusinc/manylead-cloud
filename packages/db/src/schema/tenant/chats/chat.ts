@@ -85,6 +85,7 @@ export const chat = pgTable(
 
     isArchived: boolean("is_archived").notNull().default(false),
     isPinned: boolean("is_pinned").notNull().default(false),
+    pinnedAt: timestamp("pinned_at"),
 
     snoozedUntil: timestamp("snoozed_until"),
     // Quando status=snoozed, data/hora para reativar automaticamente

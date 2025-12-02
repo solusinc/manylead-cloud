@@ -1,19 +1,26 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 
-import Link from "next/link";
 import Image from "next/image";
-import { format, isToday, isYesterday, isThisWeek } from "date-fns";
+import Link from "next/link";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { format, isThisWeek, isToday, isYesterday } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Clock, User } from "lucide-react";
+import { Archive, ChevronDown, Clock, Pin, User } from "lucide-react";
 import { FaUser, FaWhatsapp } from "react-icons/fa";
+import { toast } from "sonner";
 
 import type { Tag } from "@manylead/db";
 import { cn } from "@manylead/ui";
 import { Avatar, AvatarFallback } from "@manylead/ui/avatar";
 import { Badge } from "@manylead/ui/badge";
-import { useDebouncedValue } from "~/hooks/use-debounced-value";
+import { Button } from "@manylead/ui/button";
+
 import type { MessageStatus } from "../message/message-status-icon";
+import { QuickActions } from "~/components/dropdowns/quick-actions";
+import { useDebouncedValue } from "~/hooks/use-debounced-value";
+import { useTRPC } from "~/lib/trpc/react";
+import { useChatViewStore } from "~/stores/use-chat-view-store";
 import { ChatSidebarItemLastMessage } from "./chat-sidebar-item-last-message";
 
 // Calcula se o texto deve ser branco ou preto baseado na luminosidade do fundo
@@ -30,6 +37,9 @@ function getContrastTextColor(hexColor: string): string {
 interface ChatSidebarItemProps {
   chat: {
     id: string;
+    createdAt: Date;
+    isPinned: boolean;
+    isArchived: boolean;
     contact: {
       name: string;
       avatar: string | null;
@@ -38,7 +48,13 @@ interface ChatSidebarItemProps {
     lastMessageAt: Date;
     lastMessageStatus?: "pending" | "sent" | "delivered" | "read" | "failed";
     lastMessageSender?: "agent" | "contact" | "system";
-    lastMessageType?: "text" | "image" | "video" | "audio" | "document" | "system";
+    lastMessageType?:
+      | "text"
+      | "image"
+      | "video"
+      | "audio"
+      | "document"
+      | "system";
     lastMessageIsDeleted: boolean;
     unreadCount: number;
     status: "open" | "closed" | "pending";
@@ -65,6 +81,50 @@ export function ChatSidebarItem({
 }: ChatSidebarItemProps & React.ComponentProps<"a">) {
   const isClosed = chat.status === "closed";
   const isPending = chat.status === "pending";
+  const trpc = useTRPC();
+  const queryClient = useQueryClient();
+  const view = useChatViewStore((state) => state.view);
+
+  const togglePinMutation = useMutation(
+    trpc.chats.togglePin.mutationOptions({
+      onSuccess: () => {
+        void queryClient.invalidateQueries({ queryKey: [["chats"]] });
+      },
+      onError: (error) => {
+        toast.error(error.message || "Erro ao fixar conversa");
+      },
+    }),
+  );
+
+  const toggleArchiveMutation = useMutation(
+    trpc.chats.toggleArchive.mutationOptions({
+      onSuccess: () => {
+        void queryClient.invalidateQueries({ queryKey: [["chats"]] });
+        void queryClient.invalidateQueries({
+          queryKey: [["chats", "getArchivedCount"]],
+        });
+      },
+      onError: (error) => {
+        toast.error(error.message || "Erro ao arquivar conversa");
+      },
+    }),
+  );
+
+  const handleTogglePin = () => {
+    togglePinMutation.mutate({
+      id: chat.id,
+      createdAt: chat.createdAt,
+      isPinned: !chat.isPinned,
+    });
+  };
+
+  const handleToggleArchive = () => {
+    toggleArchiveMutation.mutate({
+      id: chat.id,
+      createdAt: chat.createdAt,
+      isArchived: !chat.isArchived,
+    });
+  };
 
   return (
     <Link
@@ -72,7 +132,7 @@ export function ChatSidebarItem({
       className={cn(
         "group hover:bg-accent/50 relative flex h-24 cursor-pointer items-start gap-3 border-b p-4 transition-colors",
         isActive && "bg-accent",
-        isClosed && "grayscale opacity-60",
+        isClosed && "opacity-60 grayscale",
         className,
       )}
       {...props}
@@ -102,20 +162,65 @@ export function ChatSidebarItem({
         />
       </div>
 
-      {/* Hover info - absolute no canto inferior direito (não exibe em chats finalizados) */}
+      {/* Info do pin/agente/actions - absolute no canto inferior direito */}
       {!isClosed && (
-        <div className="absolute bottom-1 right-2 flex items-center gap-1 text-[10px] text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
-          {isPending || !chat.assignedAgentName ? (
-            <>
-              <Clock className="h-3 w-3" />
-              <span>Aguardando atendimento</span>
-            </>
-          ) : (
-            <>
-              <User className="h-3 w-3" />
-              <span>{chat.assignedAgentName}</span>
-            </>
-          )}
+        <div className="text-muted-foreground absolute right-2 bottom-1 flex items-center gap-1.5 text-[10px]">
+          {/* Agent info - só visível no hover */}
+          <span className="flex max-w-0 items-center gap-1 overflow-hidden whitespace-nowrap opacity-0 transition-all group-hover:max-w-[200px] group-hover:opacity-100">
+            {isPending || !chat.assignedAgentName ? (
+              <>
+                <Clock className="h-3 w-3" />
+                <span>Aguardando</span>
+              </>
+            ) : (
+              <>
+                <User className="h-3 w-3" />
+                <span>{chat.assignedAgentName}</span>
+              </>
+            )}
+          </span>
+
+          {/* Pin icon - sempre visível se fixado */}
+          {chat.isPinned && <Pin className="text-primary h-3 w-3" />}
+
+          {/* Actions dropdown - só visível no hover */}
+          <div
+            className="max-w-0 overflow-hidden opacity-0 transition-all group-hover:max-w-6 group-hover:opacity-100"
+            onClick={(e) => e.preventDefault()}
+          >
+            <QuickActions
+              align="end"
+              side="bottom"
+              actions={[
+                ...(view !== "archived"
+                  ? [
+                      {
+                        id: "pin",
+                        label: chat.isPinned ? "Desafixar" : "Fixar",
+                        icon: Pin,
+                        variant: "default" as const,
+                        onClick: handleTogglePin,
+                      },
+                    ]
+                  : []),
+                {
+                  id: "archive",
+                  label: chat.isArchived ? "Desarquivar" : "Arquivar",
+                  icon: Archive,
+                  variant: "default" as const,
+                  onClick: handleToggleArchive,
+                },
+              ]}
+            >
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-5 w-5 p-0 hover:bg-transparent"
+              >
+                <ChevronDown className="h-3 w-3" />
+              </Button>
+            </QuickActions>
+          </div>
         </div>
       )}
     </Link>
@@ -146,7 +251,7 @@ export function ChatSidebarItemAvatar({
       </Avatar>
 
       {/* Badge no canto inferior esquerdo */}
-      <div className="absolute -bottom-0.5 -left-0.5 flex h-5 w-5 items-center justify-center rounded-full border-2 border-background bg-background">
+      <div className="border-background bg-background absolute -bottom-0.5 -left-0.5 flex h-5 w-5 items-center justify-center rounded-full border-2">
         {messageSource === "whatsapp" ? (
           <FaWhatsapp className="h-3 w-3 text-green-500" />
         ) : (
@@ -216,7 +321,8 @@ export function ChatSidebarItemContent({
 
   // Nunca mostrar badge se chat está ativo E está assigned ao usuário (sendo visualizado)
   // Mesmo que backend ainda não tenha zerado o unreadCount
-  const shouldShowBadge = debouncedUnreadCount > 0 && !(isActive && isAssignedToMe);
+  const shouldShowBadge =
+    debouncedUnreadCount > 0 && !(isActive && isAssignedToMe);
 
   return (
     <div className={cn("space-y-1", className)}>
@@ -235,7 +341,9 @@ export function ChatSidebarItemContent({
           messageType={messageType}
           message={message}
         />
-        {shouldShowBadge && <ChatSidebarItemBadge count={debouncedUnreadCount} />}
+        {shouldShowBadge && (
+          <ChatSidebarItemBadge count={debouncedUnreadCount} />
+        )}
       </div>
 
       {tags && tags.length > 0 && (

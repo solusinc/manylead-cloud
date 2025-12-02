@@ -12,6 +12,7 @@ import {
   eq,
   inArray,
   message,
+  ne,
   or,
   organization,
   sql,
@@ -60,6 +61,7 @@ export const chatsRouter = createTRPCRouter({
         unreadOnly: z.boolean().optional(),
         tagIds: z.array(z.string().uuid()).optional(),
         endingIds: z.array(z.string().uuid()).optional(),
+        isArchived: z.boolean().optional(),
         limit: z.number().min(1).max(100).default(50),
         offset: z.number().min(0).default(0),
       }),
@@ -520,6 +522,169 @@ export const chatsRouter = createTRPCRouter({
       const updated = await chatService.update(chatContext, id, createdAt, data);
 
       return updated;
+    }),
+
+  /**
+   * Toggle pin status (with max 3 pins validation)
+   */
+  togglePin: memberProcedure
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        createdAt: z.date(),
+        isPinned: z.boolean(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const organizationId = ctx.session.session.activeOrganizationId;
+      if (!organizationId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Nenhuma organização ativa",
+        });
+      }
+
+      // If trying to pin, check max 3 limit
+      if (input.isPinned) {
+        const [result] = await ctx.tenantDb
+          .select({ count: count() })
+          .from(chat)
+          .where(
+            and(
+              eq(chat.organizationId, organizationId),
+              eq(chat.isPinned, true),
+              // Exclude current chat from count
+              or(
+                ne(chat.id, input.id),
+                ne(chat.createdAt, input.createdAt)
+              )
+            )
+          );
+
+        const pinnedCount = result?.count ?? 0;
+        if (pinnedCount >= 3) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Você só pode fixar até 3 conversas",
+          });
+        }
+      }
+
+      // Use existing update flow
+      const permissionsService = new ChatPermissionsService(ctx.tenantDb);
+      const currentAgent = await permissionsService.getCurrentAgent(ctx.session.user.id);
+
+      const chatContext: ChatContext = {
+        organizationId,
+        tenantDb: ctx.tenantDb,
+        agentId: currentAgent.id,
+        userId: ctx.session.user.id,
+      };
+
+      const chatService = getChatService({
+        redisUrl: env.REDIS_URL,
+        getTenantConnection: tenantManager.getConnection.bind(tenantManager),
+        getCatalogDb: () => ctx.db,
+      });
+
+      const currentChat = await chatService.getById(chatContext, input.id, input.createdAt);
+
+      // Verify permissions
+      permissionsService.requireModifyPermission(currentAgent, currentChat);
+
+      return await chatService.update(
+        chatContext,
+        input.id,
+        input.createdAt,
+        {
+          isPinned: input.isPinned,
+          pinnedAt: input.isPinned ? new Date() : null,
+        }
+      );
+    }),
+
+  /**
+   * Toggle archive status (unpins when archiving)
+   */
+  toggleArchive: memberProcedure
+    .input(
+      z.object({
+        id: z.string().uuid(),
+        createdAt: z.date(),
+        isArchived: z.boolean(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const organizationId = ctx.session.session.activeOrganizationId;
+      if (!organizationId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Nenhuma organização ativa",
+        });
+      }
+
+      const permissionsService = new ChatPermissionsService(ctx.tenantDb);
+      const currentAgent = await permissionsService.getCurrentAgent(ctx.session.user.id);
+
+      const chatContext: ChatContext = {
+        organizationId,
+        tenantDb: ctx.tenantDb,
+        agentId: currentAgent.id,
+        userId: ctx.session.user.id,
+      };
+
+      const chatService = getChatService({
+        redisUrl: env.REDIS_URL,
+        getTenantConnection: tenantManager.getConnection.bind(tenantManager),
+        getCatalogDb: () => ctx.db,
+      });
+
+      const currentChat = await chatService.getById(chatContext, input.id, input.createdAt);
+
+      // Verify permissions
+      permissionsService.requireModifyPermission(currentAgent, currentChat);
+
+      // When archiving, unpin automatically
+      const updateData: { isArchived: boolean; isPinned?: boolean; pinnedAt?: Date | null } = {
+        isArchived: input.isArchived,
+      };
+      if (input.isArchived) {
+        updateData.isPinned = false;
+        updateData.pinnedAt = null;
+      }
+
+      return await chatService.update(
+        chatContext,
+        input.id,
+        input.createdAt,
+        updateData
+      );
+    }),
+
+  /**
+   * Get count of archived chats
+   */
+  getArchivedCount: memberProcedure
+    .query(async ({ ctx }) => {
+      const organizationId = ctx.session.session.activeOrganizationId;
+      if (!organizationId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Nenhuma organização ativa",
+        });
+      }
+
+      const [result] = await ctx.tenantDb
+        .select({ count: count() })
+        .from(chat)
+        .where(
+          and(
+            eq(chat.organizationId, organizationId),
+            eq(chat.isArchived, true)
+          )
+        );
+
+      return result?.count ?? 0;
     }),
 
   /**

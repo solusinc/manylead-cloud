@@ -11,6 +11,7 @@ import { useTRPC } from "~/lib/trpc/react";
 import { useChatSocketContext } from "~/components/providers/chat-socket-provider";
 import { useChatSearchStore, useIsSearchActive } from "~/stores/use-chat-search-store";
 import { useChatFiltersStore } from "~/stores/use-chat-filters-store";
+import { useChatViewStore } from "~/stores/use-chat-view-store";
 import { useCurrentAgent } from "~/hooks/chat/use-current-agent";
 
 type FilterType = "all" | "pending" | "open" | "mine";
@@ -31,6 +32,7 @@ export function ChatSidebarList({
   const searchTerm = useChatSearchStore((state) => state.searchTerm);
   const showUnreadOnly = useChatFiltersStore((state) => state.showUnreadOnly);
   const headerFilters = useChatFiltersStore((state) => state.headerFilters);
+  const view = useChatViewStore((state) => state.view);
 
   // Estado para rastrear quem está digitando (chatId -> true/false)
   const [typingChats, setTypingChats] = useState<Set<string>>(new Set());
@@ -43,23 +45,27 @@ export function ChatSidebarList({
 
   // Determinar os parâmetros do filtro baseado em headerFilters (prioridade) ou activeFilter
   const filterParams = (() => {
+    const baseFilters = {
+      isArchived: view === "archived",
+    };
+
     // PRIORIDADE: Se headerFilters.status está definido (não "all"), usar ele
     if (headerFilters.status !== "all") {
-      return { status: headerFilters.status };
+      return { ...baseFilters, status: headerFilters.status };
     }
 
     // Caso contrário, usar activeFilter dos tabs
     if (activeFilter === "pending") {
-      return { status: "pending" as const };
+      return { ...baseFilters, status: "pending" as const };
     }
     if (activeFilter === "open") {
-      return { status: "open" as const };
+      return { ...baseFilters, status: "open" as const };
     }
     if (activeFilter === "mine" && currentAgent?.id) {
-      return { assignedTo: currentAgent.id };
+      return { ...baseFilters, assignedTo: currentAgent.id };
     }
     // "all" ou default: sem filtros específicos
-    return {};
+    return baseFilters;
   })();
 
   // Buscar chats da API com filtros + busca
@@ -131,6 +137,9 @@ export function ChatSidebarList({
     () =>
       chatsData?.items.map((item) => ({
         id: item.chat.id,
+        createdAt: item.chat.createdAt,
+        isPinned: item.chat.isPinned,
+        isArchived: item.chat.isArchived,
         contact: {
           name: item.contact?.customName ?? item.contact?.name ?? "Sem nome",
           avatar: item.contact?.avatar ?? null,
@@ -213,40 +222,40 @@ export function ChatSidebarList({
       className={cn("h-full overflow-y-auto", className)}
       {...props}
     >
-      <div
-        style={{
-          height: `${virtualizer.getTotalSize()}px`,
-          width: "100%",
-          position: "relative",
-        }}
-      >
-        {virtualizer.getVirtualItems().map((virtualItem) => {
-          const chat = chats[virtualItem.index];
-          if (!chat) return null;
+        <div
+          style={{
+            height: `${virtualizer.getTotalSize()}px`,
+            width: "100%",
+            position: "relative",
+          }}
+        >
+          {virtualizer.getVirtualItems().map((virtualItem) => {
+            const chat = chats[virtualItem.index];
+            if (!chat) return null;
 
-          return (
-            <div
-              key={virtualItem.key}
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "100%",
-                height: `${virtualItem.size}px`,
-                transform: `translateY(${virtualItem.start}px)`,
-              }}
-            >
-              <ChatSidebarItem
-                chat={chat}
-                isActive={chat.id === activeChatId}
-                isTyping={typingChats.has(chat.id)}
-                isRecording={recordingChats.has(chat.id)}
-                currentAgentId={currentAgent?.id}
-              />
-            </div>
-          );
-        })}
-      </div>
+            return (
+              <div
+                key={virtualItem.key}
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  width: "100%",
+                  height: `${virtualItem.size}px`,
+                  transform: `translateY(${virtualItem.start}px)`,
+                }}
+              >
+                <ChatSidebarItem
+                  chat={chat}
+                  isActive={chat.id === activeChatId}
+                  isTyping={typingChats.has(chat.id)}
+                  isRecording={recordingChats.has(chat.id)}
+                  currentAgentId={currentAgent?.id}
+                />
+              </div>
+            );
+          })}
+        </div>
     </div>
   );
 }

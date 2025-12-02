@@ -17,6 +17,7 @@ import {
   isNull,
   ne,
   desc,
+  asc,
   count,
   sql
 
@@ -234,6 +235,11 @@ export class ChatQueryBuilderService {
       conditions.push(inArray(chat.endingId, filters.endingIds));
     }
 
+    // 16. Filtro de isArchived
+    if (filters.isArchived !== undefined) {
+      conditions.push(eq(chat.isArchived, filters.isArchived));
+    }
+
     return conditions;
   }
 
@@ -292,7 +298,12 @@ export class ChatQueryBuilderService {
     const result = await query
       .limit(filters.limit)
       .offset(filters.offset)
-      .orderBy(desc(chat.lastMessageAt));
+      .orderBy(
+        // When not viewing archived: show pinned first, ordered by when they were pinned
+        ...(filters.isArchived !== true ? [desc(chat.isPinned), asc(chat.pinnedAt)] : []),
+        // Then by last message time
+        desc(chat.lastMessageAt)
+      );
 
     // Cast role para o tipo correto
     return result.map((item) => ({
