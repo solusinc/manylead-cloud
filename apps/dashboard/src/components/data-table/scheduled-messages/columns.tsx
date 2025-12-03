@@ -1,13 +1,15 @@
 "use client";
 
 import type { ColumnDef } from "@tanstack/react-table";
-import { format } from "date-fns";
+import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { MessageSquare, StickyNote } from "lucide-react";
 
 import { Badge } from "@manylead/ui/badge";
+import { Checkbox } from "@manylead/ui/checkbox";
 
 import { DataTableColumnHeader } from "~/components/ui/data-table/data-table-column-header";
+import { DataTableRowActions } from "./data-table-row-actions";
 
 interface ScheduledMessageRow {
   scheduledMessage: {
@@ -20,6 +22,11 @@ interface ScheduledMessageRow {
   createdByAgent: {
     id: string;
   } | null;
+  createdByUser: {
+    id: string;
+    name: string | null;
+    email: string;
+  } | null;
   chat: {
     id: string;
   } | null;
@@ -31,51 +38,31 @@ interface ScheduledMessageRow {
 
 export const columns: ColumnDef<ScheduledMessageRow>[] = [
   {
-    id: "type",
-    header: "Tipo",
-    cell: ({ row }) => {
-      const isMessage = row.original.scheduledMessage.contentType === "message";
-      return (
-        <div className="flex items-center gap-2">
-          {isMessage ? (
-            <>
-              <MessageSquare className="h-4 w-4 text-blue-500" />
-              <span className="text-sm">Mensagem</span>
-            </>
-          ) : (
-            <>
-              <StickyNote className="h-4 w-4 text-amber-500" />
-              <span className="text-sm">Nota</span>
-            </>
-          )}
-        </div>
-      );
-    },
-    enableSorting: false,
-  },
-  {
-    accessorKey: "scheduledAt",
-    header: ({ column }) => (
-      <DataTableColumnHeader column={column} title="Agendado para" />
+    id: "select",
+    header: ({ table }) => (
+      <Checkbox
+        checked={
+          table.getIsAllPageRowsSelected() ||
+          (table.getIsSomePageRowsSelected() && "indeterminate")
+        }
+        onCheckedChange={(value) => table.toggleAllPageRowsSelected(!!value)}
+        aria-label="Selecionar todos"
+      />
     ),
-    cell: ({ row }) => {
-      const date = new Date(row.original.scheduledMessage.scheduledAt);
-      return (
-        <div className="flex flex-col">
-          <span className="font-medium">
-            {format(date, "dd/MM/yyyy", { locale: ptBR })}
-          </span>
-          <span className="text-sm text-muted-foreground">
-            {format(date, "HH:mm", { locale: ptBR })}
-          </span>
-        </div>
-      );
-    },
-    enableSorting: true,
+    cell: ({ row }) => (
+      <Checkbox
+        checked={row.getIsSelected()}
+        onCheckedChange={(value) => row.toggleSelected(!!value)}
+        aria-label="Selecionar linha"
+      />
+    ),
+    enableSorting: false,
+    enableHiding: false,
   },
   {
-    id: "chat",
-    header: "Chat / Contato",
+    id: "contact",
+    accessorFn: (row) => row.contact?.name ?? "",
+    header: "Enviar para",
     cell: ({ row }) => {
       const contact = row.original.contact;
       const chat = row.original.chat;
@@ -93,29 +80,72 @@ export const columns: ColumnDef<ScheduledMessageRow>[] = [
     enableSorting: false,
   },
   {
-    id: "content",
-    header: "Prévia do Conteúdo",
+    id: "type",
+    accessorFn: (row) => row.scheduledMessage.contentType,
+    header: "Tipo",
     cell: ({ row }) => {
-      const content = row.original.scheduledMessage.content;
+      const isMessage = row.original.scheduledMessage.contentType === "message";
       return (
-        <div className="max-w-[300px] truncate text-sm" title={content}>
-          {content}
+        <div className="flex items-center gap-2">
+          {isMessage ? (
+            <>
+              <MessageSquare className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm">Mensagem</span>
+            </>
+          ) : (
+            <>
+              <StickyNote className="h-4 w-4 text-muted-foreground" />
+              <span className="text-sm">Nota</span>
+            </>
+          )}
+        </div>
+      );
+    },
+    filterFn: (row, _, value: string[]) => {
+      return value.includes(row.original.scheduledMessage.contentType);
+    },
+    enableSorting: false,
+  },
+  {
+    id: "scheduledAt",
+    accessorFn: (row) => new Date(row.scheduledMessage.scheduledAt).getTime(),
+    header: ({ column }) => (
+      <DataTableColumnHeader column={column} title="Tempo para enviar" />
+    ),
+    cell: ({ row }) => {
+      const date = new Date(row.original.scheduledMessage.scheduledAt);
+
+      return (
+        <div className="text-sm">
+          {formatDistanceToNow(date, { addSuffix: true, locale: ptBR })}
+        </div>
+      );
+    },
+    enableSorting: true,
+    sortingFn: "basic",
+  },
+  {
+    id: "createdBy",
+    accessorFn: (row) => row.createdByUser?.name ?? row.createdByUser?.email,
+    header: "Agendado por",
+    cell: ({ row }) => {
+      const user = row.original.createdByUser;
+
+      if (!user) {
+        return <span className="text-muted-foreground">N/A</span>;
+      }
+
+      return (
+        <div className="max-w-[150px] truncate">
+          {user.name ?? user.email}
         </div>
       );
     },
     enableSorting: false,
   },
   {
-    id: "createdBy",
-    header: "Criado por",
-    cell: () => {
-      // Agent não tem campo name, precisa vir do user
-      return <div className="text-sm">Agente</div>;
-    },
-    enableSorting: false,
-  },
-  {
-    accessorKey: "status",
+    id: "status",
+    accessorFn: (row) => row.scheduledMessage.status,
     header: "Status",
     cell: ({ row }) => {
       const status = row.original.scheduledMessage.status;
@@ -132,6 +162,7 @@ export const columns: ColumnDef<ScheduledMessageRow>[] = [
         sent: { label: "Enviado", variant: "outline" },
         failed: { label: "Falhou", variant: "destructive" },
         cancelled: { label: "Cancelado", variant: "outline" },
+        expired: { label: "Expirado", variant: "outline" },
       };
 
       const config = statusConfig[status] ?? statusConfig.pending;
@@ -146,5 +177,10 @@ export const columns: ColumnDef<ScheduledMessageRow>[] = [
       return value.includes(row.original.scheduledMessage.status);
     },
     enableSorting: true,
+  },
+  {
+    id: "actions",
+    cell: ({ row }) => <DataTableRowActions row={row} />,
+    enableHiding: false,
   },
 ];

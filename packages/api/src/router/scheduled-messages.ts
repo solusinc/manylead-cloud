@@ -13,6 +13,7 @@ import {
   inArray,
   lte,
   scheduledMessage,
+  user,
 } from "@manylead/db";
 import { createQueue } from "@manylead/clients/queue";
 import { getRedisClient } from "@manylead/clients/redis";
@@ -452,6 +453,73 @@ export const scheduledMessagesRouter = createTRPCRouter({
     }),
 
   /**
+   * Cancelar múltiplos agendamentos de uma vez
+   */
+  cancelMany: memberProcedure
+    .input(z.object({ ids: z.array(z.string().uuid()).min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      // Buscar agendamentos existentes
+      const existing = await ctx.tenantDb
+        .select()
+        .from(scheduledMessage)
+        .where(inArray(scheduledMessage.id, input.ids));
+
+      if (existing.length === 0) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Nenhum agendamento encontrado",
+        });
+      }
+
+      // Filtrar apenas os pending
+      const pendingMessages = existing.filter((m) => m.status === "pending");
+
+      if (pendingMessages.length === 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Nenhum agendamento pendente selecionado",
+        });
+      }
+
+      // Buscar agent atual
+      const [currentAgent] = await ctx.tenantDb
+        .select()
+        .from(agent)
+        .where(eq(agent.userId, ctx.session.user.id))
+        .limit(1);
+
+      // Cancelar todos no DB
+      await ctx.tenantDb
+        .update(scheduledMessage)
+        .set({
+          status: "cancelled",
+          cancelledAt: new Date(),
+          cancelledByAgentId: currentAgent?.id,
+          cancellationReason: "manual",
+          updatedAt: new Date(),
+        })
+        .where(inArray(scheduledMessage.id, pendingMessages.map((m) => m.id)));
+
+      // Remover jobs do BullMQ
+      const connection = getRedisClient(env.REDIS_URL);
+      const queue = createQueue({
+        name: "scheduled-message",
+        connection,
+      });
+
+      for (const msg of pendingMessages) {
+        if (msg.jobId) {
+          const job = await queue.getJob(msg.jobId);
+          if (job) {
+            await job.remove();
+          }
+        }
+      }
+
+      return { success: true, cancelled: pendingMessages.length };
+    }),
+
+  /**
    * Listar agendamentos por organização (página global /schedules)
    */
   listByOrganization: memberProcedure
@@ -517,8 +585,8 @@ export const scheduledMessagesRouter = createTRPCRouter({
       // Calculate pagination
       const offset = (input.page - 1) * input.pageSize;
 
-      // Execute query with joins
-      const items = await ctx.tenantDb
+      // Execute query with joins (tenant DB)
+      const rawItems = await ctx.tenantDb
         .select({
           scheduledMessage,
           createdByAgent: agent,
@@ -543,6 +611,33 @@ export const scheduledMessagesRouter = createTRPCRouter({
         )
         .limit(input.pageSize)
         .offset(offset);
+
+      // Buscar users do catalog DB
+      const userIds = rawItems
+        .map((item) => item.createdByAgent?.userId)
+        .filter((id): id is string => !!id);
+
+      const users =
+        userIds.length > 0
+          ? await ctx.db
+              .select({
+                id: user.id,
+                name: user.name,
+                email: user.email,
+              })
+              .from(user)
+              .where(inArray(user.id, userIds))
+          : [];
+
+      const usersMap = new Map(users.map((u) => [u.id, u]));
+
+      // Merge user data
+      const items = rawItems.map((item) => ({
+        ...item,
+        createdByUser: item.createdByAgent?.userId
+          ? usersMap.get(item.createdByAgent.userId) ?? null
+          : null,
+      }));
 
       // Get total count for pagination
       const [countResult] = await ctx.tenantDb

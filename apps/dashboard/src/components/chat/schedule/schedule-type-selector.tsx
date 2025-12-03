@@ -1,4 +1,4 @@
-import { MessageSquare, StickyNote } from "lucide-react";
+import { ChevronRight, MessageSquare, StickyNote } from "lucide-react";
 import {
   ActionCard,
   ActionCardDescription,
@@ -21,16 +21,19 @@ export function ScheduleTypeSelector({ onSelect }: ScheduleTypeSelectorProps) {
           onClick={() => onSelect("message")}
         >
           <ActionCardHeader>
-            <div className="flex gap-3">
-              <div className="flex items-center justify-center">
-                <MessageSquare className="h-5 w-5 shrink-0 text-muted-foreground" />
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex gap-3">
+                <div className="flex items-center justify-center">
+                  <MessageSquare className="h-5 w-5 shrink-0 text-muted-foreground" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <ActionCardTitle>Agendar mensagem</ActionCardTitle>
+                  <ActionCardDescription>
+                    Enviar uma mensagem para o contato no horário agendado
+                  </ActionCardDescription>
+                </div>
               </div>
-              <div className="flex flex-col gap-1">
-                <ActionCardTitle>Agendar mensagem</ActionCardTitle>
-                <ActionCardDescription>
-                  Enviar uma mensagem para o contato no horário agendado
-                </ActionCardDescription>
-              </div>
+              <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
             </div>
           </ActionCardHeader>
         </ActionCard>
@@ -41,16 +44,19 @@ export function ScheduleTypeSelector({ onSelect }: ScheduleTypeSelectorProps) {
           onClick={() => onSelect("comment")}
         >
           <ActionCardHeader>
-            <div className="flex gap-3">
-              <div className="flex items-center justify-center">
-                <StickyNote className="h-5 w-5 shrink-0 text-muted-foreground" />
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex gap-3">
+                <div className="flex items-center justify-center">
+                  <StickyNote className="h-5 w-5 shrink-0 text-muted-foreground" />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <ActionCardTitle>Agendar uma nota</ActionCardTitle>
+                  <ActionCardDescription>
+                    Criar uma nota interna visível apenas para a equipe
+                  </ActionCardDescription>
+                </div>
               </div>
-              <div className="flex flex-col gap-1">
-                <ActionCardTitle>Agendar uma nota</ActionCardTitle>
-                <ActionCardDescription>
-                  Criar uma nota interna visível apenas para a equipe
-                </ActionCardDescription>
-              </div>
+              <ChevronRight className="h-5 w-5 shrink-0 text-muted-foreground" />
             </div>
           </ActionCardHeader>
         </ActionCard>

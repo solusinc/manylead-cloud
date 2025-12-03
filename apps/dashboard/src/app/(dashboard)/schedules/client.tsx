@@ -16,6 +16,8 @@ import { AppSidebarTrigger } from "~/components/nav/app-sidebar";
 import { NavBreadcrumb } from "~/components/nav/nav-breadcrumb";
 import { CalendarView } from "~/components/schedules/calendar-view";
 import { columns } from "~/components/data-table/scheduled-messages/columns";
+import { ScheduledMessagesDataTableToolbar } from "~/components/data-table/scheduled-messages/data-table-toolbar";
+import { ScheduledMessagesDataTableActionBar } from "~/components/data-table/scheduled-messages/data-table-action-bar";
 import { Section, SectionGroup } from "~/components/content/section";
 import { DataTable } from "~/components/ui/data-table/data-table";
 import { DataTablePaginationSimple } from "~/components/ui/data-table/data-table-pagination";
@@ -32,18 +34,27 @@ export function Client() {
   ]);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
 
-  // Fetch scheduled messages
-  const { data, isLoading } = useQuery(
+  const currentView = searchParams.view;
+
+  // Query para calendário - apenas pendentes
+  const { data: calendarData, isLoading: isLoadingCalendar } = useQuery(
     trpc.scheduledMessages.listByOrganization.queryOptions({
-      status: searchParams.status ?? undefined,
+      status: "pending",
+      page: 1,
+      pageSize: 100, // Máximo permitido pelo backend
+    }),
+  );
+
+  // Query para lista - com filtros (padrão: apenas pendentes)
+  const { data: listData, isLoading: isLoadingList } = useQuery(
+    trpc.scheduledMessages.listByOrganization.queryOptions({
+      status: searchParams.status ?? "pending",
       dateFrom: searchParams.dateFrom ?? undefined,
       dateTo: searchParams.dateTo ?? undefined,
       page: searchParams.page,
       pageSize: 50,
     }),
   );
-
-  const currentView = searchParams.view;
 
   return (
     <>
@@ -59,7 +70,7 @@ export function Client() {
 
       {/* Content */}
       <main className="flex-1 overflow-auto">
-        <SectionGroup>
+        <SectionGroup className="max-w-7xl">
           <Section>
             <Tabs
               value={currentView}
@@ -81,16 +92,18 @@ export function Client() {
               </TabsList>
 
               <TabsContent value="calendar" className="mt-0">
-                <CalendarView data={data} isLoading={isLoading} />
+                <CalendarView data={calendarData} isLoading={isLoadingCalendar} />
               </TabsContent>
 
-              <TabsContent value="list" className="mt-0">
-                {isLoading ? (
+              <TabsContent value="list" className="mt-2">
+                {isLoadingList ? (
                   <DataTableSkeleton rows={10} />
-                ) : data?.items ? (
+                ) : listData?.items ? (
                   <DataTable
                     columns={columns}
-                    data={data.items}
+                    data={listData.items}
+                    toolbarComponent={ScheduledMessagesDataTableToolbar}
+                    actionBar={ScheduledMessagesDataTableActionBar}
                     paginationComponent={DataTablePaginationSimple}
                     columnFilters={columnFilters}
                     setColumnFilters={setColumnFilters}

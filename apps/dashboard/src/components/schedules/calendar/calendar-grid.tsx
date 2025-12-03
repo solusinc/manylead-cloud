@@ -13,11 +13,12 @@ import { CalendarDay } from "./calendar-day";
 interface CalendarGridProps {
   currentMonth: Date;
   messagesByDate: Map<string, ScheduledMessageItem[]>;
+  onDayClick?: (date: Date, contentType: "message" | "comment") => void;
 }
 
 const WEEK_DAYS = ["dom", "seg", "ter", "qua", "qui", "sex", "sab"];
 
-export function CalendarGrid({ currentMonth, messagesByDate }: CalendarGridProps) {
+export function CalendarGrid({ currentMonth, messagesByDate, onDayClick }: CalendarGridProps) {
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
   const calendarStart = startOfWeek(monthStart, { locale: ptBR });
@@ -50,6 +51,7 @@ export function CalendarGrid({ currentMonth, messagesByDate }: CalendarGridProps
               date={day}
               currentMonth={currentMonth}
               messages={messages}
+              onDayClick={onDayClick}
             />
           );
         })}

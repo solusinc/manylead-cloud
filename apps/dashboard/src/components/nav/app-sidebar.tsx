@@ -4,6 +4,7 @@ import * as React from "react";
 import {
   MessageSquare,
   Settings,
+  Calendar,
 } from "lucide-react";
 
 import {
@@ -35,6 +36,11 @@ const data = {
       name: "Chats",
       url: "/chats",
       icon: MessageSquare,
+    },
+    {
+      name: "Agendamentos",
+      url: "/schedules",
+      icon: Calendar,
     },
     {
       name: "Configurações",
