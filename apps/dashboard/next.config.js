@@ -17,7 +17,7 @@ const config = {
   ],
 
   /** Exclude server-only packages from client bundle */
-  serverExternalPackages: ["ioredis", "bullmq"],
+  serverExternalPackages: ["ioredis", "bullmq", "pino", "thread-stream"],
 
   /** We already do linting and typechecking as separate tasks in CI */
   typescript: { ignoreBuildErrors: true },
