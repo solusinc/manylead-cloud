@@ -20,6 +20,7 @@ import { useScheduledMessagesStats } from "./hooks";
 import { useScheduledMessageSocket } from "./hooks/use-scheduled-message-socket";
 import { ScheduleForm } from "./schedule-form";
 import { ScheduleList } from "./schedule-list";
+import { ScheduleMessageForm } from "./schedule-message-form";
 import { ScheduleTypeSelector } from "./schedule-type-selector";
 
 interface ScheduleSheetProps {
@@ -131,9 +132,15 @@ export function ScheduleSheet({ open, onOpenChange }: ScheduleSheetProps) {
             <TabsContent value="schedule" className="mt-0">
               {scheduleView === "selector" ? (
                 <ScheduleTypeSelector onSelect={handleTypeSelect} />
-              ) : selectedContentType ? (
+              ) : selectedContentType === "message" ? (
+                <ScheduleMessageForm
+                  onCancel={handleBackToSelector}
+                  onSuccess={handleSuccess}
+                  editingItem={editingItem}
+                />
+              ) : selectedContentType === "comment" ? (
                 <ScheduleForm
-                  contentType={selectedContentType}
+                  contentType="comment"
                   onCancel={handleBackToSelector}
                   onSuccess={handleSuccess}
                   editingItem={editingItem}

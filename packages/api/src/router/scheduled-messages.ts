@@ -12,6 +12,7 @@ import {
   gte,
   inArray,
   lte,
+  quickReply,
   scheduledMessage,
   user,
 } from "@manylead/db";
@@ -42,6 +43,7 @@ export const scheduledMessagesRouter = createTRPCRouter({
         cancelOnContactMessage: z.boolean().default(false),
         cancelOnAgentMessage: z.boolean().default(false),
         cancelOnChatClose: z.boolean().default(false),
+        quickReplyId: z.string().uuid().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -68,6 +70,39 @@ export const scheduledMessagesRouter = createTRPCRouter({
         });
       }
 
+      // Se quickReplyId foi fornecido, buscar e validar a quick reply
+      let quickReplyTitle: string | undefined;
+      if (input.quickReplyId) {
+        const [qr] = await ctx.tenantDb
+          .select()
+          .from(quickReply)
+          .where(
+            and(
+              eq(quickReply.id, input.quickReplyId),
+              eq(quickReply.organizationId, organizationId),
+              eq(quickReply.isActive, true),
+            ),
+          )
+          .limit(1);
+
+        if (!qr) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Resposta rápida não encontrada ou não está ativa",
+          });
+        }
+
+        // Verificar permissão de acesso à quick reply
+        if (qr.visibility === "private" && qr.createdBy !== ctx.session.user.id) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: "Você não tem permissão para usar esta resposta rápida",
+          });
+        }
+
+        quickReplyTitle = qr.title;
+      }
+
       // Criar agendamento no DB
       const [schedule] = await ctx.tenantDb
         .insert(scheduledMessage)
@@ -84,6 +119,8 @@ export const scheduledMessagesRouter = createTRPCRouter({
           cancelOnContactMessage: input.cancelOnContactMessage,
           cancelOnAgentMessage: input.cancelOnAgentMessage,
           cancelOnChatClose: input.cancelOnChatClose,
+          quickReplyId: input.quickReplyId,
+          quickReplyTitle,
           metadata: {
             history: [
               {
@@ -190,7 +227,7 @@ export const scheduledMessagesRouter = createTRPCRouter({
         .from(scheduledMessage)
         .leftJoin(agent, eq(scheduledMessage.createdByAgentId, agent.id))
         .where(and(...conditions))
-        .orderBy(desc(scheduledMessage.scheduledAt));
+        .orderBy(asc(scheduledMessage.scheduledAt));
 
       return items;
     }),
@@ -233,6 +270,7 @@ export const scheduledMessagesRouter = createTRPCRouter({
         cancelOnContactMessage: z.boolean().optional(),
         cancelOnAgentMessage: z.boolean().optional(),
         cancelOnChatClose: z.boolean().optional(),
+        quickReplyId: z.string().uuid().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -264,13 +302,70 @@ export const scheduledMessagesRouter = createTRPCRouter({
         .where(eq(agent.userId, ctx.session.user.id))
         .limit(1);
 
+      const organizationId = ctx.session.session.activeOrganizationId;
+
+      if (!organizationId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Nenhuma organização ativa",
+        });
+      }
+
+      // Se quickReplyId foi fornecido, buscar e validar a quick reply
+      let quickReplyTitle: string | undefined;
+      if (input.quickReplyId !== undefined) {
+        if (input.quickReplyId) {
+          const [qr] = await ctx.tenantDb
+            .select()
+            .from(quickReply)
+            .where(
+              and(
+                eq(quickReply.id, input.quickReplyId),
+                eq(quickReply.organizationId, organizationId),
+                eq(quickReply.isActive, true),
+              ),
+            )
+            .limit(1);
+
+          if (!qr) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "Resposta rápida não encontrada ou não está ativa",
+            });
+          }
+
+          // Verificar permissão de acesso à quick reply
+          if (qr.visibility === "private" && qr.createdBy !== ctx.session.user.id) {
+            throw new TRPCError({
+              code: "FORBIDDEN",
+              message: "Você não tem permissão para usar esta resposta rápida",
+            });
+          }
+
+          quickReplyTitle = qr.title;
+        }
+      }
+
       // Atualizar campos
       const updateData: Partial<typeof scheduledMessage.$inferInsert> = {
         updatedAt: new Date(),
       };
 
+      // Se for quick reply agendada, não permitir editar content manualmente
+      if (existing.quickReplyId && input.content !== undefined) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Não é possível editar o conteúdo de uma resposta rápida agendada. Altere a resposta rápida selecionada.",
+        });
+      }
+
       if (input.content !== undefined) {
         updateData.content = input.content;
+      }
+
+      if (input.quickReplyId !== undefined) {
+        updateData.quickReplyId = input.quickReplyId || undefined;
+        updateData.quickReplyTitle = quickReplyTitle;
       }
       if (input.scheduledAt !== undefined) {
         updateData.scheduledAt = input.scheduledAt;

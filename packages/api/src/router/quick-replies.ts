@@ -4,13 +4,16 @@ import { z } from "zod";
 import {
   agent,
   and,
+  count,
   db,
   desc,
   eq,
   ilike,
+  inArray,
   insertQuickReplySchema,
   or,
   quickReply,
+  scheduledMessage,
   selectQuickReplySchema,
   sql,
   updateQuickReplySchema,
@@ -361,6 +364,25 @@ export const quickRepliesRouter = createTRPCRouter({
         });
       }
 
+      // Verificar se existe agendamento pendente usando esta quick reply
+      const pendingSchedules = await tenantDb
+        .select()
+        .from(scheduledMessage)
+        .where(
+          and(
+            eq(scheduledMessage.organizationId, organizationId),
+            eq(scheduledMessage.quickReplyId, input.id),
+            eq(scheduledMessage.status, "pending")
+          )
+        );
+
+      if (pendingSchedules.length > 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Não é possível deletar esta resposta rápida pois existem ${pendingSchedules.length} agendamento(s) pendente(s) utilizando-a.`,
+        });
+      }
+
       // Deletar todas as mídias do R2 antes de deletar a quick reply
       const mediaUrls = existing.messages
         .map((m) => m.mediaUrl)
@@ -397,6 +419,44 @@ export const quickRepliesRouter = createTRPCRouter({
       }
 
       const tenantDb = await tenantManager.getConnection(organizationId);
+
+      // Verificar se alguma quick reply tem agendamentos pendentes
+      const pendingSchedules = await tenantDb
+        .select({
+          quickReplyId: scheduledMessage.quickReplyId,
+          count: count(),
+        })
+        .from(scheduledMessage)
+        .where(
+          and(
+            eq(scheduledMessage.organizationId, organizationId),
+            inArray(scheduledMessage.quickReplyId, input.ids),
+            eq(scheduledMessage.status, "pending")
+          )
+        )
+        .groupBy(scheduledMessage.quickReplyId);
+
+      if (pendingSchedules.length > 0 && pendingSchedules[0]) {
+        const firstBlocked = pendingSchedules[0];
+
+        if (!firstBlocked.quickReplyId) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Não é possível deletar esta resposta rápida pois existem agendamentos pendentes utilizando-a.",
+          });
+        }
+
+        const [qr] = await tenantDb
+          .select()
+          .from(quickReply)
+          .where(eq(quickReply.id, firstBlocked.quickReplyId))
+          .limit(1);
+
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Não é possível deletar a resposta rápida "${qr?.title}" pois existem ${firstBlocked.count} agendamento(s) pendente(s) utilizando-a.`,
+        });
+      }
 
       await Promise.all(
         input.ids.map((id) =>
@@ -539,6 +599,41 @@ export const quickRepliesRouter = createTRPCRouter({
 
       return quickReplies.map((qr) => selectQuickReplySchema.parse(qr));
     }),
+
+  /**
+   * List quick replies available for scheduling
+   * Returns only active quick replies that user has access to
+   */
+  listAvailableForScheduling: memberProcedure.query(async ({ ctx }) => {
+    const organizationId = ctx.session.session.activeOrganizationId;
+    const userId = ctx.session.user.id;
+
+    if (!organizationId) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: "Nenhuma organização ativa",
+      });
+    }
+
+    const tenantDb = await tenantManager.getConnection(organizationId);
+
+    const quickReplies = await tenantDb
+      .select()
+      .from(quickReply)
+      .where(
+        and(
+          eq(quickReply.organizationId, organizationId),
+          eq(quickReply.isActive, true),
+          or(
+            eq(quickReply.visibility, "organization"),
+            and(eq(quickReply.visibility, "private"), eq(quickReply.createdBy, userId)),
+          ),
+        ),
+      )
+      .orderBy(desc(quickReply.usageCount), desc(quickReply.createdAt));
+
+    return quickReplies.map((qr) => selectQuickReplySchema.parse(qr));
+  }),
 
   /**
    * Send quick reply messages

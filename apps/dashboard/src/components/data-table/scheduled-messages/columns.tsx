@@ -3,7 +3,7 @@
 import type { ColumnDef } from "@tanstack/react-table";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { MessageSquare, StickyNote } from "lucide-react";
+import { MessageSquare, StickyNote, Zap } from "lucide-react";
 
 import { Badge } from "@manylead/ui/badge";
 import { Checkbox } from "@manylead/ui/checkbox";
@@ -18,6 +18,8 @@ interface ScheduledMessageRow {
     content: string;
     status: string;
     scheduledAt: Date;
+    quickReplyId?: string | null;
+    quickReplyTitle?: string | null;
   };
   createdByAgent: {
     id: string;
@@ -85,9 +87,19 @@ export const columns: ColumnDef<ScheduledMessageRow>[] = [
     header: "Tipo",
     cell: ({ row }) => {
       const isMessage = row.original.scheduledMessage.contentType === "message";
+      const isQuickReply = !!row.original.scheduledMessage.quickReplyId;
+      const quickReplyTitle = row.original.scheduledMessage.quickReplyTitle;
+
       return (
         <div className="flex items-center gap-2">
-          {isMessage ? (
+          {isQuickReply ? (
+            <>
+              <Zap className="h-4 w-4 text-primary" />
+              <span className="text-sm">
+                {quickReplyTitle ?? "Resposta Rápida"}
+              </span>
+            </>
+          ) : isMessage ? (
             <>
               <MessageSquare className="h-4 w-4 text-muted-foreground" />
               <span className="text-sm">Mensagem</span>

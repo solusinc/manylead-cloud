@@ -21,7 +21,7 @@ export function CalendarDay({
   const isCurrentMonth = isSameMonth(date, currentMonth);
   const isToday = isSameDay(date, new Date());
 
-  // Contar mensagens e notas
+  // Contar mensagens (incluindo quick replies) e notas
   const messageCount = messages.filter(
     (m) => m.scheduledMessage.contentType === "message",
   ).length;
@@ -48,7 +48,7 @@ export function CalendarDay({
       </div>
 
       <div className="flex flex-col gap-1.5 overflow-hidden">
-        {/* Badge de Mensagens */}
+        {/* Badge de Mensagens (incluindo Quick Replies) */}
         {messageCount > 0 && (
           <button
             type="button"

@@ -65,6 +65,12 @@ export const scheduledMessage = pgTable(
     // "comment" = nota interna (visibleTo: "agents_only")
     content: text("content").notNull(),
 
+    // Quick Reply (opcional)
+    quickReplyId: uuid("quick_reply_id"),
+    // Se preenchido, indica que é um agendamento de resposta rápida
+    quickReplyTitle: varchar("quick_reply_title", { length: 200 }),
+    // Título da quick reply no momento do agendamento (para histórico)
+
     // Agendamento
     scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull(),
     // Data/hora UTC para envio

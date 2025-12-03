@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { format } from "date-fns";
+import { Loader2 } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -80,7 +81,8 @@ export function CalendarView({ data, isLoading }: CalendarViewProps) {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-12">
+      <div className="flex items-center justify-center gap-2 py-12">
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         <p className="text-muted-foreground">Carregando...</p>
       </div>
     );

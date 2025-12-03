@@ -7,6 +7,8 @@ export interface ScheduledMessageItem {
     cancelOnContactMessage?: boolean | null;
     cancelOnAgentMessage?: boolean | null;
     cancelOnChatClose?: boolean | null;
+    quickReplyId?: string | null;
+    quickReplyTitle?: string | null;
   };
   createdByAgent?: {
     id: string;

@@ -26,6 +26,12 @@ export function DataTableRowActions({ row }: DataTableRowActionsProps) {
         void queryClient.invalidateQueries({
           queryKey: trpc.quickReplies.listAdmin.queryKey(),
         });
+        toast.success("Resposta rápida deletada com sucesso");
+      },
+      onError: (error) => {
+        // Mostrar mensagem de erro do backend
+        const errorMessage = error.message || "Erro ao deletar resposta rápida";
+        toast.error(errorMessage);
       },
     }),
   );
