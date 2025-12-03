@@ -53,9 +53,11 @@ export interface ConnectionUpdateData {
 export interface MessageData {
   key: {
     remoteJid: string;
+    remoteJidAlt?: string; // Novo formato LID do WhatsApp
     fromMe: boolean;
     id: string;
     participant?: string;
+    addressingMode?: string;
   };
   pushName?: string;
   message?: Record<string, unknown>;
@@ -63,11 +65,12 @@ export interface MessageData {
   messageTimestamp: string | number;
   instanceId?: string;
   source?: string;
+  status?: string;
+  contextInfo?: Record<string, unknown>;
 }
 
-export interface MessagesUpsertData {
-  messages: MessageData[];
-}
+// Evolution API envia mensagem única, não array
+export type MessagesUpsertData = MessageData;
 
 export interface MessagesUpdateData {
   messages: MessageData[];

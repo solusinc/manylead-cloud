@@ -140,4 +140,47 @@ export class ChatParticipantService {
       lastReadAt: new Date(),
     });
   }
+
+  /**
+   * Incrementar unreadCount quando nova mensagem chega
+   *
+   * Usado no WhatsApp message processor quando mensagem do customer chega
+   * e o chat está atribuído a algum agent
+   */
+  async incrementUnreadForAssignedAgent(
+    chatId: string,
+    chatCreatedAt: Date,
+    assignedAgentId: string,
+  ): Promise<void> {
+    // Buscar participant existente
+    const [existing] = await this.tenantDb
+      .select()
+      .from(chatParticipant)
+      .where(
+        and(
+          eq(chatParticipant.chatId, chatId),
+          eq(chatParticipant.chatCreatedAt, chatCreatedAt),
+          eq(chatParticipant.agentId, assignedAgentId),
+        ),
+      )
+      .limit(1);
+
+    if (existing) {
+      // Incrementar unreadCount do participant existente
+      await this.tenantDb
+        .update(chatParticipant)
+        .set({
+          unreadCount: (existing.unreadCount ?? 0) + 1,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(chatParticipant.chatId, chatId),
+            eq(chatParticipant.chatCreatedAt, chatCreatedAt),
+            eq(chatParticipant.agentId, assignedAgentId),
+          ),
+        );
+    }
+    // Se participant não existe, não faz nada (será criado quando o agent abrir o chat)
+  }
 }

@@ -31,24 +31,31 @@ export const connectionUpdateDataSchema = z.object({
   profilePictureUrl: z.string().nullable().optional(),
 });
 
-export const messageDataSchema = z.object({
-  key: z.object({
-    remoteJid: z.string(),
-    fromMe: z.boolean(),
-    id: z.string(),
-    participant: z.string().optional(),
-  }),
-  pushName: z.string().optional(),
-  message: z.record(z.unknown()).optional(),
-  messageType: z.string().optional(),
-  messageTimestamp: z.union([z.string(), z.number()]),
-  instanceId: z.string().optional(),
-  source: z.string().optional(),
-});
+export const messageDataSchema = z
+  .object({
+    key: z
+      .object({
+        remoteJid: z.string(),
+        remoteJidAlt: z.string().optional(), // Novo formato LID do WhatsApp
+        fromMe: z.boolean(),
+        id: z.string(),
+        participant: z.string().optional(),
+        addressingMode: z.string().optional(),
+      })
+      .passthrough(), // Preserva campos extras
+    pushName: z.string().optional(),
+    message: z.record(z.unknown()).optional(),
+    messageType: z.string().optional(),
+    messageTimestamp: z.union([z.string(), z.number()]),
+    instanceId: z.string().optional(),
+    source: z.string().optional(),
+    status: z.string().optional(),
+    contextInfo: z.record(z.unknown()).optional(),
+  })
+  .passthrough(); // Preserva campos extras no root também
 
-export const messagesUpsertDataSchema = z.object({
-  messages: z.array(messageDataSchema),
-});
+// Evolution API envia a mensagem diretamente, não em array
+export const messagesUpsertDataSchema = messageDataSchema;
 
 export const sendMessageDataSchema = z.object({
   key: z.object({

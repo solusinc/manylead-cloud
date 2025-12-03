@@ -20,6 +20,7 @@ const uploadAttachmentSchema = z.object({
 import { env } from "../env";
 import { getInternalMessageService } from "@manylead/messaging";
 import type { MessageContext } from "@manylead/messaging";
+import { getWhatsAppMessageService } from "@manylead/core-services/whatsapp";
 import { createTRPCRouter, memberProcedure, ownerProcedure } from "../trpc";
 
 /**
@@ -930,6 +931,8 @@ export const messagesRouter = createTRPCRouter({
 
   /**
    * Enviar mensagem de texto para WhatsApp
+   *
+   * Refatorado para usar WhatsAppMessageService (Fase 2)
    */
   sendWhatsApp: ownerProcedure
     .input(
@@ -964,142 +967,47 @@ export const messagesRouter = createTRPCRouter({
         });
       }
 
-      // 2. Buscar chat com canal e contato
-      const [chatRecord] = await ctx.tenantDb
-        .select({
-          chat,
-          contact,
-          channel,
-        })
-        .from(chat)
-        .innerJoin(contact, eq(chat.contactId, contact.id))
-        .leftJoin(channel, eq(chat.channelId, channel.id))
-        .where(
-          and(
-            eq(chat.id, input.chatId),
-            eq(chat.createdAt, input.createdAt),
-            eq(chat.messageSource, "whatsapp"),
-          ),
-        )
-        .limit(1);
+      // 2. Criar Evolution API Client
+      const evolutionClient = new EvolutionAPIClient(
+        env.EVOLUTION_API_URL,
+        env.EVOLUTION_API_KEY,
+      );
 
-      if (!chatRecord) {
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Chat não encontrado",
-        });
-      }
-
-      if (!chatRecord.channel) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Chat não possui canal configurado",
-        });
-      }
-
-      const now = new Date();
-
-      // 3. Criar mensagem no DB com status "pending"
-      const [newMessage] = await ctx.tenantDb
-        .insert(message)
-        .values({
-          chatId: input.chatId,
-          messageSource: "whatsapp",
-          sender: "agent",
-          senderId: currentAgent.id,
-          messageType: "text",
-          content: input.content,
-          status: "pending",
-          timestamp: now,
-        })
-        .returning();
-
-      if (!newMessage) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Falha ao criar mensagem",
-        });
-      }
+      // 3. Usar WhatsAppMessageService para orquestrar envio
+      const whatsappService = getWhatsAppMessageService({
+        evolutionClient,
+        redisUrl: env.REDIS_URL,
+      });
 
       try {
-        // 4. Enviar via Evolution API
-        const evolutionClient = new EvolutionAPIClient(
-          env.EVOLUTION_API_URL,
-          env.EVOLUTION_API_KEY,
-        );
-
-        if (!chatRecord.contact.phoneNumber) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "Contato não possui número de telefone",
-          });
-        }
-
-        const result = await evolutionClient.message.sendText(
-          chatRecord.channel.evolutionInstanceName,
+        const result = await whatsappService.sendTextMessage(
+          ctx.tenantDb,
+          organizationId,
           {
-            number: chatRecord.contact.phoneNumber,
-            text: input.content,
+            chatId: input.chatId,
+            chatCreatedAt: input.createdAt,
+            agentId: currentAgent.id,
+            content: input.content,
           },
         );
 
-        // 5. Atualizar mensagem com whatsappMessageId e status "sent"
-        await ctx.tenantDb
-          .update(message)
-          .set({
-            whatsappMessageId: result.key.id,
-            status: "sent",
-            sentAt: new Date(),
-          })
-          .where(
-            and(
-              eq(message.id, newMessage.id),
-              eq(message.timestamp, newMessage.timestamp),
-            ),
-          );
+        if (result.status === "failed") {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: result.error?.message ?? "Falha ao enviar mensagem",
+          });
+        }
 
-        // 6. Atualizar chat (lastMessage, totalMessages)
-        await ctx.tenantDb
-          .update(chat)
-          .set({
-            lastMessageAt: now,
-            lastMessageContent: input.content,
-            lastMessageSender: "agent",
-            lastMessageStatus: "pending",
-            totalMessages: sql`${chat.totalMessages} + 1`,
-            updatedAt: now,
-          })
-          .where(
-            and(
-              eq(chat.id, input.chatId),
-              eq(chat.createdAt, input.createdAt),
-            ),
-          );
-
-        // 7. TODO: Emitir evento Socket.io para atualizar UI em tempo real
-
+        // Retornar resposta compatível com frontend
         return {
-          ...newMessage,
-          whatsappMessageId: result.key.id,
-          status: "sent" as const,
+          id: result.messageId,
+          timestamp: result.messageCreatedAt,
+          whatsappMessageId: result.whatsappMessageId,
+          status: result.status,
           sentAt: new Date(),
         };
       } catch (error) {
-        // Se falhar, marcar mensagem como failed
-        await ctx.tenantDb
-          .update(message)
-          .set({
-            status: "failed",
-            errorMessage:
-              error instanceof Error ? error.message : "Erro desconhecido",
-          })
-          .where(
-            and(
-              eq(message.id, newMessage.id),
-              eq(message.timestamp, newMessage.timestamp),
-            ),
-          );
-
+        // WhatsAppMessageService já marcou mensagem como failed
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message:

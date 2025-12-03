@@ -52,11 +52,11 @@ export function ChatInput({
   const router = useRouter();
   const trpc = useTRPC();
   const queryClient = useQueryClient();
-  const { replyingTo, cancelReply, setMediaPreview, setFocusInput } = useChatReply();
+  const { replyingTo, cancelReply, setMediaPreview, setFocusInput, messageSource } = useChatReply();
 
   // Custom hooks
   const { data: currentAgent } = useCurrentAgent();
-  const { sendMessage } = useSendMessage(chatId);
+  const { sendMessage } = useSendMessage(chatId, messageSource, chatCreatedAt);
   const { sendAudio } = useSendAudio(chatId);
   const {
     content,

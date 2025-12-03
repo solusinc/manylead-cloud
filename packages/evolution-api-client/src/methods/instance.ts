@@ -85,4 +85,24 @@ export class InstanceMethods {
       `/instance/delete/${instanceName}`,
     );
   }
+
+  /**
+   * Busca foto de perfil de um contato no WhatsApp
+   * https://doc.evolution-api.com/v2/api-reference/chat-controller/chat-fetch-profile-picture-url
+   */
+  async fetchProfilePicture(
+    instanceName: string,
+    phoneNumber: string,
+  ): Promise<{ profilePictureUrl: string | null }> {
+    try {
+      return await this.request<{ profilePictureUrl: string | null }>(
+        "POST",
+        `/chat/fetchProfilePictureUrl/${instanceName}`,
+        { number: phoneNumber },
+      );
+    } catch (error) {
+      // Se não encontrar foto (privacidade), retornar null
+      return { profilePictureUrl: null };
+    }
+  }
 }

@@ -23,16 +23,52 @@ interface SendMessageOptions {
 /**
  * Hook for sending messages with optimistic updates and cache management
  * Extracted from chat-input.tsx (lines 185-402)
+ *
+ * IMPORTANT: Routes messages to correct endpoint based on messageSource:
+ * - "whatsapp" → sendWhatsApp (Evolution API via WhatsAppMessageService)
+ * - "internal" → sendText (cross-org via InternalMessageService)
  */
-export function useSendMessage(chatId: string) {
+export function useSendMessage(
+  chatId: string,
+  messageSource: "whatsapp" | "internal",
+  chatCreatedAt?: Date
+) {
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const { register } = useMessageDeduplication();
   const session = useServerSession();
   const { playNotificationSound } = useNotificationSound();
 
-  // Mutation for sending text messages
-  const sendMessageMutation = useMutation(
+  // Mutation for WhatsApp messages
+  const sendWhatsAppMutation = useMutation(
+    trpc.messages.sendWhatsApp.mutationOptions({
+      onSuccess: (serverMessage) => {
+        // WhatsApp messages: just invalidate queries and register
+        register(serverMessage.id);
+
+        // Invalidate messages list
+        void queryClient.invalidateQueries({
+          queryKey: [["messages", "list"]],
+        });
+
+        // Invalidate chats list
+        void queryClient.invalidateQueries({
+          queryKey: [["chats", "list"]],
+        });
+
+        // Play notification sound
+        playNotificationSound();
+      },
+      onError: (error) => {
+        toast.error("Erro ao enviar mensagem WhatsApp", {
+          description: error.message,
+        });
+      },
+    })
+  );
+
+  // Mutation for internal messages
+  const sendInternalMutation = useMutation(
     trpc.messages.sendText.mutationOptions({
       onSuccess: (serverMessage, variables) => {
         // HYBRID APPROACH: Replace tempId with serverId
@@ -220,17 +256,29 @@ export function useSendMessage(chatId: string) {
     // Register tempId in dedup store
     register(tempId);
 
-    // Send to server (with tempId and repliedToMessageId)
-    await sendMessageMutation.mutateAsync({
-      chatId,
-      content,
-      tempId,
-      metadata,
-    });
+    // Send to server with correct mutation based on messageSource
+    if (messageSource === "whatsapp") {
+      if (!chatCreatedAt) {
+        throw new Error("chatCreatedAt is required for WhatsApp messages");
+      }
+      await sendWhatsAppMutation.mutateAsync({
+        chatId,
+        createdAt: chatCreatedAt,
+        content,
+      });
+    } else {
+      // Internal message - uses tempId and metadata
+      await sendInternalMutation.mutateAsync({
+        chatId,
+        content,
+        tempId,
+        metadata,
+      });
+    }
   };
 
   return {
     sendMessage,
-    isSending: sendMessageMutation.isPending,
+    isSending: sendWhatsAppMutation.isPending || sendInternalMutation.isPending,
   };
 }

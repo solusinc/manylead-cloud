@@ -17,28 +17,22 @@ export async function handleMessagesUpsert(
   // Buscar canal
   const ch = await findChannelByInstanceName(instanceName);
   if (!ch) {
-    logger.warn("Canal não encontrado");
+    logger.warn("Canal não encontrado", { instanceName });
     return;
   }
-
-  logger.info(`${data.messages.length} mensagens recebidas`);
 
   // Criar processor
   const processor = new WhatsAppMessageProcessor(tenantManager);
 
-  // Processar cada mensagem
-  for (const msg of data.messages) {
-    logger.info("Processando mensagem", {
-      from: msg.key.remoteJid,
-      id: msg.key.id,
-      type: msg.messageType,
+  // Processar a mensagem (Evolution API envia uma mensagem por webhook)
+  try {
+    await processor.processMessage(data, ch, instanceName);
+  } catch (error) {
+    logger.error("Erro ao processar mensagem", {
+      messageId: data.key.id,
+      from: data.key.remoteJid,
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
     });
-
-    try {
-      await processor.processMessage(msg, ch, instanceName);
-      logger.info("Mensagem processada com sucesso", { id: msg.key.id });
-    } catch (error) {
-      logger.error("Erro ao processar mensagem", error);
-    }
   }
 }

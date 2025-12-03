@@ -257,10 +257,10 @@ function ChatWindowContent({
           chatCreatedAt={chatItem.chat.createdAt}
           chatStatus={chat.status}
           assignedTo={chat.assignedTo}
-          onTypingStart={() => socket.emitTypingStart(chatId)}
-          onTypingStop={() => socket.emitTypingStop(chatId)}
-          onRecordingStart={() => socket.emitRecordingStart(chatId)}
-          onRecordingStop={() => socket.emitRecordingStop(chatId)}
+          onTypingStart={chat.source === "internal" ? () => socket.emitTypingStart(chatId) : undefined}
+          onTypingStop={chat.source === "internal" ? () => socket.emitTypingStop(chatId) : undefined}
+          onRecordingStart={chat.source === "internal" ? () => socket.emitRecordingStart(chatId) : undefined}
+          onRecordingStop={chat.source === "internal" ? () => socket.emitRecordingStop(chatId) : undefined}
         />
       </div>
     </div>

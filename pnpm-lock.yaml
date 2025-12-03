@@ -628,6 +628,9 @@ importers:
       '@manylead/db':
         specifier: workspace:*
         version: link:../db
+      '@manylead/evolution-api-client':
+        specifier: workspace:*
+        version: link:../evolution-api-client
       '@manylead/shared':
         specifier: workspace:*
         version: link:../shared
