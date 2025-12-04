@@ -50,6 +50,47 @@ export async function handleConnectionUpdate(
     return;
   }
 
+  // AUTO-CORREÇÃO: Detectar webhooks desatualizados/atrasados
+  // Se webhook representa downgrade de estado (open->connecting, open->close), verificar estado real
+  const isDowngrade =
+    (state === "connecting" && ch.evolutionConnectionState === "open") ||
+    (state === "close" && ch.evolutionConnectionState === "open");
+
+  if (isDowngrade) {
+    logger.warn("Potential stale webhook detected, verifying real state", {
+      webhookState: state,
+      dbState: ch.evolutionConnectionState,
+      transition: `${ch.evolutionConnectionState} -> ${state}`,
+    });
+
+    try {
+      const evolutionClient = getEvolutionClient();
+      const instanceData = await evolutionClient.instance.fetch(instanceName);
+      const instance = Array.isArray(instanceData) ? instanceData[0] : instanceData;
+      const realState = instance?.connectionStatus;
+
+      // Se estado real é diferente do webhook, ignorar webhook desatualizado
+      if (realState && realState !== state) {
+        logger.warn("Ignoring stale webhook - real state differs", {
+          webhookState: state,
+          realState,
+          dbState: ch.evolutionConnectionState,
+        });
+        return; // Ignorar webhook desatualizado
+      }
+
+      logger.info("Real state confirmed, proceeding with update", {
+        webhookState: state,
+        realState,
+      });
+    } catch (error) {
+      logger.error("Failed to verify real instance state, proceeding with webhook data", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      // Se falhar ao verificar, aceitar o webhook (fail-safe)
+    }
+  }
+
   switch (state) {
     case "open":
       newStatus = CHANNEL_STATUS.CONNECTED;
