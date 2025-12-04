@@ -114,6 +114,70 @@ export function useMessageSocket(
     [chatId]
   );
 
+  // Message created/updated - map tempId to real ID and update attachment
+  useSocketListener(
+    socket,
+    "onMessageNew",
+    (event) => {
+      if (event.message.chatId !== chatId) return;
+
+      const serverId = event.message.id as string;
+      const tempId = (event.message.metadata as Record<string, unknown> | undefined)?.tempId as string | undefined;
+      const hasAttachment = event.message.attachment as Record<string, unknown> | undefined;
+
+      // Update message by serverId OR tempId
+      const searchIds = [serverId, tempId].filter(Boolean) as string[];
+
+      for (const searchId of searchIds) {
+        // Update message in cache
+        const queries = queryClient.getQueryCache().findAll({
+          queryKey: [["messages", "list"]],
+          exact: false,
+        });
+
+        queries.forEach((query) => {
+          const queryState = query.state.data as InfiniteQueryData | undefined;
+          if (!queryState?.pages) return;
+
+          const newPages = queryState.pages.map((page) => ({
+            ...page,
+            items: page.items.map((item) => {
+              const itemTempId = (item.message.metadata as Record<string, unknown> | undefined)?.tempId as string | undefined;
+              const matchesById = item.message.id === searchId;
+              const matchesByTempId = itemTempId === searchId;
+
+              if (matchesById || matchesByTempId) {
+                return {
+                  ...item,
+                  message: {
+                    ...item.message,
+                    id: serverId, // Update to real server ID
+                    timestamp: new Date(event.message.timestamp as string),
+                  },
+                  // Update attachment if present (worker completed download)
+                  attachment: hasAttachment ?? item.attachment,
+                };
+              }
+              return item;
+            }),
+          }));
+
+          queryClient.setQueryData(query.queryKey, {
+            ...queryState,
+            pages: newPages,
+            pageParams: queryState.pageParams,
+          });
+
+          void queryClient.invalidateQueries({
+            queryKey: query.queryKey,
+            refetchType: "none",
+          });
+        });
+      }
+    },
+    [chatId, queryClient]
+  );
+
   // Message updated
   useSocketListener(
     socket,

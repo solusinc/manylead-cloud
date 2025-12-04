@@ -1,0 +1,1 @@
+ALTER TABLE "chat" ADD COLUMN "last_message_is_deleted" boolean DEFAULT false NOT NULL;

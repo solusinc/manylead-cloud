@@ -16,7 +16,6 @@ export type {
 
 export type {
   SendWhatsAppTextInput,
-  SendWhatsAppMediaInput,
   SendMessageResult,
   MarkAsReadInput,
 } from "./whatsapp";

@@ -6,6 +6,7 @@ import { v7 as uuidv7 } from "uuid";
 import { useMessageDeduplication } from "~/hooks/use-message-deduplication";
 import { useNotificationSound } from "~/hooks/use-notification-sound";
 import { useTRPC } from "~/lib/trpc/react";
+import { useChat } from "../../providers/chat-context";
 
 export function useSendMedia(_chatId: string) {
   const [isUploading, setIsUploading] = useState(false);
@@ -13,12 +14,16 @@ export function useSendMedia(_chatId: string) {
   const trpc = useTRPC();
   const { register } = useMessageDeduplication();
   const { playNotificationSound } = useNotificationSound();
+  const { chat } = useChat();
 
   const getSignedUrlMutation = useMutation(
     trpc.attachments.getSignedUploadUrl.mutationOptions(),
   );
   const sendWithAttachmentMutation = useMutation(
     trpc.messages.sendWithAttachment.mutationOptions(),
+  );
+  const sendWhatsAppMutation = useMutation(
+    trpc.messages.sendWhatsApp.mutationOptions(),
   );
 
   const sendMedia = useCallback(
@@ -71,21 +76,40 @@ export function useSendMedia(_chatId: string) {
         // 4. Registrar tempId para evitar duplicação
         register(tempId);
 
-        // 5. Enviar para backend
-        await sendWithAttachmentMutation.mutateAsync({
-          chatId: options.chatId,
-          content: options.caption ?? "",
-          tempId,
-          attachment: {
-            fileName: options.file.name,
+        // 5. Enviar para backend (detecta source do chat)
+        if (chat.source === "whatsapp") {
+          // Enviar via WhatsApp
+          await sendWhatsAppMutation.mutateAsync({
+            chatId: chat.id,
+            createdAt: chat.createdAt,
+            content: options.caption ?? "",
+
+            // Mídia
+            mediaUrl: signedData.publicUrl,
             mimeType: options.file.type,
-            storagePath: signedData.storagePath,
-            publicUrl: signedData.publicUrl,
+            fileName: options.file.name,
             fileSize: options.file.size,
             ...dimensions,
-          },
-          metadata: options.metadata,
-        });
+
+            metadata: options.metadata,
+          });
+        } else {
+          // Enviar via internal (cross-org)
+          await sendWithAttachmentMutation.mutateAsync({
+            chatId: options.chatId,
+            content: options.caption ?? "",
+            tempId,
+            attachment: {
+              fileName: options.file.name,
+              mimeType: options.file.type,
+              storagePath: signedData.storagePath,
+              publicUrl: signedData.publicUrl,
+              fileSize: options.file.size,
+              ...dimensions,
+            },
+            metadata: options.metadata,
+          });
+        }
 
         setUploadProgress(100);
         playNotificationSound();
@@ -109,10 +133,12 @@ export function useSendMedia(_chatId: string) {
       }
     },
     [
+      chat,
       register,
       playNotificationSound,
       getSignedUrlMutation,
       sendWithAttachmentMutation,
+      sendWhatsAppMutation,
     ],
   );
 

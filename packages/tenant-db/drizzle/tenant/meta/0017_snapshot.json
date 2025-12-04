@@ -1,6 +1,6 @@
 {
-  "id": "011b4c60-d50b-425b-bf8e-4b0bc6db040b",
-  "prevId": "a8275f83-ee26-419d-b8fa-bc2f061236ff",
+  "id": "86b90139-0212-4671-8f0a-f5335b4a96f8",
+  "prevId": "011b4c60-d50b-425b-bf8e-4b0bc6db040b",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -848,6 +848,13 @@
           "type": "varchar(20)",
           "primaryKey": false,
           "notNull": false
+        },
+        "last_message_is_deleted": {
+          "name": "last_message_is_deleted",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
         },
         "unread_count": {
           "name": "unread_count",

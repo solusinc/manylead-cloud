@@ -110,6 +110,7 @@ export class InternalMessageService {
       input.content,
       now,
       "sent",
+      (input.messageType ?? "text") as "text" | "image" | "video" | "audio" | "document",
     );
 
     // Emitir evento para org original (sempre)
@@ -291,26 +292,47 @@ export class InternalMessageService {
     // Emitir evento local
     await this.eventPublisher.messageUpdated(organizationId, chatId, deletedMessage);
 
-    // Se a mensagem deletada estava como não lida, decrementar unreadCount
-    if (existingMessage.status !== "read") {
-      await tenantDb
-        .update(chat)
-        .set({
-          unreadCount: sql`GREATEST(${chat.unreadCount} - 1, 0)`,
-        })
-        .where(eq(chat.id, chatId));
-    }
-
-    // Buscar chat atualizado para emitir evento com unreadCount correto
+    // Buscar chat para verificar se a mensagem deletada é a última mensagem
     const [chatRecord] = await tenantDb
       .select()
       .from(chat)
       .where(eq(chat.id, chatId))
       .limit(1);
 
-    // Emitir evento de chat atualizado para atualizar sidebar em tempo real
-    if (chatRecord) {
-      await this.eventPublisher.chatUpdated(organizationId, chatRecord);
+    // Preparar updates do chat
+    const chatUpdates: Record<string, unknown> = {};
+
+    // Se a mensagem deletada estava como não lida, decrementar unreadCount
+    if (existingMessage.status !== "read") {
+      chatUpdates.unreadCount = sql`GREATEST(${chat.unreadCount} - 1, 0)`;
+    }
+
+    // Se a mensagem deletada é a última mensagem, marcar como deletada
+    if (
+      chatRecord?.lastMessageAt &&
+      deletedMessage.timestamp.getTime() === chatRecord.lastMessageAt.getTime()
+    ) {
+      chatUpdates.lastMessageIsDeleted = true;
+    }
+
+    // Aplicar updates se houver
+    if (Object.keys(chatUpdates).length > 0) {
+      await tenantDb
+        .update(chat)
+        .set(chatUpdates)
+        .where(eq(chat.id, chatId));
+
+      // Buscar chat atualizado
+      const [updatedChat] = await tenantDb
+        .select()
+        .from(chat)
+        .where(eq(chat.id, chatId))
+        .limit(1);
+
+      // Emitir evento de chat atualizado para atualizar sidebar em tempo real
+      if (updatedChat) {
+        await this.eventPublisher.chatUpdated(organizationId, updatedChat);
+      }
     }
 
     if (chatRecord && this.crossOrgMirror.shouldMirror(chatRecord)) {
@@ -413,6 +435,7 @@ export class InternalMessageService {
     messageContent: string,
     timestamp: Date,
     messageStatus?: "pending" | "sent" | "delivered" | "read" | "failed",
+    messageType?: "text" | "image" | "video" | "audio" | "document",
   ): Promise<Chat> {
     const [updatedChat] = await tenantDb
       .update(chat)
@@ -421,6 +444,8 @@ export class InternalMessageService {
         lastMessageContent: messageContent,
         lastMessageSender: "agent",
         lastMessageStatus: messageStatus ?? "sent",
+        lastMessageType: messageType ?? "text",
+        lastMessageIsDeleted: false,
         totalMessages: sql`${chat.totalMessages} + 1`,
         updatedAt: timestamp,
       })

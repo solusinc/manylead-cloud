@@ -1,12 +1,12 @@
-import { and, chat, contact, channel, eq, message, sql, isNotNull, inArray } from "@manylead/db";
-import type { TenantDB } from "@manylead/db";
+import { and, chat, contact, channel, eq, message, sql, isNotNull, inArray, attachment } from "@manylead/db";
+import type { TenantDB, Attachment } from "@manylead/db";
 import type { EvolutionAPIClient } from "@manylead/evolution-api-client";
-import { formatMessageWithSignature } from "@manylead/core-services";
+import { formatMessageWithSignature, getEventPublisher } from "@manylead/core-services";
+import type { EventPublisher } from "@manylead/core-services";
 
 import { WhatsAppSenderService } from "./whatsapp-sender.service";
 import type {
   SendWhatsAppTextInput,
-  // SendWhatsAppMediaInput,
   SendMessageResult,
   MarkAsReadInput,
   WhatsAppSendTextParams,
@@ -38,9 +38,11 @@ export interface WhatsAppMessageServiceConfig {
  */
 export class WhatsAppMessageService {
   private senderService: WhatsAppSenderService;
+  private eventPublisher: EventPublisher;
 
   constructor(private config: WhatsAppMessageServiceConfig) {
     this.senderService = new WhatsAppSenderService(config.evolutionClient);
+    this.eventPublisher = getEventPublisher(config.redisUrl);
   }
 
   /**
@@ -100,7 +102,12 @@ export class WhatsAppMessageService {
 
     const now = new Date();
 
-    // 2. Criar mensagem no banco com status "pending"
+    // 2. Detectar messageType baseado em attachmentData
+    const messageType = input.attachmentData
+      ? input.attachmentData.mediaType
+      : "text";
+
+    // 3. Criar mensagem no banco com status "pending"
     const [newMessage] = await tenantDb
       .insert(message)
       .values({
@@ -109,8 +116,8 @@ export class WhatsAppMessageService {
         sender: "agent",
         senderId: input.agentId,
         senderName: input.agentName,
-        messageType: "text",
-        content: input.content,
+        messageType,
+        content: input.content || `[${messageType}]`, // Default content se vazio
         status: "pending",
         timestamp: now,
         repliedToMessageId: input.repliedToMessageId ?? null,
@@ -122,15 +129,39 @@ export class WhatsAppMessageService {
       throw new Error("Falha ao criar mensagem");
     }
 
-    try {
-      // 3. Formatar mensagem com assinatura para envio
-      const textWithSignature = formatMessageWithSignature(
-        input.agentName,
-        input.content,
-        "whatsapp",
-      );
+    // 4. Se tem attachmentData, criar attachment
+    let attachmentRecord: Attachment | undefined;
+    if (input.attachmentData) {
+      const [createdAttachment] = await tenantDb
+        .insert(attachment)
+        .values({
+          messageId: newMessage.id,
+          mediaType: input.attachmentData.mediaType,
+          mimeType: input.attachmentData.mimeType,
+          fileName: input.attachmentData.fileName,
+          fileSize: input.attachmentData.fileSize ?? null,
+          width: input.attachmentData.width ?? null,
+          height: input.attachmentData.height ?? null,
+          duration: input.attachmentData.duration ?? null,
+          storagePath: input.attachmentData.storagePath,
+          storageUrl: input.attachmentData.storageUrl,
+          downloadStatus: "completed", // Já está no R2
+        })
+        .returning();
 
-      // 4. Se tiver repliedToMessageId, buscar mensagem original para quoted
+      attachmentRecord = createdAttachment;
+    }
+
+    try {
+      // 5. Formatar mensagem (com ou sem assinatura)
+      // IMPORTANTE: Mídia NÃO leva assinatura, só o caption puro
+      const messageContent = input.attachmentData
+        ? (input.content || "") // Mídia: caption puro sem assinatura
+        : input.content
+          ? formatMessageWithSignature(input.agentName, input.content, "whatsapp")
+          : ""; // Texto: com assinatura
+
+      // 6. Se tiver repliedToMessageId, buscar mensagem original para quoted
       let quoted: WhatsAppSendTextParams["quoted"];
 
       if (input.repliedToMessageId) {
@@ -159,13 +190,23 @@ export class WhatsAppMessageService {
         }
       }
 
-      // 5. Enviar via WhatsAppSenderService
-      const result = await this.senderService.sendText({
-        instanceName: chatRecord.channel.evolutionInstanceName,
-        phoneNumber: chatRecord.contact.phoneNumber,
-        text: textWithSignature,
-        quoted,
-      });
+      // 7. Enviar via WhatsAppSenderService (sendMedia ou sendText)
+      const result = input.attachmentData
+        ? await this.senderService.sendMedia({
+            instanceName: chatRecord.channel.evolutionInstanceName,
+            phoneNumber: chatRecord.contact.phoneNumber,
+            mediaType: input.attachmentData.mediaType,
+            mediaUrl: input.attachmentData.storageUrl, // URL público do R2
+            filename: input.attachmentData.fileName,
+            caption: messageContent, // Caption puro (sem assinatura)
+            quoted,
+          })
+        : await this.senderService.sendText({
+            instanceName: chatRecord.channel.evolutionInstanceName,
+            phoneNumber: chatRecord.contact.phoneNumber,
+            text: messageContent, // Texto com assinatura
+            quoted,
+          });
 
       // 5. Atualizar mensagem com whatsappMessageId e status "sent"
       await tenantDb
@@ -190,6 +231,8 @@ export class WhatsAppMessageService {
           lastMessageContent: input.content,
           lastMessageSender: "agent",
           lastMessageStatus: "sent",
+          lastMessageType: messageType,
+          lastMessageIsDeleted: false,
           totalMessages: sql`${chat.totalMessages} + 1`,
           updatedAt: now,
         })
@@ -200,8 +243,16 @@ export class WhatsAppMessageService {
           ),
         );
 
-      // 7. TODO: Emitir evento Socket.io
-      // getSocketManager().emitToRoom(`org:${organizationId}`, "message:new", {...})
+      // 7. Emitir evento Socket.io
+      await this.eventPublisher.messageCreated(
+        organizationId,
+        input.chatId,
+        newMessage,
+        {
+          senderId: input.agentId,
+          attachment: attachmentRecord,
+        },
+      );
 
       return {
         messageId: newMessage.id,
@@ -239,24 +290,6 @@ export class WhatsAppMessageService {
       };
     }
   }
-
-  // /**
-  //  * Enviar mensagem com mídia para WhatsApp
-  //  *
-  //  * TODO: Fase 6 - Implementar envio de mídia
-  //  *
-  //  * @param tenantDb - Database do tenant
-  //  * @param organizationId - ID da organização
-  //  * @param input - Dados da mídia
-  //  * @returns Resultado do envio
-  //  */
-  // async sendMediaMessage(
-  //   tenantDb: TenantDB,
-  //   organizationId: string,
-  //   input: SendWhatsAppMediaInput,
-  // ): Promise<SendMessageResult> {
-  //   throw new Error("sendMediaMessage not implemented yet - Fase 6");
-  // }
 
   /**
    * Marcar mensagens como lidas no WhatsApp

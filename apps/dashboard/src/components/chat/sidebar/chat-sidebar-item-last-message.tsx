@@ -14,7 +14,7 @@ export function ChatSidebarItemLastMessage({
   isTyping = false,
   isRecording = false,
   lastMessageIsDeleted = false,
-  messageSender,
+  messageSender: _messageSender,
   messageStatus,
   messageType = "text",
   message,
@@ -62,8 +62,8 @@ export function ChatSidebarItemLastMessage({
   // Caso 4: Mensagem normal (texto ou mídia)
   return (
     <div className={cn("flex min-w-0 flex-1 items-center gap-1.5", className)}>
-      {/* Status icon - SOMENTE se última mensagem foi enviada pelo agent */}
-      {messageSender === "agent" && messageStatus && (
+      {/* Status icon - para qualquer mensagem com status */}
+      {messageStatus && (
         <MessageStatusIcon status={messageStatus} size={14} className="shrink-0" />
       )}
 

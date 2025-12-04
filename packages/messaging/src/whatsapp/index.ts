@@ -5,7 +5,6 @@ export type { WhatsAppMessageServiceConfig } from "./whatsapp-message.service";
 // Types
 export type {
   SendWhatsAppTextInput,
-  SendWhatsAppMediaInput,
   SendMessageResult,
   MarkAsReadInput,
   WhatsAppSendTextParams,

@@ -6,7 +6,6 @@ import {
   chatTag,
   tag,
   user,
-  message,
   eq,
   and,
   or,
@@ -267,8 +266,8 @@ export class ChatQueryBuilderService {
         contact,
         assignedAgent: agent,
         participant: chatParticipant,
-        lastMessageIsDeleted: message.isDeleted,
-        lastMessageType: message.messageType,
+        lastMessageIsDeleted: chat.lastMessageIsDeleted,
+        lastMessageType: chat.lastMessageType,
       })
       .from(chat)
       .leftJoin(contact, eq(chat.contactId, contact.id))
@@ -282,13 +281,6 @@ export class ChatQueryBuilderService {
               eq(chatParticipant.agentId, currentAgent.id),
             )
           : undefined,
-      )
-      .leftJoin(
-        message,
-        and(
-          eq(message.chatId, chat.id),
-          eq(message.timestamp, chat.lastMessageAt),
-        ),
       );
 
     if (where) {
@@ -308,7 +300,7 @@ export class ChatQueryBuilderService {
     // Cast role para o tipo correto
     return result.map((item) => ({
       ...item,
-      lastMessageIsDeleted: item.lastMessageIsDeleted ?? false,
+      lastMessageIsDeleted: item.lastMessageIsDeleted,
       lastMessageType: item.lastMessageType ?? "text",
       assignedAgent: item.assignedAgent
         ? {

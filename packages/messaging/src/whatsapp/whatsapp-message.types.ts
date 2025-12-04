@@ -12,17 +12,18 @@ export interface SendWhatsAppTextInput {
   content: string;
   repliedToMessageId?: string;
   metadata?: Record<string, unknown>;
-}
-
-export interface SendWhatsAppMediaInput {
-  chatId: string;
-  chatCreatedAt: Date;
-  agentId: string;
-  mediaType: "image" | "audio" | "video" | "document";
-  mediaUrl: string;
-  filename?: string;
-  caption?: string;
-  repliedToMessageId?: string;
+  // 🆕 Suporte opcional a attachment (mídia)
+  attachmentData?: {
+    mediaType: "image" | "video" | "audio" | "document";
+    mimeType: string;
+    fileName: string;
+    fileSize?: number;
+    width?: number;
+    height?: number;
+    duration?: number;
+    storagePath: string;
+    storageUrl: string;
+  };
 }
 
 export interface SendMessageResult {

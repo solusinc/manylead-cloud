@@ -8,6 +8,7 @@ import { createLogger } from "@manylead/clients/logger";
  */
 export interface MediaDownloadJobData {
   organizationId: string;
+  chatId: string;
   messageId: string;
   attachmentId: string;
   whatsappMediaId: string;

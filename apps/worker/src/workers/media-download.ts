@@ -1,29 +1,14 @@
 import type { Job } from "bullmq";
-import { attachment, eq } from "@manylead/db";
-import {
-  generateMediaPath,
-  getMediaTypeFromMimeType,
-  getR2TagsForMedia,
-} from "@manylead/storage/utils";
+import { attachment, eq, message } from "@manylead/db";
+import { generateMediaPath } from "@manylead/storage/utils";
 import { evolutionAPI } from "@manylead/evolution-api-client";
 import { storage } from "@manylead/storage";
 import { CircuitBreakerError } from "@manylead/clients";
+import type { MediaDownloadJobData } from "@manylead/shared/queue";
 import { logger } from "~/libs/utils/logger";
 import { tenantManager } from "~/libs/tenant-manager";
 import { evolutionCircuitBreaker } from "~/libs/evolution-circuit-breaker";
-
-/**
- * Media download job data schema
- */
-export interface MediaDownloadJobData {
-  organizationId: string;
-  messageId: string;
-  attachmentId: string;
-  whatsappMediaId: string;
-  instanceName: string;
-  fileName: string;
-  mimeType: string;
-}
+import { eventPublisher } from "~/libs/cache/event-publisher";
 
 /**
  * Process media download job
@@ -35,6 +20,7 @@ export async function processMediaDownload(
 ): Promise<void> {
   const {
     organizationId,
+    chatId,
     messageId,
     attachmentId,
     whatsappMediaId,
@@ -88,15 +74,13 @@ export async function processMediaDownload(
 
     // Generate storage path (com mimeType para usar prefixo correto)
     const storagePath = generateMediaPath(organizationId, fileName, mimeType);
-    const mediaType = getMediaTypeFromMimeType(mimeType);
-    const tags = getR2TagsForMedia(mediaType);
 
     logger.debug(
-      { storagePath, mediaType, fileSize },
+      { storagePath, fileSize },
       "Uploading media to R2",
     );
 
-    // Upload to R2
+    // Upload to R2 (tags removidas - R2 pode não suportar x-amz-tagging header)
     const uploadResult = await storage.upload({
       key: storagePath,
       body: buffer,
@@ -107,7 +91,6 @@ export async function processMediaDownload(
         attachmentId,
         whatsappMediaId,
       },
-      tags,
     });
 
     logger.info(
@@ -116,7 +99,7 @@ export async function processMediaDownload(
     );
 
     // Update attachment with success
-    await tenantDb
+    const [updatedAttachment] = await tenantDb
       .update(attachment)
       .set({
         downloadStatus: "completed",
@@ -126,12 +109,43 @@ export async function processMediaDownload(
         downloadedAt: new Date(),
         downloadError: null,
       })
-      .where(eq(attachment.id, attachmentId));
+      .where(eq(attachment.id, attachmentId))
+      .returning();
 
     logger.info(
       { jobId: job.id, attachmentId, organizationId },
       "Media download completed successfully",
     );
+
+    // Buscar mensagem para emitir evento Socket.io completo
+    const [messageRecord] = await tenantDb
+      .select()
+      .from(message)
+      .where(eq(message.id, messageId))
+      .limit(1);
+
+    if (messageRecord && updatedAttachment) {
+      // Emitir evento Socket.io com mensagem + attachment via Redis Pub/Sub
+      // Formato deve ser igual ao EventPublisher.messageCreated()
+      await eventPublisher.publish("message:events", {
+        type: "message:new",
+        organizationId,
+        chatId,
+        messageId,
+        senderId: messageRecord.senderId ?? undefined,
+        data: {
+          message: {
+            ...messageRecord,
+            attachment: updatedAttachment,
+          },
+        },
+      });
+
+      logger.info(
+        { messageId, attachmentId },
+        "Socket.io event emitted for media message",
+      );
+    }
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : String(error);

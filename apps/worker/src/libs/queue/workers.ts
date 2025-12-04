@@ -3,7 +3,7 @@ import { createWorker, createQueue } from "@manylead/clients/queue";
 import { createLogger } from "~/libs/utils/logger";
 import type { TenantProvisioningJobData } from "~/workers/tenant-provisioning";
 import type { ChannelSyncJobData } from "~/workers/channel-sync";
-import type { MediaDownloadJobData } from "~/workers/media-download";
+import type { MediaDownloadJobData } from "@manylead/shared/queue";
 import type { AttachmentCleanupJobData } from "~/workers/attachment-cleanup";
 import type { AttachmentOrphanCleanupJobData } from "~/workers/attachment-orphan-cleanup";
 import type { QuickReplyOrphanCleanupJobData } from "~/workers/quick-reply-orphan-cleanup";

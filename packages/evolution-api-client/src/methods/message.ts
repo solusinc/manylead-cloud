@@ -47,16 +47,24 @@ export class MessageMethods {
   }
 
   /**
-   * Baixa mídia do WhatsApp
-   * https://doc.evolution-api.com/v2/en/endpoints/messages
+   * Baixa mídia do WhatsApp (Evolution API v2)
+   * https://doc.evolution-api.com/v2/api-reference/chat-controller/get-base64
    */
   async downloadMedia(
     instanceName: string,
     messageId: string,
   ): Promise<MediaDownloadResponse> {
     return this.request<MediaDownloadResponse>(
-      "GET",
-      `/message/download/${instanceName}/${messageId}`,
+      "POST",
+      `/chat/getBase64FromMediaMessage/${instanceName}`,
+      {
+        message: {
+          key: {
+            id: messageId,
+          },
+        },
+        convertToMp4: false, // Manter formato original
+      },
     );
   }
 

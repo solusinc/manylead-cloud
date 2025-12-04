@@ -4,6 +4,7 @@ import { z } from "zod";
 import { agent, and, attachment, channel, chat, chatParticipant, contact, desc, eq, ilike, lt, message, sql } from "@manylead/db";
 import { EvolutionAPIClient } from "@manylead/evolution-api-client";
 import { publishMessageEvent } from "@manylead/shared";
+import { extractKeyFromUrl } from "@manylead/storage";
 
 // Schema para upload de attachment (validação do frontend)
 const uploadAttachmentSchema = z.object({
@@ -19,7 +20,7 @@ const uploadAttachmentSchema = z.object({
 
 import { env } from "../env";
 import { getInternalMessageService, getWhatsAppMessageService } from "@manylead/messaging";
-import type { MessageContext } from "@manylead/messaging";
+import type { MessageContext, SendWhatsAppTextInput } from "@manylead/messaging";
 import { createTRPCRouter, memberProcedure, ownerProcedure } from "../trpc";
 
 /**
@@ -978,9 +979,18 @@ export const messagesRouter = createTRPCRouter({
       z.object({
         chatId: z.string().uuid(),
         createdAt: z.date(), // Para composite PK do chat
-        content: z.string().min(1),
+        content: z.string(),
         repliedToMessageId: z.string().uuid().optional(),
         metadata: z.record(z.string(), z.unknown()).optional(),
+
+        // 🆕 Campos opcionais para mídia
+        mediaUrl: z.string().url().optional(),
+        mimeType: z.string().optional(),
+        fileName: z.string().optional(),
+        fileSize: z.number().int().positive().optional(),
+        width: z.number().int().positive().optional(),
+        height: z.number().int().positive().optional(),
+        duration: z.number().int().positive().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -1014,7 +1024,38 @@ export const messagesRouter = createTRPCRouter({
         env.EVOLUTION_API_KEY,
       );
 
-      // 3. Usar WhatsAppMessageService para orquestrar envio
+      // 3. Preparar attachmentData se mídia foi fornecida
+      let attachmentData: SendWhatsAppTextInput["attachmentData"];
+      if (input.mediaUrl && input.mimeType && input.fileName) {
+        // Detectar mediaType a partir do mimeType
+        let mediaType: "image" | "video" | "audio" | "document" = "document";
+        if (input.mimeType.startsWith("image/")) mediaType = "image";
+        else if (input.mimeType.startsWith("video/")) mediaType = "video";
+        else if (input.mimeType.startsWith("audio/")) mediaType = "audio";
+
+        // Extrair storagePath do R2 URL usando método utilitário
+        const storagePath = extractKeyFromUrl(input.mediaUrl);
+        if (!storagePath) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "URL de mídia inválida",
+          });
+        }
+
+        attachmentData = {
+          mediaType,
+          mimeType: input.mimeType,
+          fileName: input.fileName,
+          fileSize: input.fileSize,
+          width: input.width,
+          height: input.height,
+          duration: input.duration,
+          storagePath,
+          storageUrl: input.mediaUrl,
+        };
+      }
+
+      // 4. Usar WhatsAppMessageService para orquestrar envio
       const whatsappService = getWhatsAppMessageService({
         evolutionClient,
         redisUrl: env.REDIS_URL,
@@ -1032,6 +1073,7 @@ export const messagesRouter = createTRPCRouter({
             content: input.content,
             repliedToMessageId: input.repliedToMessageId,
             metadata: input.metadata,
+            attachmentData, // 🆕 Passa attachmentData se fornecido
           },
         );
 

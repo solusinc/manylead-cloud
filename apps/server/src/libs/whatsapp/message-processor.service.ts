@@ -1,4 +1,4 @@
-import type { Channel, TenantDB, Chat } from "@manylead/db";
+import type { Channel, TenantDB, Chat, Attachment } from "@manylead/db";
 import type { TenantDatabaseManager } from "@manylead/tenant-db";
 import { and, attachment, chat, contact, eq, message, sql } from "@manylead/db";
 import { createMediaDownloadQueue } from "@manylead/shared/queue";
@@ -206,6 +206,7 @@ export class WhatsAppMessageProcessor {
     if (messageContent.hasMedia && messageContent.mediaUrl) {
       await this.processMedia(
         tenantDb,
+        chatRecord.id, // chatId
         newMessage.id,
         msg.key.id,
         messageContent,
@@ -222,19 +223,33 @@ export class WhatsAppMessageProcessor {
       chatRecord.createdAt,
       timestamp,
       messageContent.text,
+      messageType,
       chatRecord.assignedTo,
     );
 
-    // 8. Emitir evento Socket.io
-    const socketManager = getSocketManager();
+    // 8. Emitir evento Socket.io SOMENTE se NÃO for mídia
+    // Mídia: Worker emite após completar download e ter storageUrl
+    // Texto: Emite imediatamente
+    log.info({
+      hasMedia: messageContent.hasMedia,
+      mediaUrl: messageContent.mediaUrl,
+      messageType,
+    }, "Checking if should emit Socket.io immediately");
 
-    const messagePayload = {
-      chatId: chatRecord.id,
-      message: newMessage,
-      contact: contactRecord,
-    };
+    if (!messageContent.hasMedia) {
+      const socketManager = getSocketManager();
 
-    socketManager.emitToRoom(`org:${channel.organizationId}`, "message:new", messagePayload);
+      const messagePayload = {
+        chatId: chatRecord.id,
+        message: newMessage,
+        contact: contactRecord,
+      };
+
+      socketManager.emitToRoom(`org:${channel.organizationId}`, "message:new", messagePayload);
+      log.info("Socket.io emitted immediately (text message)");
+    } else {
+      log.info("Socket.io NOT emitted (media - worker will emit after download)");
+    }
 
     log.info("Message processed", {
       messageId: newMessage.id,
@@ -449,17 +464,19 @@ export class WhatsAppMessageProcessor {
 
   /**
    * Processa anexos de mídia
+   * Retorna o attachment criado para ser incluído no evento Socket.io
    */
   private async processMedia(
     tenantDb: TenantDB,
+    chatId: string,
     messageId: string,
-    whatsappMessageId: string,
+    whatsappMediaId: string,
     messageContent: MessageContent,
     messageType: MessageType,
     organizationId: string,
     instanceName: string,
-  ): Promise<void> {
-    const fileName = messageContent.fileName ?? `media-${whatsappMessageId}`;
+  ): Promise<Attachment | null> {
+    const fileName = messageContent.fileName ?? `media-${whatsappMediaId}`;
     const mimeType = messageContent.mimeType ?? "application/octet-stream";
 
     const [newAttachment] = await tenantDb
@@ -469,8 +486,8 @@ export class WhatsAppMessageProcessor {
         fileName,
         mimeType,
         mediaType: messageType === "text" ? "document" : messageType,
-        whatsappMediaId: whatsappMessageId,
-        storagePath: `temp/${whatsappMessageId}`,
+        whatsappMediaId: whatsappMediaId,
+        storagePath: `temp/${whatsappMediaId}`,
         downloadStatus: "pending",
       })
       .returning();
@@ -485,9 +502,10 @@ export class WhatsAppMessageProcessor {
         "download-media",
         {
           organizationId,
+          chatId,
           messageId,
           attachmentId: newAttachment.id,
-          whatsappMediaId: whatsappMessageId,
+          whatsappMediaId: whatsappMediaId,
           instanceName,
           fileName,
           mimeType,
@@ -497,6 +515,8 @@ export class WhatsAppMessageProcessor {
         },
       );
     }
+
+    return newAttachment ?? null;
   }
 
   /**
@@ -508,6 +528,7 @@ export class WhatsAppMessageProcessor {
     chatCreatedAt: Date,
     timestamp: Date,
     content: string,
+    messageType: MessageType,
     assignedTo: string | null,
   ): Promise<void> {
     await tenantDb
@@ -517,6 +538,8 @@ export class WhatsAppMessageProcessor {
         lastMessageContent: content,
         lastMessageSender: "customer",
         lastMessageStatus: "delivered",
+        lastMessageType: messageType,
+        lastMessageIsDeleted: false,
         unreadCount: sql`COALESCE(${chat.unreadCount}, 0) + 1`,
         updatedAt: new Date(),
       })
