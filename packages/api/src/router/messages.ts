@@ -769,7 +769,7 @@ export const messagesRouter = createTRPCRouter({
         });
       }
 
-      // Buscar mensagem
+      // Buscar mensagem para determinar messageSource
       const [existingMessage] = await ctx.tenantDb
         .select()
         .from(message)
@@ -810,28 +810,55 @@ export const messagesRouter = createTRPCRouter({
       }
 
       const { tenantManager } = await import("../trpc");
-      const messageService = getInternalMessageService({
-        redisUrl: env.REDIS_URL,
-        getTenantConnection: tenantManager.getConnection.bind(tenantManager),
-        getCatalogDb: () => ctx.db,
-      });
 
-      const messageContext: MessageContext = {
-        organizationId,
-        tenantDb: ctx.tenantDb,
-        agentId: currentAgent.id,
-        agentName: ctx.session.user.name,
-      };
+      // Rota baseada no messageSource
+      if (existingMessage.messageSource === "whatsapp") {
+        // WhatsApp: usar WhatsAppMessageService
+        const evolutionClient = new EvolutionAPIClient(
+          env.EVOLUTION_API_URL,
+          env.EVOLUTION_API_KEY,
+        );
 
-      const updated = await messageService.editMessage(
-        messageContext,
-        input.id,
-        input.timestamp,
-        input.chatId,
-        { content: input.content },
-      );
+        const whatsappService = getWhatsAppMessageService({
+          evolutionClient,
+          redisUrl: env.REDIS_URL,
+        });
 
-      return updated;
+        const updated = await whatsappService.editMessage(
+          ctx.tenantDb,
+          organizationId,
+          input.id,
+          input.timestamp,
+          input.chatId,
+          input.content,
+        );
+
+        return updated;
+      } else {
+        // Internal: usar InternalMessageService
+        const messageService = getInternalMessageService({
+          redisUrl: env.REDIS_URL,
+          getTenantConnection: tenantManager.getConnection.bind(tenantManager),
+          getCatalogDb: () => ctx.db,
+        });
+
+        const messageContext: MessageContext = {
+          organizationId,
+          tenantDb: ctx.tenantDb,
+          agentId: currentAgent.id,
+          agentName: ctx.session.user.name,
+        };
+
+        const updated = await messageService.editMessage(
+          messageContext,
+          input.id,
+          input.timestamp,
+          input.chatId,
+          { content: input.content },
+        );
+
+        return updated;
+      }
     }),
 
   /**

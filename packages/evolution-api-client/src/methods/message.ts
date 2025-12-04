@@ -5,6 +5,8 @@ import type {
   MediaDownloadResponse,
   MarkAsReadRequest,
   MarkAsReadResponse,
+  UpdateMessageRequest,
+  UpdateMessageResponse,
 } from "../types";
 
 export class MessageMethods {
@@ -79,6 +81,21 @@ export class MessageMethods {
     return this.request<MarkAsReadResponse>(
       "POST",
       `/chat/markMessageAsRead/${instanceName}`,
+      params,
+    );
+  }
+
+  /**
+   * Edita uma mensagem existente no WhatsApp
+   * https://doc.evolution-api.com/v2/api-reference/chat-controller/update-message
+   */
+  async updateMessage(
+    instanceName: string,
+    params: UpdateMessageRequest,
+  ): Promise<UpdateMessageResponse> {
+    return this.request<UpdateMessageResponse>(
+      "POST",
+      `/chat/updateMessage/${instanceName}`,
       params,
     );
   }

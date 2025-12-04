@@ -3,11 +3,14 @@ import type {
   SendMessageResponse,
   SendTextMessageRequest,
   SendMediaMessageRequest,
+  UpdateMessageRequest,
+  UpdateMessageResponse,
 } from "@manylead/evolution-api-client";
 import type {
   WhatsAppSendTextParams,
   WhatsAppSendMediaParams,
   WhatsAppMarkAsReadParams,
+  WhatsAppUpdateMessageParams,
 } from "./whatsapp-message.types";
 
 /**
@@ -115,6 +118,31 @@ export class WhatsAppSenderService {
         },
       ],
     });
+  }
+
+  /**
+   * Editar mensagem existente no WhatsApp
+   *
+   * @param params - Parâmetros para edição de mensagem
+   * @returns Response da Evolution API com mensagem atualizada
+   */
+  async updateMessage(
+    params: WhatsAppUpdateMessageParams,
+  ): Promise<UpdateMessageResponse> {
+    const request: UpdateMessageRequest = {
+      number: params.phoneNumber,
+      text: params.text,
+      key: {
+        remoteJid: params.remoteJid,
+        fromMe: params.fromMe,
+        id: params.whatsappMessageId,
+      },
+    };
+
+    return await this.evolutionClient.message.updateMessage(
+      params.instanceName,
+      request,
+    );
   }
 
   /**

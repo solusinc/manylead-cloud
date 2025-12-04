@@ -192,3 +192,24 @@ export interface MarkAsReadResponse {
   message: string;
   read: string;
 }
+
+export interface UpdateMessageRequest {
+  number: string;
+  text: string;
+  key: {
+    remoteJid: string;
+    fromMe: boolean;
+    id: string;
+  };
+}
+
+export interface UpdateMessageResponse {
+  key: {
+    remoteJid: string;
+    fromMe: boolean;
+    id: string;
+  };
+  message: Record<string, unknown>;
+  messageTimestamp: string;
+  status: string;
+}

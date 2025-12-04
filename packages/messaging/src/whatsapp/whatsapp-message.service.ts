@@ -292,6 +292,153 @@ export class WhatsAppMessageService {
   }
 
   /**
+   * Editar mensagem existente no WhatsApp
+   *
+   * Fluxo:
+   * 1. Buscar mensagem original com chat, channel e contact
+   * 2. Validar que mensagem é do agente (sender: "agent")
+   * 3. Chamar Evolution API para editar no WhatsApp
+   * 4. Atualizar no banco: content, isEdited, editedAt
+   * 5. Se é última mensagem, atualizar chat.lastMessageContent
+   * 6. Emitir evento Socket.io message:updated
+   *
+   * @param tenantDb - Database do tenant
+   * @param organizationId - ID da organização
+   * @param messageId - ID da mensagem
+   * @param timestamp - Timestamp da mensagem (composite key)
+   * @param chatId - ID do chat
+   * @param newContent - Novo conteúdo da mensagem
+   * @returns Mensagem atualizada
+   */
+  async editMessage(
+    tenantDb: TenantDB,
+    organizationId: string,
+    messageId: string,
+    timestamp: Date,
+    chatId: string,
+    newContent: string,
+  ): Promise<typeof message.$inferSelect> {
+    // 1. Buscar mensagem com chat, channel e contact
+    const [messageRecord] = await tenantDb
+      .select({
+        message,
+        chat,
+        contact,
+        channel,
+      })
+      .from(message)
+      .innerJoin(chat, eq(message.chatId, chat.id))
+      .innerJoin(contact, eq(chat.contactId, contact.id))
+      .leftJoin(channel, eq(chat.channelId, channel.id))
+      .where(
+        and(
+          eq(message.id, messageId),
+          eq(message.timestamp, timestamp),
+          eq(message.chatId, chatId),
+        ),
+      )
+      .limit(1);
+
+    if (!messageRecord) {
+      throw new Error("Mensagem não encontrada");
+    }
+
+    // 2. Validar que mensagem é do agente
+    if (messageRecord.message.sender !== "agent") {
+      throw new Error("Apenas mensagens enviadas pelo agente podem ser editadas");
+    }
+
+    if (!messageRecord.message.whatsappMessageId) {
+      throw new Error("Mensagem não possui whatsappMessageId");
+    }
+
+    if (!messageRecord.channel) {
+      throw new Error("Chat não possui canal configurado");
+    }
+
+    if (!messageRecord.contact.phoneNumber) {
+      throw new Error("Contato não possui número de telefone");
+    }
+
+    const now = new Date();
+
+    // 3. Formatar conteúdo com assinatura do agente
+    const formattedContent = formatMessageWithSignature(
+      messageRecord.message.senderName ?? "Agente",
+      newContent,
+      "whatsapp",
+    );
+
+    // 4. Chamar Evolution API para editar no WhatsApp
+    const remoteJid = `${messageRecord.contact.phoneNumber}@s.whatsapp.net`;
+
+    try {
+      await this.senderService.updateMessage({
+        instanceName: messageRecord.channel.evolutionInstanceName,
+        phoneNumber: messageRecord.contact.phoneNumber,
+        text: formattedContent,
+        remoteJid,
+        fromMe: true, // Mensagem foi enviada por nós
+        whatsappMessageId: messageRecord.message.whatsappMessageId,
+      });
+    } catch (error) {
+      console.error("Failed to edit message on WhatsApp", {
+        messageId,
+        error,
+      });
+      throw new Error("Erro ao editar mensagem no WhatsApp");
+    }
+
+    // 5. Atualizar mensagem no banco
+    const [updatedMessage] = await tenantDb
+      .update(message)
+      .set({
+        content: newContent, // Armazenar SEM assinatura
+        isEdited: true,
+        editedAt: now,
+      })
+      .where(
+        and(
+          eq(message.id, messageId),
+          eq(message.timestamp, timestamp),
+        ),
+      )
+      .returning();
+
+    if (!updatedMessage) {
+      throw new Error("Erro ao atualizar mensagem no banco");
+    }
+
+    // 6. Emitir evento Socket.io
+    await this.eventPublisher.messageUpdated(
+      organizationId,
+      chatId,
+      updatedMessage,
+    );
+
+    // 7. Se é última mensagem, atualizar chat.lastMessageContent
+    if (
+      messageRecord.chat.lastMessageAt &&
+      updatedMessage.timestamp.getTime() === messageRecord.chat.lastMessageAt.getTime()
+    ) {
+      const [updatedChat] = await tenantDb
+        .update(chat)
+        .set({
+          lastMessageContent: newContent,
+        })
+        .where(eq(chat.id, chatId))
+        .returning();
+
+      // Emitir evento de chat atualizado
+      if (updatedChat) {
+        await this.eventPublisher.chatUpdated(organizationId, updatedChat);
+      }
+    }
+
+    return updatedMessage;
+  }
+
+  /**
    * Marcar mensagens como lidas no WhatsApp
    *
    * Fluxo:

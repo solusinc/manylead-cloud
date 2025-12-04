@@ -78,3 +78,12 @@ export interface WhatsAppMarkAsReadParams {
   fromMe: boolean;
   messageId: string;
 }
+
+export interface WhatsAppUpdateMessageParams {
+  instanceName: string;
+  phoneNumber: string;
+  text: string;
+  remoteJid: string;
+  fromMe: boolean;
+  whatsappMessageId: string;
+}
