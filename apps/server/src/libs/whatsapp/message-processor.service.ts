@@ -39,15 +39,16 @@ export class WhatsAppMessageProcessor {
     channel: Channel,
     instanceName: string,
   ): Promise<void> {
-    log.info("📨 [STEP 1] Iniciando processMessage", {
-      messageId: msg.key.id,
-      fromMe: msg.key.fromMe,
-      remoteJid: msg.key.remoteJid,
-    });
-
     // Ignorar mensagens enviadas por nós
     if (msg.key.fromMe) {
-      log.info({ id: msg.key.id }, "⏭️  Ignoring our own message (fromMe=true)");
+      return;
+    }
+
+    // Ignorar mensagens de grupos (por enquanto)
+    // Grupos terminam com @g.us, individuais com @s.whatsapp.net
+    const remoteJid = msg.key.remoteJidAlt ?? msg.key.remoteJid;
+    if (remoteJid.endsWith("@g.us")) {
+      log.info({ remoteJid }, "Ignoring group message (not supported yet)");
       return;
     }
 
@@ -56,27 +57,16 @@ export class WhatsAppMessageProcessor {
       msg.key.remoteJidAlt,
     );
 
-    log.info("📞 [STEP 2] Phone number extraído", {
-      phoneNumber,
-    });
-
     if (!phoneNumber) {
-      log.warn({ remoteJid: msg.key.remoteJid }, "❌ Invalid phone number");
+      log.warn({ remoteJid: msg.key.remoteJid }, "Invalid phone number");
       return;
     }
-
-    log.info("🔌 [STEP 3] Obtendo conexão com tenant DB", {
-      organizationId: channel.organizationId,
-    });
 
     const tenantDb = await this.tenantManager.getConnection(
       channel.organizationId,
     );
 
-    log.info("✅ Conexão obtida com sucesso");
-
     // 1. Garantir que contato existe
-    log.info("👤 [STEP 4] Garantindo contato existe");
     const contactRecord = await this.ensureContact(
       tenantDb,
       channel.organizationId,
@@ -84,14 +74,8 @@ export class WhatsAppMessageProcessor {
       msg.pushName,
       instanceName,
     );
-    log.info("✅ Contato garantido", {
-      contactId: contactRecord.id,
-      name: contactRecord.name,
-      phoneNumber: contactRecord.phoneNumber,
-    });
 
     // 2. Buscar chat existente
-    log.info("💬 [STEP 5] Buscando chat existente");
     let chatRecord = await this.findExistingChat(
       tenantDb,
       contactRecord.id,
@@ -101,7 +85,6 @@ export class WhatsAppMessageProcessor {
     // Se não encontrar, criar novo chat
     let isChatNew = false;
     if (!chatRecord) {
-      log.info("Creating new chat");
       chatRecord = await this.createNewChat(
         tenantDb,
         channel.organizationId,
@@ -111,7 +94,6 @@ export class WhatsAppMessageProcessor {
       isChatNew = true;
 
       // Criar mensagem de sistema "Sessão criada às HH:mm"
-      log.info("📝 Criando mensagem de sistema 'Sessão criada'");
       const createdTime = formatTime(chatRecord.createdAt);
 
       const [systemMessage] = await tenantDb
@@ -135,54 +117,28 @@ export class WhatsAppMessageProcessor {
         throw new Error("Failed to create system message");
       }
 
-      log.info("✅ Mensagem de sistema criada", {
-        messageId: systemMessage.id,
-        content: systemMessage.content,
-      });
-
-      // Emitir evento chat:created (como faz cross-org)
-      // O evento chat:created já invalida queries e recarrega chats
-      // Mensagens de sistema não precisam de evento separado (carregadas ao abrir chat)
-      log.info("🔊 Emitindo evento chat:created");
+      // Emitir evento chat:created
       const socketManager = getSocketManager();
       socketManager.emitToRoom(`org:${channel.organizationId}`, "chat:created", {
         chat: chatRecord,
         contact: contactRecord,
       });
-      log.info("✅ Evento chat:created emitido");
 
-      // Guardar referência para emitir message:new junto com a primeira mensagem do cliente
-      // Isso garante que o som toca corretamente (frontend precisa do chat já carregado)
-      isChatNew = true;
+      log.info("New chat created", {
+        chatId: chatRecord.id,
+        contactId: contactRecord.id,
+      });
     }
-
-    log.info("✅ Chat garantido", {
-      chatId: chatRecord.id,
-      contactId: chatRecord.contactId,
-      channelId: chatRecord.channelId,
-      status: chatRecord.status,
-      isNew: isChatNew,
-    });
 
     // 3. Verificar se mensagem já existe (evitar duplicatas)
-    log.info("🔍 [STEP 6] Verificando duplicata");
     if (await this.isDuplicate(tenantDb, msg.key.id)) {
-      log.info({ id: msg.key.id }, "⏭️  Duplicate message ignored");
       return;
     }
-    log.info("✅ Mensagem não é duplicata");
 
     // 4. Extrair conteúdo
-    log.info("📝 [STEP 7] Extraindo conteúdo da mensagem");
     const messageContent = this.contentExtractor.extract(msg.message);
     const messageType = this.contentExtractor.mapType(msg.messageType);
     const timestamp = this.parseTimestamp(msg.messageTimestamp);
-    log.info("✅ Conteúdo extraído", {
-      messageType,
-      hasMedia: messageContent.hasMedia,
-      textLength: messageContent.text.length,
-      timestamp: timestamp.toISOString(),
-    });
 
     // 5. Criar mensagem
     const messageToInsert = {
@@ -197,33 +153,18 @@ export class WhatsAppMessageProcessor {
       timestamp,
     };
 
-    log.info("💾 [STEP 8] Inserindo mensagem no banco", {
-      ...messageToInsert,
-      contentPreview: messageContent.text.substring(0, 50),
-      timestamp: timestamp.toISOString(),
-    });
-
     const [newMessage] = await tenantDb
       .insert(message)
       .values(messageToInsert)
       .returning();
 
     if (!newMessage) {
-      log.error("❌ FALHA CRÍTICA: Failed to create message");
+      log.error("Failed to create message");
       throw new Error("Failed to create message");
     }
 
-    log.info("✅ [STEP 8] Mensagem salva no banco!", {
-      messageId: newMessage.id,
-      chatId: newMessage.chatId,
-      content: newMessage.content.substring(0, 100),
-      status: newMessage.status,
-      whatsappMessageId: newMessage.whatsappMessageId,
-    });
-
     // 6. Processar mídia se houver
     if (messageContent.hasMedia && messageContent.mediaUrl) {
-      log.info("📎 [STEP 9] Processando mídia");
       await this.processMedia(
         tenantDb,
         newMessage.id,
@@ -233,25 +174,19 @@ export class WhatsAppMessageProcessor {
         channel.organizationId,
         instanceName,
       );
-      log.info("✅ Mídia processada");
-    } else {
-      log.info("⏭️  [STEP 9] Sem mídia para processar");
     }
 
     // 7. Atualizar chat
-    log.info("🔄 [STEP 10] Atualizando chat");
     await this.updateChat(
       tenantDb,
       chatRecord.id,
       chatRecord.createdAt,
       timestamp,
       messageContent.text,
-      chatRecord.assignedTo, // Passar assignedTo para incrementar participant
+      chatRecord.assignedTo,
     );
-    log.info("✅ Chat atualizado");
 
     // 8. Emitir evento Socket.io
-    log.info("🔊 [STEP 11] Emitindo evento Socket.io");
     const socketManager = getSocketManager();
 
     const messagePayload = {
@@ -262,19 +197,10 @@ export class WhatsAppMessageProcessor {
 
     socketManager.emitToRoom(`org:${channel.organizationId}`, "message:new", messagePayload);
 
-    log.info("✅ Evento emitido", {
-      room: `org:${channel.organizationId}`,
-      event: "message:new",
+    log.info("Message processed", {
       messageId: newMessage.id,
-      sender: newMessage.sender,
-      senderId: newMessage.senderId,
-      messageType: newMessage.messageType,
-      isChatNew,
-    });
-
-    log.info("🎉 [CONCLUÍDO] Message processed successfully", {
-      messageId: newMessage.id,
-      whatsappMessageId: msg.key.id,
+      chatId: chatRecord.id,
+      isNewChat: isChatNew,
     });
   }
 
@@ -312,8 +238,6 @@ export class WhatsAppMessageProcessor {
       .then((rows) => rows[0] ?? null);
 
     if (!contactRecord) {
-      log.info({ phoneNumber }, "Creating new contact");
-
       // Buscar foto de perfil ao criar contato
       const profilePictureUrl = await this.fetchProfilePicture(
         instanceName,
@@ -496,8 +420,6 @@ export class WhatsAppMessageProcessor {
     organizationId: string,
     instanceName: string,
   ): Promise<void> {
-    log.info({ type: messageType }, "Processing media");
-
     const fileName = messageContent.fileName ?? `media-${whatsappMessageId}`;
     const mimeType = messageContent.mimeType ?? "application/octet-stream";
 
@@ -535,8 +457,6 @@ export class WhatsAppMessageProcessor {
           jobId: `media-download-${organizationId}-${newAttachment.id}`,
         },
       );
-
-      log.info({ attachmentId: newAttachment.id }, "Download job enqueued");
     }
   }
 

@@ -100,7 +100,7 @@ export class InstanceMethods {
         `/chat/fetchProfilePictureUrl/${instanceName}`,
         { number: phoneNumber },
       );
-    } catch (error) {
+    } catch {
       // Se não encontrar foto (privacidade), retornar null
       return { profilePictureUrl: null };
     }

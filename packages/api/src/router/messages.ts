@@ -608,23 +608,63 @@ export const messagesRouter = createTRPCRouter({
         });
       }
 
-      const { tenantManager } = await import("../trpc");
-      const messageService = getInternalMessageService({
-        redisUrl: env.REDIS_URL,
-        getTenantConnection: tenantManager.getConnection.bind(tenantManager),
-        getCatalogDb: () => ctx.db,
-      });
+      // Buscar chat para determinar messageSource
+      const [chatRecord] = await ctx.tenantDb
+        .select({
+          messageSource: chat.messageSource,
+          createdAt: chat.createdAt,
+        })
+        .from(chat)
+        .where(eq(chat.id, input.chatId))
+        .limit(1);
 
-      const messageContext: MessageContext = {
-        organizationId,
-        tenantDb: ctx.tenantDb,
-        agentId: currentAgent.id,
-        agentName: ctx.session.user.name,
-      };
+      if (!chatRecord) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Chat não encontrado",
+        });
+      }
 
-      await messageService.markAllAsRead(messageContext, input.chatId);
+      // Rota baseada no messageSource
+      if (chatRecord.messageSource === "whatsapp") {
+        // Chamar WhatsAppMessageService
+        const evolutionClient = new EvolutionAPIClient(
+          env.EVOLUTION_API_URL,
+          env.EVOLUTION_API_KEY,
+        );
 
-      return { success: true };
+        const whatsappService = getWhatsAppMessageService({
+          evolutionClient,
+          redisUrl: env.REDIS_URL,
+        });
+
+        await whatsappService.markAsRead(ctx.tenantDb, organizationId, {
+          chatId: input.chatId,
+          chatCreatedAt: chatRecord.createdAt,
+          messageIds: [], // Não usado - marca todas automaticamente
+        });
+
+        return { success: true };
+      } else {
+        // Fluxo original para internal messages
+        const { tenantManager } = await import("../trpc");
+        const messageService = getInternalMessageService({
+          redisUrl: env.REDIS_URL,
+          getTenantConnection: tenantManager.getConnection.bind(tenantManager),
+          getCatalogDb: () => ctx.db,
+        });
+
+        const messageContext: MessageContext = {
+          organizationId,
+          tenantDb: ctx.tenantDb,
+          agentId: currentAgent.id,
+          agentName: ctx.session.user.name,
+        };
+
+        await messageService.markAllAsRead(messageContext, input.chatId);
+
+        return { success: true };
+      }
     }),
 
   /**

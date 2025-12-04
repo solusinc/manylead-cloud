@@ -1,4 +1,4 @@
-import { and, chat, contact, channel, eq, message, sql } from "@manylead/db";
+import { and, chat, contact, channel, eq, message, sql, isNotNull, inArray } from "@manylead/db";
 import type { TenantDB } from "@manylead/db";
 import type { EvolutionAPIClient } from "@manylead/evolution-api-client";
 import { formatMessageWithSignature } from "@manylead/core-services";
@@ -8,7 +8,7 @@ import type {
   SendWhatsAppTextInput,
   // SendWhatsAppMediaInput,
   SendMessageResult,
-  // MarkAsReadInput,
+  MarkAsReadInput,
 } from "./whatsapp-message.types";
 
 export interface WhatsAppMessageServiceConfig {
@@ -227,22 +227,140 @@ export class WhatsAppMessageService {
   //   throw new Error("sendMediaMessage not implemented yet - Fase 6");
   // }
 
-  // /**
-  //  * Marcar mensagens como lidas no WhatsApp
-  //  *
-  //  * TODO: Fase 4 - Implementar mark as read
-  //  *
-  //  * @param tenantDb - Database do tenant
-  //  * @param organizationId - ID da organização
-  //  * @param input - IDs das mensagens
-  //  */
-  // async markAsRead(
-  //   tenantDb: TenantDB,
-  //   organizationId: string,
-  //   input: MarkAsReadInput,
-  // ): Promise<void> {
-  //   throw new Error("markAsRead not implemented yet - Fase 4");
-  // }
+  /**
+   * Marcar mensagens como lidas no WhatsApp
+   *
+   * Fluxo:
+   * 1. Buscar chat, channel e contact
+   * 2. Buscar mensagens não lidas do CONTATO (sender: "contact")
+   * 3. Chamar Evolution API EM LOTE (todas mensagens de uma vez)
+   * 4. Atualizar status local para "read" em lote
+   * 5. Atualizar chat.lastMessageStatus se necessário
+   *
+   * @param tenantDb - Database do tenant
+   * @param organizationId - ID da organização (não usado, mas mantido para consistência)
+   * @param input - ID do chat
+   */
+  async markAsRead(
+    tenantDb: TenantDB,
+    organizationId: string,
+    input: MarkAsReadInput,
+  ): Promise<void> {
+    // 1. Buscar chat com canal e contato
+    const [chatRecord] = await tenantDb
+      .select({
+        chat,
+        contact,
+        channel,
+      })
+      .from(chat)
+      .innerJoin(contact, eq(chat.contactId, contact.id))
+      .leftJoin(channel, eq(chat.channelId, channel.id))
+      .where(
+        and(
+          eq(chat.id, input.chatId),
+          eq(chat.createdAt, input.chatCreatedAt),
+          eq(chat.messageSource, "whatsapp"),
+        ),
+      )
+      .limit(1);
+
+    if (!chatRecord) {
+      throw new Error("Chat não encontrado");
+    }
+
+    if (!chatRecord.channel) {
+      throw new Error("Chat não possui canal configurado");
+    }
+
+    if (!chatRecord.contact.phoneNumber) {
+      throw new Error("Contato não possui número de telefone");
+    }
+
+    // 2. Buscar mensagens não lidas do CONTATO
+    // Mensagens do contato chegam com status "received", não "delivered"
+    const unreadMessages = await tenantDb
+      .select({
+        id: message.id,
+        timestamp: message.timestamp,
+        whatsappMessageId: message.whatsappMessageId,
+      })
+      .from(message)
+      .where(
+        and(
+          eq(message.chatId, input.chatId),
+          eq(message.sender, "customer"), // customer, não contact!
+          eq(message.status, "received"), // received, não delivered!
+          isNotNull(message.whatsappMessageId),
+        ),
+      );
+
+    if (unreadMessages.length === 0) {
+      return; // Nada a marcar
+    }
+
+    const remoteJid = `${chatRecord.contact.phoneNumber}@s.whatsapp.net`;
+
+    // 3. Preparar array de mensagens para marcar como lidas
+    const messagesToMarkRead = unreadMessages
+      .map((msg) => msg.whatsappMessageId)
+      .filter((id): id is string => Boolean(id))
+      .map((id) => ({
+        remoteJid,
+        fromMe: false,
+        id,
+      }));
+
+    if (messagesToMarkRead.length === 0) {
+      return;
+    }
+
+    try {
+      // Chamar Evolution API em LOTE (performance!)
+      await this.config.evolutionClient.message.markAsRead(
+        chatRecord.channel.evolutionInstanceName,
+        { readMessages: messagesToMarkRead },
+      );
+
+      // 4. Atualizar status local em LOTE
+      const messageIds = unreadMessages.map((msg) => msg.id);
+      await tenantDb
+        .update(message)
+        .set({
+          status: "read",
+          readAt: new Date(),
+        })
+        .where(
+          and(
+            eq(message.chatId, input.chatId),
+            inArray(message.id, messageIds),
+          ),
+        );
+
+      // 5. Atualizar chat.lastMessageStatus se necessário
+      if (chatRecord.chat.lastMessageSender === "customer") {
+        await tenantDb
+          .update(chat)
+          .set({
+            lastMessageStatus: "read",
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(chat.id, input.chatId),
+              eq(chat.createdAt, input.chatCreatedAt),
+            ),
+          );
+      }
+    } catch (error) {
+      console.error("Failed to mark messages as read", {
+        chatId: input.chatId,
+        messageCount: messagesToMarkRead.length,
+        error,
+      });
+      throw error;
+    }
+  }
 }
 
 // Singleton instance

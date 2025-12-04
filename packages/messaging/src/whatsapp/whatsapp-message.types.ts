@@ -73,5 +73,6 @@ export interface WhatsAppSendMediaParams {
 export interface WhatsAppMarkAsReadParams {
   instanceName: string;
   remoteJid: string;
+  fromMe: boolean;
   messageId: string;
 }

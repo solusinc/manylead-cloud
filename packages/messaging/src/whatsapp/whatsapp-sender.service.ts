@@ -7,7 +7,7 @@ import type {
 import type {
   WhatsAppSendTextParams,
   WhatsAppSendMediaParams,
-  // WhatsAppMarkAsReadParams,
+  WhatsAppMarkAsReadParams,
 } from "./whatsapp-message.types";
 
 /**
@@ -100,22 +100,22 @@ export class WhatsAppSenderService {
     });
   }
 
-  // /**
-  //  * Marcar mensagem como lida no WhatsApp
-  //  *
-  //  * TODO: Implementar quando Evolution API suportar mark as read
-  //  * Documentação: https://doc.evolution-api.com/v2/en/endpoints/messages
-  //  *
-  //  * @param params - Parâmetros para marcar como lido
-  //  */
-  // async markAsRead(params: WhatsAppMarkAsReadParams): Promise<void> {
-  //   // TODO: Implementar quando Evolution API Client tiver método markAsRead
-  //   // await this.evolutionClient.message.markAsRead(params.instanceName, {
-  //   //   remoteJid: params.remoteJid,
-  //   //   messageId: params.messageId,
-  //   // });
-  //   throw new Error("markAsRead not implemented yet in Evolution API Client");
-  // }
+  /**
+   * Marcar mensagem como lida no WhatsApp
+   *
+   * @param params - Parâmetros para marcar como lido
+   */
+  async markAsRead(params: WhatsAppMarkAsReadParams): Promise<void> {
+    await this.evolutionClient.message.markAsRead(params.instanceName, {
+      readMessages: [
+        {
+          remoteJid: params.remoteJid,
+          fromMe: params.fromMe,
+          id: params.messageId,
+        },
+      ],
+    });
+  }
 
   /**
    * Buscar foto de perfil do contato

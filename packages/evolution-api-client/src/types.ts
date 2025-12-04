@@ -179,3 +179,16 @@ export interface EvolutionAPIError {
   message: string;
   statusCode?: number;
 }
+
+export interface MarkAsReadRequest {
+  readMessages: {
+    remoteJid: string;
+    fromMe: boolean;
+    id: string;
+  }[];
+}
+
+export interface MarkAsReadResponse {
+  message: string;
+  read: string;
+}

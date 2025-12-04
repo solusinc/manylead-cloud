@@ -3,6 +3,8 @@ import type {
   SendMessageResponse,
   SendTextMessageRequest,
   MediaDownloadResponse,
+  MarkAsReadRequest,
+  MarkAsReadResponse,
 } from "../types";
 
 export class MessageMethods {
@@ -55,6 +57,21 @@ export class MessageMethods {
     return this.request<MediaDownloadResponse>(
       "GET",
       `/message/download/${instanceName}/${messageId}`,
+    );
+  }
+
+  /**
+   * Marca mensagens como lidas no WhatsApp
+   * https://doc.evolution-api.com/v2/api-reference/chat-controller/mark-as-read
+   */
+  async markAsRead(
+    instanceName: string,
+    params: MarkAsReadRequest,
+  ): Promise<MarkAsReadResponse> {
+    return this.request<MarkAsReadResponse>(
+      "POST",
+      `/chat/markMessageAsRead/${instanceName}`,
+      params,
     );
   }
 }
