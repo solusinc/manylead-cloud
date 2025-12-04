@@ -9,6 +9,7 @@ import type {
   // SendWhatsAppMediaInput,
   SendMessageResult,
   MarkAsReadInput,
+  WhatsAppSendTextParams,
 } from "./whatsapp-message.types";
 
 export interface WhatsAppMessageServiceConfig {
@@ -113,6 +114,7 @@ export class WhatsAppMessageService {
         status: "pending",
         timestamp: now,
         repliedToMessageId: input.repliedToMessageId ?? null,
+        metadata: input.metadata ?? null,
       })
       .returning();
 
@@ -128,12 +130,41 @@ export class WhatsAppMessageService {
         "whatsapp",
       );
 
-      // 4. Enviar via WhatsAppSenderService
+      // 4. Se tiver repliedToMessageId, buscar mensagem original para quoted
+      let quoted: WhatsAppSendTextParams["quoted"];
+
+      if (input.repliedToMessageId) {
+        const [repliedMessage] = await tenantDb
+          .select({
+            whatsappMessageId: message.whatsappMessageId,
+            sender: message.sender,
+          })
+          .from(message)
+          .where(
+            and(
+              eq(message.id, input.repliedToMessageId),
+              eq(message.chatId, input.chatId),
+            ),
+          )
+          .limit(1);
+
+        if (repliedMessage?.whatsappMessageId) {
+          quoted = {
+            key: {
+              remoteJid: `${chatRecord.contact.phoneNumber}@s.whatsapp.net`,
+              fromMe: repliedMessage.sender === "agent",
+              id: repliedMessage.whatsappMessageId,
+            },
+          };
+        }
+      }
+
+      // 5. Enviar via WhatsAppSenderService
       const result = await this.senderService.sendText({
         instanceName: chatRecord.channel.evolutionInstanceName,
         phoneNumber: chatRecord.contact.phoneNumber,
         text: textWithSignature,
-        // TODO: Fase 5 - Implementar quoted para reply
+        quoted,
       });
 
       // 5. Atualizar mensagem com whatsappMessageId e status "sent"

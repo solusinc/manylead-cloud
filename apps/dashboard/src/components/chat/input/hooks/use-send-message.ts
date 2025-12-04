@@ -265,6 +265,8 @@ export function useSendMessage(
         chatId,
         createdAt: chatCreatedAt,
         content,
+        repliedToMessageId: metadata?.repliedToMessageId,
+        metadata, // Pass metadata for reply preview rendering
       });
     } else {
       // Internal message - uses tempId and metadata

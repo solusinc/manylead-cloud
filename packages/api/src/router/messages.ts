@@ -979,6 +979,8 @@ export const messagesRouter = createTRPCRouter({
         chatId: z.string().uuid(),
         createdAt: z.date(), // Para composite PK do chat
         content: z.string().min(1),
+        repliedToMessageId: z.string().uuid().optional(),
+        metadata: z.record(z.string(), z.unknown()).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -1028,6 +1030,8 @@ export const messagesRouter = createTRPCRouter({
             agentId: currentAgent.id,
             agentName: ctx.session.user.name,
             content: input.content,
+            repliedToMessageId: input.repliedToMessageId,
+            metadata: input.metadata,
           },
         );
 

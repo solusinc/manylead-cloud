@@ -11,6 +11,7 @@ export interface SendWhatsAppTextInput {
   agentName: string;
   content: string;
   repliedToMessageId?: string;
+  metadata?: Record<string, unknown>;
 }
 
 export interface SendWhatsAppMediaInput {

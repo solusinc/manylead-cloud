@@ -140,7 +140,44 @@ export class WhatsAppMessageProcessor {
     const messageType = this.contentExtractor.mapType(msg.messageType);
     const timestamp = this.parseTimestamp(msg.messageTimestamp);
 
-    // 5. Criar mensagem
+    // 5. Buscar mensagem citada se existir
+    let repliedToMessageId: string | null = null;
+    let replyMetadata: Record<string, unknown> | null = null;
+
+    if (msg.contextInfo?.quotedMessage) {
+      const quotedStanzaId = msg.contextInfo.stanzaId as string | undefined;
+
+      if (quotedStanzaId) {
+        const [repliedMessage] = await tenantDb
+          .select({
+            id: message.id,
+            content: message.content,
+            senderName: message.senderName,
+            sender: message.sender,
+            messageType: message.messageType,
+          })
+          .from(message)
+          .where(
+            and(
+              eq(message.chatId, chatRecord.id),
+              eq(message.whatsappMessageId, quotedStanzaId),
+            ),
+          )
+          .limit(1);
+
+        if (repliedMessage) {
+          repliedToMessageId = repliedMessage.id;
+          replyMetadata = {
+            repliedToMessageId: repliedMessage.id,
+            repliedToContent: repliedMessage.content,
+            repliedToSender: repliedMessage.senderName ?? repliedMessage.sender,
+            repliedToMessageType: repliedMessage.messageType,
+          };
+        }
+      }
+    }
+
+    // 6. Criar mensagem
     const messageToInsert = {
       chatId: chatRecord.id,
       messageSource: "whatsapp" as const,
@@ -151,6 +188,8 @@ export class WhatsAppMessageProcessor {
       whatsappMessageId: msg.key.id,
       status: "received" as const,
       timestamp,
+      repliedToMessageId,
+      metadata: replyMetadata,
     };
 
     const [newMessage] = await tenantDb
