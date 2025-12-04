@@ -213,3 +213,30 @@ export interface UpdateMessageResponse {
   messageTimestamp: string;
   status: string;
 }
+
+export interface DeleteMessageRequest {
+  id: string;
+  remoteJid: string;
+  fromMe: boolean;
+  participant?: string; // Para mensagens de grupo
+}
+
+export interface DeleteMessageResponse {
+  key: {
+    remoteJid: string;
+    fromMe: boolean;
+    id: string;
+  };
+  message: {
+    protocolMessage: {
+      key: {
+        remoteJid: string;
+        fromMe: boolean;
+        id: string;
+      };
+      type: "REVOKE";
+    };
+  };
+  messageTimestamp: string;
+  status: "PENDING";
+}

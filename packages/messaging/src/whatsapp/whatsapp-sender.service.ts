@@ -5,12 +5,15 @@ import type {
   SendMediaMessageRequest,
   UpdateMessageRequest,
   UpdateMessageResponse,
+  DeleteMessageRequest,
+  DeleteMessageResponse,
 } from "@manylead/evolution-api-client";
 import type {
   WhatsAppSendTextParams,
   WhatsAppSendMediaParams,
   WhatsAppMarkAsReadParams,
   WhatsAppUpdateMessageParams,
+  WhatsAppDeleteMessageParams,
 } from "./whatsapp-message.types";
 
 /**
@@ -140,6 +143,28 @@ export class WhatsAppSenderService {
     };
 
     return await this.evolutionClient.message.updateMessage(
+      params.instanceName,
+      request,
+    );
+  }
+
+  /**
+   * Deletar mensagem para todos no WhatsApp
+   *
+   * @param params - Parâmetros para deleção de mensagem
+   * @returns Response da Evolution API com confirmação de deleção
+   */
+  async deleteMessage(
+    params: WhatsAppDeleteMessageParams,
+  ): Promise<DeleteMessageResponse> {
+    const request: DeleteMessageRequest = {
+      id: params.whatsappMessageId,
+      remoteJid: params.remoteJid,
+      fromMe: params.fromMe,
+      participant: params.participant,
+    };
+
+    return await this.evolutionClient.message.deleteMessage(
       params.instanceName,
       request,
     );

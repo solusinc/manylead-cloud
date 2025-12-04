@@ -14,6 +14,14 @@ export async function handleMessagesUpsert(
 ) {
   const logger = new WebhookLogger("messages.upsert", instanceName);
 
+  // DEBUG: Log completo do webhook para detectar editedMessage
+  logger.info("Webhook payload received", {
+    messageId: data.key.id,
+    hasMessage: !!data.message,
+    messageKeys: data.message ? Object.keys(data.message) : [],
+    fullMessage: data.message, // Log completo para debug
+  });
+
   // Buscar canal
   const ch = await findChannelByInstanceName(instanceName);
   if (!ch) {

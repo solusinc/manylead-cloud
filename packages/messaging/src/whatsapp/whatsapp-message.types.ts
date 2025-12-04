@@ -87,3 +87,11 @@ export interface WhatsAppUpdateMessageParams {
   fromMe: boolean;
   whatsappMessageId: string;
 }
+
+export interface WhatsAppDeleteMessageParams {
+  instanceName: string;
+  remoteJid: string;
+  fromMe: boolean;
+  whatsappMessageId: string;
+  participant?: string; // Para mensagens de grupo
+}

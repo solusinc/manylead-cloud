@@ -43,7 +43,7 @@ export function useSendMessage(
   const sendWhatsAppMutation = useMutation(
     trpc.messages.sendWhatsApp.mutationOptions({
       onSuccess: (serverMessage) => {
-        // WhatsApp messages: just invalidate queries and register
+        // NO OPTIMISTIC UI - just invalidate and let Socket.io handle it
         register(serverMessage.id);
 
         // Invalidate messages list
@@ -181,83 +181,16 @@ export function useSendMessage(
   );
 
   /**
-   * Send a single message with optimistic update
+   * Send a single message
+   * - WhatsApp: NO optimistic UI, wait for Socket.io
+   * - Internal: Optimistic UI with tempId replacement
    */
   const sendMessage = async (options: SendMessageOptions) => {
     const { content, metadata } = options;
 
-    // Generate tempId BEFORE sending (UUIDv7 - time-sortable)
-    const tempId = uuidv7();
-
-    const userName = session.user.name;
-
-    const tempMessage = {
-      id: tempId,
-      chatId,
-      content, // Conteúdo sem assinatura
-      senderName: userName, // Nome do remetente em campo separado
-      timestamp: new Date(),
-      status: "pending" as const,
-      sender: "agent" as const,
-      senderId: null as string | null,
-      messageType: "text" as const,
-      isOwnMessage: true,
-      _isOptimistic: true,
-      repliedToMessageId: metadata?.repliedToMessageId ?? null,
-      metadata: metadata ?? null,
-    };
-
-    // Add to cache BEFORE mutateAsync (instant UI update)
-    const queries = queryClient.getQueryCache().findAll({
-      queryKey: [["messages", "list"]],
-      exact: false,
-    });
-
-    queries.forEach((query) => {
-      const queryState = query.state.data as {
-        pages: {
-          items: {
-            message: Record<string, unknown>;
-            attachment: Record<string, unknown> | null;
-            isOwnMessage: boolean;
-          }[];
-          nextCursor: string | undefined;
-          hasMore: boolean;
-        }[];
-        pageParams: unknown[];
-      } | undefined;
-
-      if (!queryState?.pages) return;
-
-      const newPages = [...queryState.pages];
-      const firstPage = newPages[0];
-
-      if (firstPage) {
-        newPages[0] = {
-          ...firstPage,
-          items: [
-            ...firstPage.items,
-            {
-              message: tempMessage as unknown as Record<string, unknown>,
-              attachment: null,
-              isOwnMessage: true,
-            },
-          ],
-        };
-
-        queryClient.setQueryData(query.queryKey, {
-          ...queryState,
-          pages: newPages,
-          pageParams: queryState.pageParams,
-        });
-      }
-    });
-
-    // Register tempId in dedup store
-    register(tempId);
-
     // Send to server with correct mutation based on messageSource
     if (messageSource === "whatsapp") {
+      // WhatsApp: NO optimistic UI
       if (!chatCreatedAt) {
         throw new Error("chatCreatedAt is required for WhatsApp messages");
       }
@@ -269,7 +202,75 @@ export function useSendMessage(
         metadata, // Pass metadata for reply preview rendering
       });
     } else {
-      // Internal message - uses tempId and metadata
+      // Internal: Use optimistic UI with tempId
+      const tempId = uuidv7();
+      const userName = session.user.name;
+
+      const tempMessage = {
+        id: tempId,
+        chatId,
+        content,
+        senderName: userName,
+        timestamp: new Date(),
+        status: "pending" as const,
+        sender: "agent" as const,
+        senderId: null as string | null,
+        messageType: "text" as const,
+        isOwnMessage: true,
+        _isOptimistic: true,
+        repliedToMessageId: metadata?.repliedToMessageId ?? null,
+        metadata: metadata ?? null,
+      };
+
+      // Add to cache BEFORE mutateAsync (instant UI update)
+      const queries = queryClient.getQueryCache().findAll({
+        queryKey: [["messages", "list"]],
+        exact: false,
+      });
+
+      queries.forEach((query) => {
+        const queryState = query.state.data as {
+          pages: {
+            items: {
+              message: Record<string, unknown>;
+              attachment: Record<string, unknown> | null;
+              isOwnMessage: boolean;
+            }[];
+            nextCursor: string | undefined;
+            hasMore: boolean;
+          }[];
+          pageParams: unknown[];
+        } | undefined;
+
+        if (!queryState?.pages) return;
+
+        const newPages = [...queryState.pages];
+        const firstPage = newPages[0];
+
+        if (firstPage) {
+          newPages[0] = {
+            ...firstPage,
+            items: [
+              ...firstPage.items,
+              {
+                message: tempMessage as unknown as Record<string, unknown>,
+                attachment: null,
+                isOwnMessage: true,
+              },
+            ],
+          };
+
+          queryClient.setQueryData(query.queryKey, {
+            ...queryState,
+            pages: newPages,
+            pageParams: queryState.pageParams,
+          });
+        }
+      });
+
+      // Register tempId in dedup store
+      register(tempId);
+
       await sendInternalMutation.mutateAsync({
         chatId,
         content,

@@ -5,6 +5,7 @@ import {
   handleConnectionUpdate,
   handleMessagesUpsert,
   handleMessagesUpdate,
+  handleMessagesDelete,
   handleQRCodeUpdated,
   handleSendMessage,
 } from "./handlers";
@@ -13,6 +14,7 @@ import type {
   EvolutionWebhookPayload,
   MessagesUpsertData,
   MessagesUpdateData,
+  MessagesDeleteData,
   QRCodeData,
   SendMessageData,
 } from "./types";
@@ -92,8 +94,13 @@ async function routeEvent(event: string, instance: string, data: unknown) {
       break;
     }
 
+    case "messages.delete": {
+      const validatedData = validateEventData<MessagesDeleteData>(event, data);
+      await handleMessagesDelete(instance, validatedData);
+      break;
+    }
+
     // Eventos não implementados (por enquanto)
-    case "messages.delete":
     case "contacts.upsert":
     case "contacts.update":
     case "presence.update":

@@ -85,6 +85,14 @@ export interface MessagesUpdateData {
   messageId: string;
 }
 
+export interface MessagesDeleteData {
+  key: {
+    remoteJid: string;
+    fromMe: boolean;
+    id: string;
+  };
+}
+
 export interface SendMessageData {
   key: {
     remoteJid: string;

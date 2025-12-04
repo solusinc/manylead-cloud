@@ -439,6 +439,140 @@ export class WhatsAppMessageService {
   }
 
   /**
+   * Deletar mensagem no WhatsApp (para todos)
+   *
+   * Fluxo:
+   * 1. Buscar mensagem original com chat, channel e contact
+   * 2. Validar que mensagem é do agente (sender: "agent")
+   * 3. Chamar Evolution API para deletar no WhatsApp
+   * 4. Soft delete no banco: isDeleted: true, content: "Esta mensagem foi excluída"
+   * 5. Se é última mensagem, marcar chat.lastMessageIsDeleted: true
+   * 6. Emitir evento Socket.io message:updated
+   *
+   * @param tenantDb - Database do tenant
+   * @param organizationId - ID da organização
+   * @param messageId - ID da mensagem
+   * @param timestamp - Timestamp da mensagem (composite key)
+   * @param chatId - ID do chat
+   * @returns Mensagem atualizada
+   */
+  async deleteMessage(
+    tenantDb: TenantDB,
+    organizationId: string,
+    messageId: string,
+    timestamp: Date,
+    chatId: string,
+  ): Promise<typeof message.$inferSelect> {
+    // 1. Buscar mensagem com chat, channel e contact
+    const [messageRecord] = await tenantDb
+      .select({
+        message,
+        chat,
+        contact,
+        channel,
+      })
+      .from(message)
+      .innerJoin(chat, eq(message.chatId, chat.id))
+      .innerJoin(contact, eq(chat.contactId, contact.id))
+      .leftJoin(channel, eq(chat.channelId, channel.id))
+      .where(
+        and(
+          eq(message.id, messageId),
+          eq(message.timestamp, timestamp),
+          eq(message.chatId, chatId),
+        ),
+      )
+      .limit(1);
+
+    if (!messageRecord) {
+      throw new Error("Mensagem não encontrada");
+    }
+
+    // 2. Validar que mensagem é do agente
+    if (messageRecord.message.sender !== "agent") {
+      throw new Error("Apenas mensagens enviadas pelo agente podem ser deletadas");
+    }
+
+    if (!messageRecord.message.whatsappMessageId) {
+      throw new Error("Mensagem não possui whatsappMessageId");
+    }
+
+    if (!messageRecord.channel) {
+      throw new Error("Chat não possui canal configurado");
+    }
+
+    if (!messageRecord.contact.phoneNumber) {
+      throw new Error("Contato não possui número de telefone");
+    }
+
+    // 3. Chamar Evolution API para deletar no WhatsApp
+    const remoteJid = `${messageRecord.contact.phoneNumber}@s.whatsapp.net`;
+
+    try {
+      await this.senderService.deleteMessage({
+        instanceName: messageRecord.channel.evolutionInstanceName,
+        remoteJid,
+        fromMe: true, // Mensagem foi enviada por nós
+        whatsappMessageId: messageRecord.message.whatsappMessageId,
+      });
+    } catch (error) {
+      console.error("Failed to delete message on WhatsApp", {
+        messageId,
+        error,
+      });
+      throw new Error("Erro ao deletar mensagem no WhatsApp");
+    }
+
+    // 4. Soft delete no banco
+    const [updatedMessage] = await tenantDb
+      .update(message)
+      .set({
+        isDeleted: true,
+        content: "Esta mensagem foi excluída",
+      })
+      .where(
+        and(
+          eq(message.id, messageId),
+          eq(message.timestamp, timestamp),
+        ),
+      )
+      .returning();
+
+    if (!updatedMessage) {
+      throw new Error("Erro ao atualizar mensagem no banco");
+    }
+
+    // 5. Emitir evento Socket.io
+    await this.eventPublisher.messageUpdated(
+      organizationId,
+      chatId,
+      updatedMessage,
+    );
+
+    // 6. Se é última mensagem, marcar chat.lastMessageIsDeleted: true
+    if (
+      messageRecord.chat.lastMessageAt &&
+      updatedMessage.timestamp.getTime() === messageRecord.chat.lastMessageAt.getTime()
+    ) {
+      const [updatedChat] = await tenantDb
+        .update(chat)
+        .set({
+          lastMessageIsDeleted: true,
+          lastMessageContent: "Esta mensagem foi excluída",
+        })
+        .where(eq(chat.id, chatId))
+        .returning();
+
+      // Emitir evento de chat atualizado
+      if (updatedChat) {
+        await this.eventPublisher.chatUpdated(organizationId, updatedChat);
+      }
+    }
+
+    return updatedMessage;
+  }
+
+  /**
    * Marcar mensagens como lidas no WhatsApp
    *
    * Fluxo:

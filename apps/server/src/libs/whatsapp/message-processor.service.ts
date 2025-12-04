@@ -130,12 +130,18 @@ export class WhatsAppMessageProcessor {
       });
     }
 
+    // TODO: FIX - Detectar mensagens editadas do WhatsApp → Dashboard
+    // Evolution API Issue #2010: Evolution API não envia webhooks de edição
+    // Ref: https://github.com/EvolutionAPI/evolution-api/issues/2010
+    // Status: Aguardando fix da Evolution API
+    // Nota: Dashboard → WhatsApp funciona perfeitamente via updateWhatsAppMessage
+
     // 3. Verificar se mensagem já existe (evitar duplicatas)
     if (await this.isDuplicate(tenantDb, msg.key.id)) {
       return;
     }
 
-    // 4. Extrair conteúdo
+    // 5. Extrair conteúdo
     const messageContent = this.contentExtractor.extract(msg.message);
     const messageType = this.contentExtractor.mapType(msg.messageType);
     const timestamp = this.parseTimestamp(msg.messageTimestamp);
@@ -257,6 +263,31 @@ export class WhatsAppMessageProcessor {
       isNewChat: isChatNew,
     });
   }
+
+  /**
+   * TODO: DISABLED - Aguardando Evolution API Issue #2010
+   * Evolution API não envia webhooks de mensagens editadas
+   * Ref: https://github.com/EvolutionAPI/evolution-api/issues/2010
+   *
+   * Processa mensagem editada recebida do WhatsApp
+   *
+   * Fluxo:
+   * 1. Extrai novo conteúdo do editedMessage
+   * 2. Busca mensagem original pelo whatsappMessageId
+   * 3. Atualiza content, isEdited, editedAt
+   * 4. Atualiza chat.lastMessageContent se for última mensagem
+   * 5. Emite evento Socket.io message:updated
+   */
+  /*
+  private async processEditedMessage(
+    tenantDb: TenantDB,
+    msg: MessageData,
+    chatId: string,
+    organizationId: string,
+  ): Promise<void> {
+    ...
+  }
+  */
 
   /**
    * Extrai número de telefone do remoteJid

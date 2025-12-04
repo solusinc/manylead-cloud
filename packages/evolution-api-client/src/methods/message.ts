@@ -7,6 +7,8 @@ import type {
   MarkAsReadResponse,
   UpdateMessageRequest,
   UpdateMessageResponse,
+  DeleteMessageRequest,
+  DeleteMessageResponse,
 } from "../types";
 
 export class MessageMethods {
@@ -96,6 +98,21 @@ export class MessageMethods {
     return this.request<UpdateMessageResponse>(
       "POST",
       `/chat/updateMessage/${instanceName}`,
+      params,
+    );
+  }
+
+  /**
+   * Deleta uma mensagem para todos no WhatsApp
+   * https://doc.evolution-api.com/v2/api-reference/chat-controller/delete-message-for-everyone
+   */
+  async deleteMessage(
+    instanceName: string,
+    params: DeleteMessageRequest,
+  ): Promise<DeleteMessageResponse> {
+    return this.request<DeleteMessageResponse>(
+      "DELETE",
+      `/chat/deleteMessageForEveryone/${instanceName}`,
       params,
     );
   }
