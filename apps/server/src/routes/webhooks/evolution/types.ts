@@ -72,8 +72,17 @@ export interface MessageData {
 // Evolution API envia mensagem única, não array
 export type MessagesUpsertData = MessageData;
 
+/**
+ * Tipo de dados para messages.update (Evolution API v2.3.6)
+ * Formato real da Evolution API - single object, não array
+ */
 export interface MessagesUpdateData {
-  messages: MessageData[];
+  keyId: string;
+  remoteJid: string;
+  fromMe: boolean;
+  status: string; // "SERVER_ACK" | "DELIVERY_ACK" | "READ"
+  instanceId: string;
+  messageId: string;
 }
 
 export interface SendMessageData {

@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./internal": "./src/internal/index.ts",
+    "./whatsapp": "./src/whatsapp/index.ts",
     "./types": "./src/types/index.ts"
   },
   "scripts": {
@@ -15,6 +16,7 @@
   "dependencies": {
     "@manylead/core-services": "workspace:*",
     "@manylead/db": "workspace:*",
+    "@manylead/evolution-api-client": "workspace:*",
     "@manylead/storage": "workspace:*"
   },
   "devDependencies": {

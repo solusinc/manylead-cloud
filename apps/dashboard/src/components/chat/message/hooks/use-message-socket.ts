@@ -180,5 +180,8 @@ export function useMessageSocket(
     [queryClient]
   );
 
+  // NOTE: WhatsApp message status (ticks) listener moved to ChatLayoutInner
+  // to ensure it's always active, even when chat is not open
+
   return { isTyping, isRecording };
 }

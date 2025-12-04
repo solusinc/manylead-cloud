@@ -14,6 +14,7 @@ import type {
   ContactLogoUpdatedEvent,
   ScheduledMessageSentEvent,
   ScheduledMessageCancelledEvent,
+  WhatsAppMessageStatusEvent,
   UseChatSocketReturn,
 } from "~/hooks/use-chat-socket";
 
@@ -34,6 +35,7 @@ interface SocketEventMap {
   onContactLogoUpdated: ContactLogoUpdatedEvent;
   onScheduledMessageSent: ScheduledMessageSentEvent;
   onScheduledMessageCancelled: ScheduledMessageCancelledEvent;
+  onWhatsAppMessageStatus: WhatsAppMessageStatusEvent;
 }
 
 /**

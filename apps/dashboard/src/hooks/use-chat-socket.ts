@@ -73,6 +73,14 @@ export interface ScheduledMessageCancelledEvent {
   reason: string;
 }
 
+export interface WhatsAppMessageStatusEvent {
+  messageId: string;
+  chatId: string;
+  status: "sent" | "delivered" | "read";
+  sender: string;
+  timestamp: string;
+}
+
 export interface UseChatSocketReturn {
   // Connection state
   isConnected: boolean;
@@ -95,6 +103,7 @@ export interface UseChatSocketReturn {
   onContactLogoUpdated: (callback: (data: ContactLogoUpdatedEvent) => void) => () => void;
   onScheduledMessageSent: (callback: (data: ScheduledMessageSentEvent) => void) => () => void;
   onScheduledMessageCancelled: (callback: (data: ScheduledMessageCancelledEvent) => void) => () => void;
+  onWhatsAppMessageStatus: (callback: (data: WhatsAppMessageStatusEvent) => void) => () => void;
 
   // Typing indicators
   emitTypingStart: (chatId: string) => void;
@@ -367,6 +376,18 @@ export function useChatSocket(): UseChatSocketReturn {
     };
   };
 
+  const onWhatsAppMessageStatus = (callback: (data: WhatsAppMessageStatusEvent) => void) => {
+    if (!socketRef.current) {
+      return () => {
+        // No-op
+      };
+    }
+    socketRef.current.on("message:status", callback);
+    return () => {
+      socketRef.current?.off("message:status", callback);
+    };
+  };
+
   // Emit typing events
   const emitTypingStart = (chatId: string) => {
     if (socketRef.current?.connected) {
@@ -417,6 +438,7 @@ export function useChatSocket(): UseChatSocketReturn {
     onContactLogoUpdated,
     onScheduledMessageSent,
     onScheduledMessageCancelled,
+    onWhatsAppMessageStatus,
     emitTypingStart,
     emitTypingStop,
     emitRecordingStart,

@@ -170,7 +170,7 @@ export class ChatParticipantService {
       await this.tenantDb
         .update(chatParticipant)
         .set({
-          unreadCount: (existing.unreadCount ?? 0) + 1,
+          unreadCount: existing.unreadCount + 1,
           updatedAt: new Date(),
         })
         .where(

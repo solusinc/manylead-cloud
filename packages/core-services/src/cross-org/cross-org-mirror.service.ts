@@ -17,6 +17,7 @@ import type { EventPublisher } from "../events";
 import type { CrossOrgMirrorConfig } from "./cross-org.types";
 import { getEventPublisher } from "../events";
 import { getDefaultDepartment } from "../department";
+import { removeSignatureFromMessage } from "../utils/message-formatting";
 
 /**
  * CrossOrgMirrorService
@@ -151,7 +152,7 @@ export class CrossOrgMirrorService {
           createdAt: now,
           updatedAt: now,
           lastMessageAt: now,
-          lastMessageContent: messageContent.replace(/^\*\*.*?\*\*\n/, ""), // Remove signature
+          lastMessageContent: removeSignatureFromMessage(messageContent),
           lastMessageSender: "agent",
           lastMessageStatus: "sent",
           totalMessages: 0,
@@ -416,7 +417,7 @@ export class CrossOrgMirrorService {
     await this.updateMirroredChatAfterMessage(
       targetTenantDb,
       mirroredChat,
-      messageContent.replace(/^\*\*.*?\*\*\n/, ""),
+      removeSignatureFromMessage(messageContent),
       messageTimestamp,
     );
 
@@ -605,7 +606,7 @@ export class CrossOrgMirrorService {
         updatedMirrored.timestamp.getTime() === mirroredChat.lastMessageAt.getTime()
       ) {
         // Extrair conteúdo sem a assinatura (**AgentName**\n)
-        const contentWithoutSignature = newContent.replace(/^\*\*[^*]+\*\*\n/, '');
+        const contentWithoutSignature = removeSignatureFromMessage(newContent);
         const [updatedChat] = await targetTenantDb
           .update(chat)
           .set({

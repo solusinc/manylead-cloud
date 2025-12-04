@@ -12,3 +12,6 @@ export * from "./chat";
 
 // Message
 export * from "./message";
+
+// Utils
+export * from "./utils/message-formatting";

@@ -10,6 +10,7 @@ import { useMessageDeduplication } from "~/hooks/use-message-deduplication";
 import { useSocketListener } from "~/hooks/chat/use-socket-listener";
 import { useNotificationSound } from "~/hooks/use-notification-sound";
 import { useCurrentAgent } from "~/hooks/chat/use-current-agent";
+import type { WhatsAppMessageStatusEvent } from "~/hooks/use-chat-socket";
 import { ChatSidebar } from "./sidebar";
 import { ChatWindowEmpty } from "./window";
 
@@ -273,6 +274,119 @@ function ChatLayoutInner({
           });
 
           // Force re-render
+          void queryClient.invalidateQueries({
+            queryKey: query.queryKey,
+            refetchType: "none",
+          });
+        }
+      });
+    },
+    [queryClient]
+  );
+
+  // 5. WhatsApp message status updates (ticks) - atualizar mensagens e sidebar
+  useSocketListener(
+    socket,
+    'onWhatsAppMessageStatus',
+    (event: WhatsAppMessageStatusEvent) => {
+      // Update message in messages cache
+      const queries = queryClient.getQueryCache().findAll({
+        queryKey: [["messages", "list"]],
+        exact: false,
+      });
+
+      queries.forEach((query) => {
+        const queryState = query.state.data as {
+          pages: {
+            items: {
+              message: Record<string, unknown>;
+              attachment: Record<string, unknown> | null;
+              isOwnMessage: boolean;
+            }[];
+            nextCursor: string | undefined;
+            hasMore: boolean;
+          }[];
+          pageParams: unknown[];
+        } | undefined;
+
+        if (!queryState?.pages) return;
+
+        const newPages = queryState.pages.map((page) => ({
+          ...page,
+          items: page.items.map((item) => {
+            if (item.message.id === event.messageId) {
+              return {
+                ...item,
+                message: {
+                  ...item.message,
+                  status: event.status,
+                  deliveredAt: event.status === "delivered" || event.status === "read" ? new Date(event.timestamp) : item.message.deliveredAt,
+                  readAt: event.status === "read" ? new Date(event.timestamp) : item.message.readAt,
+                },
+              };
+            }
+            return item;
+          }),
+        }));
+
+        queryClient.setQueryData(query.queryKey, {
+          ...queryState,
+          pages: newPages,
+          pageParams: queryState.pageParams,
+        });
+
+        void queryClient.invalidateQueries({
+          queryKey: query.queryKey,
+          refetchType: "none",
+        });
+      });
+
+      // Update lastMessageStatus in chats cache (for sidebar)
+      const chatQueries = queryClient.getQueryCache().findAll({
+        queryKey: [["chats", "list"]],
+        exact: false,
+      });
+
+      chatQueries.forEach((query) => {
+        const queryState = query.state.data as {
+          items: {
+            chat: {
+              id: string;
+              lastMessageAt?: Date;
+              lastMessageStatus?: string;
+              lastMessageSender?: string;
+            };
+          }[];
+        } | undefined;
+
+        if (!queryState?.items) return;
+
+        const chatIndex = queryState.items.findIndex((item) => item.chat.id === event.chatId);
+        if (chatIndex === -1) return;
+
+        const chat = queryState.items[chatIndex];
+        if (!chat) return;
+
+        // Only update if this is the last message (compare timestamps)
+        const isLastMessage =
+          !chat.chat.lastMessageAt ||
+          new Date(event.timestamp).getTime() >= new Date(chat.chat.lastMessageAt).getTime();
+
+        if (isLastMessage) {
+          const newItems = [...queryState.items];
+          newItems[chatIndex] = {
+            ...chat,
+            chat: {
+              ...chat.chat,
+              lastMessageStatus: event.status,
+            },
+          };
+
+          queryClient.setQueryData(query.queryKey, {
+            ...queryState,
+            items: newItems,
+          });
+
           void queryClient.invalidateQueries({
             queryKey: query.queryKey,
             refetchType: "none",

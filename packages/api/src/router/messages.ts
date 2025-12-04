@@ -18,9 +18,8 @@ const uploadAttachmentSchema = z.object({
 });
 
 import { env } from "../env";
-import { getInternalMessageService } from "@manylead/messaging";
+import { getInternalMessageService, getWhatsAppMessageService } from "@manylead/messaging";
 import type { MessageContext } from "@manylead/messaging";
-import { getWhatsAppMessageService } from "@manylead/core-services/whatsapp";
 import { createTRPCRouter, memberProcedure, ownerProcedure } from "../trpc";
 
 /**
@@ -987,6 +986,7 @@ export const messagesRouter = createTRPCRouter({
             chatId: input.chatId,
             chatCreatedAt: input.createdAt,
             agentId: currentAgent.id,
+            agentName: ctx.session.user.name,
             content: input.content,
           },
         );

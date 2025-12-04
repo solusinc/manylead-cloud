@@ -1,6 +1,10 @@
 // Internal messaging
 export { InternalMessageService, getInternalMessageService } from "./internal";
 
+// WhatsApp messaging
+export { WhatsAppMessageService, getWhatsAppMessageService } from "./whatsapp";
+export type { WhatsAppMessageServiceConfig } from "./whatsapp";
+
 // Types
 export type {
   MessageServiceConfig,
@@ -9,3 +13,10 @@ export type {
   MessageContext,
   CreateMessageResult,
 } from "./types";
+
+export type {
+  SendWhatsAppTextInput,
+  SendWhatsAppMediaInput,
+  SendMessageResult,
+  MarkAsReadInput,
+} from "./whatsapp";

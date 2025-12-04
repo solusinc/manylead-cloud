@@ -8,6 +8,7 @@ export interface SendWhatsAppTextInput {
   chatId: string;
   chatCreatedAt: Date;
   agentId: string;
+  agentName: string;
   content: string;
   repliedToMessageId?: string;
 }

@@ -1,13 +1,14 @@
 import { and, chat, contact, channel, eq, message, sql } from "@manylead/db";
 import type { TenantDB } from "@manylead/db";
 import type { EvolutionAPIClient } from "@manylead/evolution-api-client";
+import { formatMessageWithSignature } from "@manylead/core-services";
 
 import { WhatsAppSenderService } from "./whatsapp-sender.service";
 import type {
   SendWhatsAppTextInput,
-  SendWhatsAppMediaInput,
+  // SendWhatsAppMediaInput,
   SendMessageResult,
-  MarkAsReadInput,
+  // MarkAsReadInput,
 } from "./whatsapp-message.types";
 
 export interface WhatsAppMessageServiceConfig {
@@ -106,6 +107,7 @@ export class WhatsAppMessageService {
         messageSource: "whatsapp",
         sender: "agent",
         senderId: input.agentId,
+        senderName: input.agentName,
         messageType: "text",
         content: input.content,
         status: "pending",
@@ -119,15 +121,22 @@ export class WhatsAppMessageService {
     }
 
     try {
-      // 3. Enviar via WhatsAppSenderService
+      // 3. Formatar mensagem com assinatura para envio
+      const textWithSignature = formatMessageWithSignature(
+        input.agentName,
+        input.content,
+        "whatsapp",
+      );
+
+      // 4. Enviar via WhatsAppSenderService
       const result = await this.senderService.sendText({
         instanceName: chatRecord.channel.evolutionInstanceName,
         phoneNumber: chatRecord.contact.phoneNumber,
-        text: input.content,
+        text: textWithSignature,
         // TODO: Fase 5 - Implementar quoted para reply
       });
 
-      // 4. Atualizar mensagem com whatsappMessageId e status "sent"
+      // 5. Atualizar mensagem com whatsappMessageId e status "sent"
       await tenantDb
         .update(message)
         .set({
@@ -142,7 +151,7 @@ export class WhatsAppMessageService {
           ),
         );
 
-      // 5. Atualizar chat (lastMessage, totalMessages)
+      // 6. Atualizar chat (lastMessage, totalMessages)
       await tenantDb
         .update(chat)
         .set({
@@ -160,7 +169,7 @@ export class WhatsAppMessageService {
           ),
         );
 
-      // 6. TODO: Emitir evento Socket.io
+      // 7. TODO: Emitir evento Socket.io
       // getSocketManager().emitToRoom(`org:${organizationId}`, "message:new", {...})
 
       return {
@@ -170,7 +179,7 @@ export class WhatsAppMessageService {
         status: "sent",
       };
     } catch (error) {
-      // 7. Se falhar, marcar mensagem como failed
+      // 8. Se falhar, marcar mensagem como failed
       const errorMessage =
         error instanceof Error ? error.message : "Erro desconhecido";
 
@@ -200,38 +209,49 @@ export class WhatsAppMessageService {
     }
   }
 
-  /**
-   * Enviar mensagem com mídia para WhatsApp
-   *
-   * TODO: Fase 6 - Implementar envio de mídia
-   *
-   * @param tenantDb - Database do tenant
-   * @param organizationId - ID da organização
-   * @param input - Dados da mídia
-   * @returns Resultado do envio
-   */
-  async sendMediaMessage(
-    tenantDb: TenantDB,
-    organizationId: string,
-    input: SendWhatsAppMediaInput,
-  ): Promise<SendMessageResult> {
-    throw new Error("sendMediaMessage not implemented yet - Fase 6");
-  }
+  // /**
+  //  * Enviar mensagem com mídia para WhatsApp
+  //  *
+  //  * TODO: Fase 6 - Implementar envio de mídia
+  //  *
+  //  * @param tenantDb - Database do tenant
+  //  * @param organizationId - ID da organização
+  //  * @param input - Dados da mídia
+  //  * @returns Resultado do envio
+  //  */
+  // async sendMediaMessage(
+  //   tenantDb: TenantDB,
+  //   organizationId: string,
+  //   input: SendWhatsAppMediaInput,
+  // ): Promise<SendMessageResult> {
+  //   throw new Error("sendMediaMessage not implemented yet - Fase 6");
+  // }
 
-  /**
-   * Marcar mensagens como lidas no WhatsApp
-   *
-   * TODO: Fase 4 - Implementar mark as read
-   *
-   * @param tenantDb - Database do tenant
-   * @param organizationId - ID da organização
-   * @param input - IDs das mensagens
-   */
-  async markAsRead(
-    tenantDb: TenantDB,
-    organizationId: string,
-    input: MarkAsReadInput,
-  ): Promise<void> {
-    throw new Error("markAsRead not implemented yet - Fase 4");
-  }
+  // /**
+  //  * Marcar mensagens como lidas no WhatsApp
+  //  *
+  //  * TODO: Fase 4 - Implementar mark as read
+  //  *
+  //  * @param tenantDb - Database do tenant
+  //  * @param organizationId - ID da organização
+  //  * @param input - IDs das mensagens
+  //  */
+  // async markAsRead(
+  //   tenantDb: TenantDB,
+  //   organizationId: string,
+  //   input: MarkAsReadInput,
+  // ): Promise<void> {
+  //   throw new Error("markAsRead not implemented yet - Fase 4");
+  // }
+}
+
+// Singleton instance
+let whatsappMessageServiceInstance: WhatsAppMessageService | null = null;
+
+/**
+ * Get or create WhatsAppMessageService singleton
+ */
+export function getWhatsAppMessageService(config: WhatsAppMessageServiceConfig): WhatsAppMessageService {
+  whatsappMessageServiceInstance ??= new WhatsAppMessageService(config);
+  return whatsappMessageServiceInstance;
 }
