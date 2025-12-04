@@ -4,6 +4,7 @@ import { createLogger } from "~/libs/utils/logger";
 import type { TenantProvisioningJobData } from "~/workers/tenant-provisioning";
 import type { ChannelSyncJobData } from "~/workers/channel-sync";
 import type { MediaDownloadJobData } from "@manylead/shared/queue";
+import type { AudioSendJobData } from "@manylead/shared/queue";
 import type { AttachmentCleanupJobData } from "~/workers/attachment-cleanup";
 import type { AttachmentOrphanCleanupJobData } from "~/workers/attachment-orphan-cleanup";
 import type { QuickReplyOrphanCleanupJobData } from "~/workers/quick-reply-orphan-cleanup";
@@ -16,6 +17,7 @@ import { getRedisClient } from "~/libs/cache/redis";
 import { processTenantProvisioning } from "~/workers/tenant-provisioning";
 import { processChannelSync } from "~/workers/channel-sync";
 import { processMediaDownload } from "~/workers/media-download";
+import { processAudioSend } from "~/workers/audio-send";
 import { processAttachmentCleanup } from "~/workers/attachment-cleanup";
 import { processAttachmentOrphanCleanup } from "~/workers/attachment-orphan-cleanup";
 import { processQuickReplyOrphanCleanup } from "~/workers/quick-reply-orphan-cleanup";
@@ -167,6 +169,27 @@ export function createWorkers(): Worker[] {
 
   logger.info(`Worker created for queue: ${env.QUEUE_MEDIA_DOWNLOAD}`);
   workers.push(mediaDownloadWorker);
+
+  /**
+   * Audio Send Worker
+   * Converte áudio para formato WhatsApp (OGG/Opus) e envia via Evolution API
+   */
+  logger.info("Creating worker for queue: audio-send");
+
+  const audioSendWorker = createWorker<AudioSendJobData>({
+    name: "audio-send",
+    processor: processAudioSend,
+    connection,
+    concurrency: env.WORKER_CONCURRENCY,
+    logger,
+  });
+
+  attachEventListeners(audioSendWorker, {
+    queueName: "audio-send",
+  });
+
+  logger.info("Worker created for queue: audio-send");
+  workers.push(audioSendWorker);
 
   /**
    * Attachment Cleanup Worker (Cron)
@@ -349,6 +372,10 @@ export function createQueuesForMonitoring(): { name: string; queue: Queue }[] {
     {
       name: "media-download",
       queue: createQueue({ name: "media-download", connection }),
+    },
+    {
+      name: "audio-send",
+      queue: createQueue({ name: "audio-send", connection }),
     },
     {
       name: "attachment-cleanup",

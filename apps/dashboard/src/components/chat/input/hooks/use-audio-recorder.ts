@@ -173,6 +173,7 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
       extractWaveformData();
 
       // Create media recorder
+      // Gravar em webm (backend irá converter para OGG para WhatsApp)
       const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
         ? "audio/webm;codecs=opus"
         : "audio/webm";

@@ -540,6 +540,7 @@ export class WhatsAppMessageProcessor {
           instanceName,
           fileName,
           mimeType,
+          mediaUrl: messageContent.mediaUrl, // URL direta do WhatsApp (workaround para bug Evolution API)
         },
         {
           jobId: `media-download-${organizationId}-${newAttachment.id}`,

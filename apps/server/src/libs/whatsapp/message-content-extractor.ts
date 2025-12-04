@@ -82,32 +82,34 @@ export class MessageContentExtractor {
 
   private extractImage(messageObj: Record<string, unknown>): MessageContent {
     const img = messageObj.imageMessage as Record<string, unknown>;
+    const caption = typeof img.caption === "string" ? img.caption : "";
     return {
-      text: typeof img.caption === "string" ? img.caption : "",
+      text: caption, // Usa caption se presente, vazio caso contrário
       hasMedia: true,
       mediaUrl: typeof img.url === "string" ? img.url : "",
       mimeType: typeof img.mimetype === "string" ? img.mimetype : "image/jpeg",
       fileName: typeof img.fileName === "string" ? img.fileName : "image.jpg",
-      caption: typeof img.caption === "string" ? img.caption : "",
+      caption,
     };
   }
 
   private extractVideo(messageObj: Record<string, unknown>): MessageContent {
     const vid = messageObj.videoMessage as Record<string, unknown>;
+    const caption = typeof vid.caption === "string" ? vid.caption : "";
     return {
-      text: typeof vid.caption === "string" ? vid.caption : "",
+      text: caption, // Usa caption se presente, vazio caso contrário
       hasMedia: true,
       mediaUrl: typeof vid.url === "string" ? vid.url : "",
       mimeType: typeof vid.mimetype === "string" ? vid.mimetype : "video/mp4",
       fileName: typeof vid.fileName === "string" ? vid.fileName : "video.mp4",
-      caption: typeof vid.caption === "string" ? vid.caption : "",
+      caption,
     };
   }
 
   private extractAudio(messageObj: Record<string, unknown>): MessageContent {
     const aud = messageObj.audioMessage as Record<string, unknown>;
     return {
-      text: "[Áudio]",
+      text: "", // Áudio não precisa de texto placeholder
       hasMedia: true,
       mediaUrl: typeof aud.url === "string" ? aud.url : "",
       mimeType: typeof aud.mimetype === "string" ? aud.mimetype : "audio/ogg",

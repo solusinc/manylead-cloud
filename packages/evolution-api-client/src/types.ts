@@ -130,6 +130,21 @@ export interface SendMediaMessageRequest {
   delay?: number;
 }
 
+export interface SendAudioMessageRequest {
+  number: string;
+  audio: string; // URL or base64
+  delay?: number;
+  encoding?: boolean;
+  ptt?: boolean; // Push-to-talk (voice message)
+  quoted?: {
+    key: {
+      remoteJid: string;
+      fromMe: boolean;
+      id: string;
+    };
+  };
+}
+
 export interface SendMessageResponse {
   key: {
     remoteJid: string;

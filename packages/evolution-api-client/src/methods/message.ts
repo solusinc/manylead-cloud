@@ -1,5 +1,6 @@
 import type {
   SendMediaMessageRequest,
+  SendAudioMessageRequest,
   SendMessageResponse,
   SendTextMessageRequest,
   MediaDownloadResponse,
@@ -43,6 +44,12 @@ export class MessageMethods {
     instanceName: string,
     params: SendMediaMessageRequest,
   ): Promise<SendMessageResponse> {
+    // Log para debug
+    console.log('[Evolution API] sendMedia request:', {
+      instanceName,
+      params: JSON.stringify(params, null, 2)
+    });
+
     return this.request<SendMessageResponse>(
       "POST",
       `/message/sendMedia/${instanceName}`,
@@ -51,24 +58,66 @@ export class MessageMethods {
   }
 
   /**
+   * Envia mensagem de áudio (voz) via WhatsApp
+   * https://doc.evolution-api.com/v2/api-reference/message-controller/send-audio
+   */
+  async sendAudio(
+    instanceName: string,
+    params: SendAudioMessageRequest,
+  ): Promise<SendMessageResponse> {
+    // Log para debug
+    console.log('[Evolution API] sendAudio request:', {
+      instanceName,
+      params: JSON.stringify(params, null, 2)
+    });
+
+    return this.request<SendMessageResponse>(
+      "POST",
+      `/message/sendWhatsAppAudio/${instanceName}`,
+      params,
+    );
+  }
+
+  /**
    * Baixa mídia do WhatsApp (Evolution API v2)
    * https://doc.evolution-api.com/v2/api-reference/chat-controller/get-base64
+   *
+   * @param instanceName - Nome da instância Evolution API
+   * @param messageId - ID da mensagem no WhatsApp
+   * @param mediaType - Tipo de mídia (opcional) - usado para condicionar parâmetros
    */
   async downloadMedia(
     instanceName: string,
     messageId: string,
+    mediaType?: "image" | "video" | "audio" | "document",
   ): Promise<MediaDownloadResponse> {
+    const body: Record<string, unknown> = {
+      message: {
+        key: {
+          id: messageId,
+        },
+      },
+    };
+
+    // Apenas para vídeo, adicionar o parâmetro convertToMp4: false (manter formato original)
+    // Para áudio, omitir completamente esse parâmetro (Evolution API retorna 400 Bad Request quando recebe convertToMp4 para áudio)
+    // Para imagem/documento, também omitir (não aplicável)
+    if (mediaType === "video") {
+      body.convertToMp4 = false; // false = manter formato original (não converter para MP4)
+    }
+
+    // Log para debug: mostrar exatamente o que está sendo enviado
+    console.log('[Evolution API] downloadMedia request:', {
+      instanceName,
+      messageId,
+      mediaType,
+      body: JSON.stringify(body, null, 2)
+    });
+
     return this.request<MediaDownloadResponse>(
       "POST",
       `/chat/getBase64FromMediaMessage/${instanceName}`,
-      {
-        message: {
-          key: {
-            id: messageId,
-          },
-        },
-        convertToMp4: false, // Manter formato original
-      },
+      body,
     );
   }
 

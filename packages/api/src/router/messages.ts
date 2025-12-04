@@ -520,6 +520,7 @@ export const messagesRouter = createTRPCRouter({
         agentId: currentAgent.id,
         agentName: ctx.session.user.name,
         metadata: input.metadata,
+        repliedToMessageId: input.metadata?.repliedToMessageId as string | undefined, // Extract reply-to from metadata (same as sendText)
         attachmentData: {
           fileName: input.attachment.fileName,
           mimeType: input.attachment.mimeType,
@@ -1254,7 +1255,7 @@ export const messagesRouter = createTRPCRouter({
           sender: "agent",
           senderId: currentAgent.id,
           messageType,
-          content: input.caption ?? `[${messageType}]`,
+          content: input.caption ?? "",
           status: "pending",
           timestamp: now,
         })

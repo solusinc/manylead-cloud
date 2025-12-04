@@ -8,7 +8,15 @@ import { useNotificationSound } from "~/hooks/use-notification-sound";
 import { useTRPC } from "~/lib/trpc/react";
 import { useChat } from "../../providers/chat-context";
 
-export function useSendMedia(_chatId: string) {
+export function useSendMedia(
+  _chatId: string,
+  replyingTo?: {
+    id: string;
+    content: string;
+    senderName: string;
+    messageType?: string;
+  } | null,
+) {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const trpc = useTRPC();
@@ -78,11 +86,14 @@ export function useSendMedia(_chatId: string) {
 
         // 5. Enviar para backend (detecta source do chat)
         if (chat.source === "whatsapp") {
-          // Enviar via WhatsApp
+          // Enviar via WhatsApp with reply-to support
           await sendWhatsAppMutation.mutateAsync({
             chatId: chat.id,
             createdAt: chat.createdAt,
             content: options.caption ?? "",
+
+            // Reply-to (top-level field required for backend)
+            repliedToMessageId: replyingTo?.id,
 
             // Mídia
             mediaUrl: signedData.publicUrl,
@@ -91,10 +102,22 @@ export function useSendMedia(_chatId: string) {
             fileSize: options.file.size,
             ...dimensions,
 
-            metadata: options.metadata,
+            // Merge user metadata with reply-to metadata
+            metadata: {
+              ...options.metadata,
+              ...(replyingTo
+                ? {
+                    tempId,
+                    repliedToMessageId: replyingTo.id,
+                    repliedToContent: replyingTo.content,
+                    repliedToSender: replyingTo.senderName,
+                    repliedToMessageType: replyingTo.messageType ?? "text",
+                  }
+                : { tempId }),
+            },
           });
         } else {
-          // Enviar via internal (cross-org)
+          // Enviar via internal (cross-org) with reply-to support
           await sendWithAttachmentMutation.mutateAsync({
             chatId: options.chatId,
             content: options.caption ?? "",
@@ -107,7 +130,18 @@ export function useSendMedia(_chatId: string) {
               fileSize: options.file.size,
               ...dimensions,
             },
-            metadata: options.metadata,
+            // Merge user metadata with reply-to metadata (same format as sendText)
+            metadata: {
+              ...options.metadata,
+              ...(replyingTo
+                ? {
+                    repliedToMessageId: replyingTo.id,
+                    repliedToContent: replyingTo.content,
+                    repliedToSender: replyingTo.senderName,
+                    repliedToMessageType: replyingTo.messageType ?? "text",
+                  }
+                : {}),
+            },
           });
         }
 
@@ -139,6 +173,7 @@ export function useSendMedia(_chatId: string) {
       getSignedUrlMutation,
       sendWithAttachmentMutation,
       sendWhatsAppMutation,
+      replyingTo,
     ],
   );
 

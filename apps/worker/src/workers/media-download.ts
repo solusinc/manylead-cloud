@@ -27,6 +27,7 @@ export async function processMediaDownload(
     instanceName,
     fileName,
     mimeType,
+    mediaUrl: _mediaUrl, // URL direta do WhatsApp (não usado - descriptografia precisa da Evolution API)
   } = job.data;
 
   logger.info(
@@ -53,14 +54,24 @@ export async function processMediaDownload(
 
     logger.debug({ attachmentId }, "Attachment status updated to downloading");
 
-    // Download media from Evolution API (with circuit breaker protection)
+    // Download media from Evolution API
+    // Detectar mediaType do mimeType para passar corretamente à Evolution API
+    let mediaType: "image" | "video" | "audio" | "document" = "document";
+    if (mimeType.startsWith("image/")) {
+      mediaType = "image";
+    } else if (mimeType.startsWith("video/")) {
+      mediaType = "video";
+    } else if (mimeType.startsWith("audio/")) {
+      mediaType = "audio";
+    }
+
     logger.debug(
-      { instanceName, whatsappMediaId },
+      { instanceName, whatsappMediaId, mimeType, mediaType },
       "Downloading media from Evolution API",
     );
 
     const mediaData = await evolutionCircuitBreaker.execute(async () => {
-      return evolutionAPI.message.downloadMedia(instanceName, whatsappMediaId);
+      return evolutionAPI.message.downloadMedia(instanceName, whatsappMediaId, mediaType);
     });
 
     logger.debug(
@@ -68,7 +79,6 @@ export async function processMediaDownload(
       "Media downloaded from Evolution API",
     );
 
-    // Convert base64 to buffer
     const buffer = Buffer.from(mediaData.base64, "base64");
     const fileSize = buffer.length;
 

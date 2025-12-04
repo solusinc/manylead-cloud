@@ -57,7 +57,7 @@ export function ChatInput({
   // Custom hooks
   const { data: currentAgent } = useCurrentAgent();
   const { sendMessage } = useSendMessage(chatId, messageSource, chatCreatedAt);
-  const { sendAudio } = useSendAudio(chatId);
+  const { sendAudio } = useSendAudio(chatId, replyingTo);
   const {
     content,
     handleContentChange,
@@ -319,13 +319,14 @@ export function ChatInput({
     async (audioBlob: Blob, duration: number) => {
       try {
         await sendAudio(audioBlob, duration);
+        cancelReply(); // Cancel reply after sending audio
         onRecordingStop?.();
         setMode("text");
       } catch (err) {
         console.error("Failed to send audio:", err);
       }
     },
-    [sendAudio, onRecordingStop]
+    [sendAudio, cancelReply, onRecordingStop]
   );
 
   const handleAudioCancel = useCallback(() => {

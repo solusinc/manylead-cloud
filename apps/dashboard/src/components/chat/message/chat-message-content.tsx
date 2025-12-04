@@ -3,7 +3,7 @@
 import { memo, useEffect, useState } from "react";
 import Image from "next/image";
 import { format } from "date-fns";
-import { BanIcon, Check, CheckCheck, Clock, Star, FileX, Image as ImageIcon, Video, Mic, FileText } from "lucide-react";
+import { BanIcon, Check, CheckCheck, Clock, Star, FileX, Image as ImageIcon, Video, Mic, FileText, Loader2 } from "lucide-react";
 import type { Attachment } from "@manylead/db";
 
 import { cn } from "@manylead/ui";
@@ -235,6 +235,15 @@ export function ChatMessageBubble({
     currentTime: number;
     isPlaying: boolean;
   }>({ currentTime: 0, isPlaying: false });
+
+  // Check if audio is processing (optimistic UI)
+  const isProcessingAudio = message.attachment?.mediaType === "audio" &&
+    (message.attachment as Record<string, unknown>)._isProcessing;
+
+  // If processing audio, show skeleton bubble instead of normal bubble
+  if (isProcessingAudio) {
+    return <AudioProcessingSkeleton isOwnMessage={isOutgoing} />;
+  }
 
   // Passar metadata completo para o componente
   const hasReply = Boolean(message.metadata && message.repliedToMessageId);
@@ -636,4 +645,27 @@ export function ChatMessageStatus({
     default:
       return null;
   }
+}
+
+/**
+ * Skeleton placeholder for audio while worker is processing
+ * Shows a bubble with loader and "Processando áudio" text
+ */
+function AudioProcessingSkeleton({ isOwnMessage }: { isOwnMessage: boolean }) {
+  return (
+    <div className="mb-2">
+      <div className={cn(
+        "flex items-center gap-3 rounded-lg px-4 py-3",
+        isOwnMessage ? "bg-msg-outgoing" : "bg-msg-incoming"
+      )}>
+        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        <span className={cn(
+          "text-sm",
+          isOwnMessage && "dark:text-white"
+        )}>
+          Processando áudio...
+        </span>
+      </div>
+    </div>
+  );
 }

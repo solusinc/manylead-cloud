@@ -273,7 +273,9 @@ export const attachmentsRouter = createTRPCRouter({
                 ...MEDIA_LIMITS.AUDIO.ALLOWED_TYPES,
                 ...MEDIA_LIMITS.DOCUMENT.ALLOWED_TYPES,
               ];
-              return allAllowedTypes.includes(type as never);
+              // Remover parâmetros de codec (e.g., "audio/webm;codecs=opus" -> "audio/webm")
+              const baseType = type.split(";")[0]?.trim();
+              return allAllowedTypes.includes(baseType as never);
             },
             "Tipo de arquivo não permitido",
           ),

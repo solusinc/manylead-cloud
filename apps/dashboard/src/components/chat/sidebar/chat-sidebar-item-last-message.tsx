@@ -84,13 +84,13 @@ export function ChatSidebarItemLastMessage({
       {/* Texto da mensagem ou label do tipo de mídia */}
       <p className="text-muted-foreground flex-1 truncate text-sm">
         {messageType === "image"
-          ? "Foto"
+          ? message.trim() || "Foto"
           : messageType === "video"
-          ? "Vídeo"
+          ? message.trim() || "Vídeo"
           : messageType === "document"
-          ? "Documento"
+          ? message.trim() || "Documento"
           : messageType === "audio"
-          ? "Áudio"
+          ? message.trim() || "Áudio"
           : message}
       </p>
     </div>

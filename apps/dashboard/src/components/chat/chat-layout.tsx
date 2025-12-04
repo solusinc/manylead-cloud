@@ -100,59 +100,80 @@ function ChatLayoutInner({
         // Only update if message belongs to this chat
         if (!queryChatId || messageData.chatId !== queryChatId) return;
 
-        // === LAYER 1: Cache Check (Primary) ===
-        // Check if message exists in cache (by serverId OR tempId)
-        const messageExists = queryState.pages.some((page) =>
-          page.items.some((item) =>
-            item.message.id === serverId ||
-            (tempId && item.message.id === tempId)
-          )
+        // === LAYER 1: Check if serverId already exists (avoid duplicate real messages) ===
+        const serverMessageExists = queryState.pages.some((page) =>
+          page.items.some((item) => item.message.id === serverId)
         );
 
-        if (messageExists) {
-          return;
+        if (serverMessageExists) {
+          return; // Real message already in cache
         }
 
-        // === LAYER 2: Dedup Store (Secondary) ===
-        // Check if serverId OR tempId was already processed
-        // BUT only block if message actually exists in cache (checked above)
-        // This handles the case where tempId was registered but message wasn't added to cache (media uploads)
-
-        // === PASSED ALL CHECKS: Add message ===
+        // === LAYER 2: Check if optimistic message exists (tempId) ===
+        // If tempId exists in metadata, look for optimistic message and REPLACE it
+        let hasOptimisticMessage = false;
+        if (tempId) {
+          hasOptimisticMessage = queryState.pages.some((page) =>
+            page.items.some((item) => item.message.id === tempId)
+          );
+        }
 
         // Register in dedup store
         register(serverId);
         if (tempId) register(tempId);
 
-        // Add message to the FIRST page (index 0 - most recent messages)
         const newPages = [...queryState.pages];
-        const firstPage = newPages[0];
 
-        if (firstPage) {
-          newPages[0] = {
-            ...firstPage,
-            items: [
-              ...firstPage.items,
-              {
-                message: messageData,
-                attachment: (messageData as { attachment?: Record<string, unknown> }).attachment ?? null,
-                isOwnMessage: currentAgent ? messageData.senderId === currentAgent.id : false,
-              },
-            ],
-          };
+        if (hasOptimisticMessage && tempId) {
+          // REPLACE optimistic message with real one
+          const updatedPages = newPages.map((page) => ({
+            ...page,
+            items: page.items.map((item) =>
+              item.message.id === tempId
+                ? {
+                    message: messageData,
+                    attachment: (messageData as { attachment?: Record<string, unknown> }).attachment ?? null,
+                    isOwnMessage: currentAgent ? messageData.senderId === currentAgent.id : false,
+                  }
+                : item
+            ),
+          }));
 
           queryClient.setQueryData(query.queryKey, {
             ...queryState,
-            pages: newPages,
+            pages: updatedPages,
             pageParams: queryState.pageParams,
           });
+        } else {
+          // ADD new message (no optimistic message exists)
+          const firstPage = newPages[0];
 
-          // Force re-render without refetch
-          void queryClient.invalidateQueries({
-            queryKey: query.queryKey,
-            refetchType: "none",
-          });
+          if (firstPage) {
+            newPages[0] = {
+              ...firstPage,
+              items: [
+                ...firstPage.items,
+                {
+                  message: messageData,
+                  attachment: (messageData as { attachment?: Record<string, unknown> }).attachment ?? null,
+                  isOwnMessage: currentAgent ? messageData.senderId === currentAgent.id : false,
+                },
+              ],
+            };
+
+            queryClient.setQueryData(query.queryKey, {
+              ...queryState,
+              pages: newPages,
+              pageParams: queryState.pageParams,
+            });
+          }
         }
+
+        // Force re-render without refetch
+        void queryClient.invalidateQueries({
+          queryKey: query.queryKey,
+          refetchType: "none",
+        });
       });
 
       // Invalidate chats list to update last message preview
@@ -161,10 +182,15 @@ function ChatLayoutInner({
         queryKey: [["chats", "list"]],
       });
 
-      // Play notification sound only for messages NOT from current agent
-      // Own messages already play sound in use-send-message.ts
+      // Play notification sound for:
+      // 1. Messages from other agents
+      // 2. Own audio messages (async processing - feedback needed)
       // Don't play sound for comments (internal notes)
-      if (currentAgent && messageData.senderId !== currentAgent.id && messageData.messageType !== "comment") {
+      const isOwnMessage = currentAgent && messageData.senderId === currentAgent.id;
+      const isAudioMessage = messageData.messageType === "audio";
+      const isComment = messageData.messageType === "comment";
+
+      if (currentAgent && !isComment && (!isOwnMessage || isAudioMessage)) {
         playNotificationSound();
       }
     },

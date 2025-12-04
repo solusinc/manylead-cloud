@@ -189,7 +189,7 @@ function ChatWindowContent({
   className?: string;
 } & React.ComponentProps<"div">) {
   const { mediaPreview, replyingTo, cancelReply, cancelMediaPreview } = useChatReply();
-  const { sendMedia, isUploading, uploadProgress } = useSendMedia(chatId);
+  const { sendMedia, isUploading, uploadProgress } = useSendMedia(chatId, replyingTo);
 
   const handleMediaSend = useCallback(
     async (caption: string) => {
@@ -200,13 +200,7 @@ function ChatWindowContent({
           chatId,
           file: mediaPreview,
           caption: caption || undefined,
-          metadata: replyingTo
-            ? {
-                repliedToMessageId: replyingTo.id,
-                repliedToContent: replyingTo.content,
-                repliedToSender: replyingTo.senderName,
-              }
-            : undefined,
+          // Reply-to metadata is now handled by useSendMedia hook
         });
         cancelMediaPreview();
         cancelReply();
@@ -214,7 +208,7 @@ function ChatWindowContent({
         console.error("Failed to send media:", error);
       }
     },
-    [mediaPreview, sendMedia, chatId, replyingTo, cancelMediaPreview, cancelReply]
+    [mediaPreview, sendMedia, chatId, cancelMediaPreview, cancelReply]
   );
 
   return (

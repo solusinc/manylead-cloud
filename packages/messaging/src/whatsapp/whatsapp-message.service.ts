@@ -3,6 +3,8 @@ import type { TenantDB, Attachment } from "@manylead/db";
 import type { EvolutionAPIClient } from "@manylead/evolution-api-client";
 import { formatMessageWithSignature, getEventPublisher } from "@manylead/core-services";
 import type { EventPublisher } from "@manylead/core-services";
+import { createAudioSendQueue } from "@manylead/shared";
+import type { AudioSendJobData, Queue } from "@manylead/shared";
 
 import { WhatsAppSenderService } from "./whatsapp-sender.service";
 import type {
@@ -38,10 +40,12 @@ export interface WhatsAppMessageServiceConfig {
  */
 export class WhatsAppMessageService {
   private senderService: WhatsAppSenderService;
+  private audioSendQueue: Queue<AudioSendJobData>;
   private eventPublisher: EventPublisher;
 
   constructor(private config: WhatsAppMessageServiceConfig) {
     this.senderService = new WhatsAppSenderService(config.evolutionClient);
+    this.audioSendQueue = createAudioSendQueue(config.redisUrl);
     this.eventPublisher = getEventPublisher(config.redisUrl);
   }
 
@@ -117,7 +121,7 @@ export class WhatsAppMessageService {
         senderId: input.agentId,
         senderName: input.agentName,
         messageType,
-        content: input.content || `[${messageType}]`, // Default content se vazio
+        content: input.content || "", // Não exibir placeholder se vazio
         status: "pending",
         timestamp: now,
         repliedToMessageId: input.repliedToMessageId ?? null,
@@ -190,21 +194,54 @@ export class WhatsAppMessageService {
         }
       }
 
-      // 7. Enviar via WhatsAppSenderService (sendMedia ou sendText)
+      // 7. Se for áudio, enfileirar job no worker (conversão assíncrona)
+      if (input.attachmentData?.mediaType === "audio") {
+        if (!attachmentRecord) {
+          throw new Error("Attachment não criado para áudio");
+        }
+
+        await this.audioSendQueue.add("send-audio", {
+          organizationId,
+          chatId: input.chatId,
+          messageId: newMessage.id,
+          attachmentId: attachmentRecord.id,
+          instanceName: chatRecord.channel.evolutionInstanceName,
+          phoneNumber: chatRecord.contact.phoneNumber,
+          audioUrl: input.attachmentData.storageUrl,
+          audioStoragePath: input.attachmentData.storagePath,
+          audioMimeType: input.attachmentData.mimeType,
+          audioFileName: input.attachmentData.fileName,
+          duration: input.attachmentData.duration,
+          caption: messageContent,
+          quoted,
+        }, {
+          jobId: `audio-send-${newMessage.id}`,
+        });
+
+        // Retornar sem whatsappMessageId (worker vai completar)
+        return {
+          messageId: newMessage.id,
+          messageCreatedAt: newMessage.createdAt,
+          whatsappMessageId: null, // Worker vai atualizar
+          status: "sent" as const, // Frontend considera como sent, mas worker ainda processando
+        };
+      }
+
+      // 7. Enviar via WhatsAppSenderService (sendMedia ou sendText) - síncrono para imagem/vídeo
       const result = input.attachmentData
         ? await this.senderService.sendMedia({
             instanceName: chatRecord.channel.evolutionInstanceName,
             phoneNumber: chatRecord.contact.phoneNumber,
             mediaType: input.attachmentData.mediaType,
-            mediaUrl: input.attachmentData.storageUrl, // URL público do R2
+            mediaUrl: input.attachmentData.storageUrl,
             filename: input.attachmentData.fileName,
-            caption: messageContent, // Caption puro (sem assinatura)
+            caption: messageContent,
             quoted,
           })
         : await this.senderService.sendText({
             instanceName: chatRecord.channel.evolutionInstanceName,
             phoneNumber: chatRecord.contact.phoneNumber,
-            text: messageContent, // Texto com assinatura
+            text: messageContent,
             quoted,
           });
 

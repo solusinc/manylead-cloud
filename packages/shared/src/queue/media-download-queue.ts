@@ -15,6 +15,7 @@ export interface MediaDownloadJobData {
   instanceName: string;
   fileName: string;
   mimeType: string;
+  mediaUrl?: string; // URL direta do WhatsApp (workaround para bug Evolution API com áudio)
 }
 
 /**
