@@ -44,12 +44,6 @@ export class MessageMethods {
     instanceName: string,
     params: SendMediaMessageRequest,
   ): Promise<SendMessageResponse> {
-    // Log para debug
-    console.log('[Evolution API] sendMedia request:', {
-      instanceName,
-      params: JSON.stringify(params, null, 2)
-    });
-
     return this.request<SendMessageResponse>(
       "POST",
       `/message/sendMedia/${instanceName}`,
@@ -65,12 +59,6 @@ export class MessageMethods {
     instanceName: string,
     params: SendAudioMessageRequest,
   ): Promise<SendMessageResponse> {
-    // Log para debug
-    console.log('[Evolution API] sendAudio request:', {
-      instanceName,
-      params: JSON.stringify(params, null, 2)
-    });
-
     return this.request<SendMessageResponse>(
       "POST",
       `/message/sendWhatsAppAudio/${instanceName}`,
@@ -105,14 +93,6 @@ export class MessageMethods {
     if (mediaType === "video") {
       body.convertToMp4 = false; // false = manter formato original (não converter para MP4)
     }
-
-    // Log para debug: mostrar exatamente o que está sendo enviado
-    console.log('[Evolution API] downloadMedia request:', {
-      instanceName,
-      messageId,
-      mediaType,
-      body: JSON.stringify(body, null, 2)
-    });
 
     return this.request<MediaDownloadResponse>(
       "POST",
