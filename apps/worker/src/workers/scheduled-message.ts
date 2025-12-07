@@ -12,9 +12,10 @@ import {
   user,
 } from "@manylead/db";
 import type { QuickReplyMessage } from "@manylead/db";
-import { getInternalMessageService } from "@manylead/messaging";
+import { getInternalMessageService, getWhatsAppMessageService } from "@manylead/messaging";
 import type { MessageContext } from "@manylead/messaging";
 import { extractKeyFromUrl } from "@manylead/storage";
+import { EvolutionAPIClient } from "@manylead/evolution-api-client";
 import { tenantManager } from "~/libs/tenant-manager";
 import { createLogger } from "~/libs/utils/logger";
 import { eventPublisher } from "~/libs/cache/event-publisher";
@@ -103,7 +104,7 @@ export async function processScheduledMessage(
       })
       .where(eq(scheduledMessage.id, scheduledMessageId));
 
-    // 3. Verificar se chat existe
+    // 3. Verificar se chat existe e identificar o tipo (messageSource)
     const [chatRecord] = await tenantDb
       .select()
       .from(chat)
@@ -118,6 +119,13 @@ export async function processScheduledMessage(
     if (!chatRecord) {
       throw new Error("Chat não encontrado");
     }
+
+    const isWhatsAppChat = chatRecord.messageSource === "whatsapp";
+
+    logger.info(
+      { scheduledMessageId, messageSource: chatRecord.messageSource, isWhatsAppChat },
+      `Detected chat type: ${chatRecord.messageSource}`,
+    );
 
     // 4. Buscar agent para pegar o userId
     const [agentRecord] = await tenantDb
@@ -141,12 +149,24 @@ export async function processScheduledMessage(
       throw new Error("Usuário não encontrado");
     }
 
-    // Inicializar MessageService
-    const messageService = getInternalMessageService({
-      redisUrl: env.REDIS_URL,
-      getTenantConnection: tenantManager.getConnection.bind(tenantManager),
-      getCatalogDb: () => db,
-    });
+    // Inicializar MessageService correto baseado no tipo de chat
+    const whatsappService = isWhatsAppChat
+      ? getWhatsAppMessageService({
+          evolutionClient: new EvolutionAPIClient(
+            env.EVOLUTION_API_URL,
+            env.EVOLUTION_API_KEY,
+          ),
+          redisUrl: env.REDIS_URL,
+        })
+      : null;
+
+    const internalService = !isWhatsAppChat
+      ? getInternalMessageService({
+          redisUrl: env.REDIS_URL,
+          getTenantConnection: tenantManager.getConnection.bind(tenantManager),
+          getCatalogDb: () => db,
+        })
+      : null;
 
     const messageContext: MessageContext = {
       organizationId,
@@ -215,35 +235,69 @@ export async function processScheduledMessage(
 
       // Enviar cada mensagem da quick reply
       for (const message of processedMessages) {
-        if (message.mediaUrl?.startsWith("http")) {
-          // Mensagem com mídia
-          const storagePath = extractKeyFromUrl(message.mediaUrl);
+        if (isWhatsAppChat && whatsappService) {
+          // WhatsApp: usar sendTextMessage
+          if (message.mediaUrl?.startsWith("http")) {
+            // Mensagem com mídia
+            const storagePath = extractKeyFromUrl(message.mediaUrl);
+            const messageType =
+              message.type === "image" ? "image" : message.type === "audio" ? "audio" : "document";
 
-          const messageType =
-            message.type === "image" ? "image" : message.type === "audio" ? "audio" : "document";
+            await whatsappService.sendTextMessage(tenantDb, organizationId, {
+              chatId,
+              chatCreatedAt: new Date(chatCreatedAt),
+              content: message.content,
+              agentId: createdByAgentId,
+              agentName: userRecord.name,
+              attachmentData: {
+                fileName: message.mediaName ?? "file",
+                mimeType: message.mediaMimeType ?? "application/octet-stream",
+                mediaType: messageType,
+                storagePath: storagePath ?? "",
+                storageUrl: message.mediaUrl,
+              },
+            });
+          } else {
+            // Mensagem de texto puro
+            await whatsappService.sendTextMessage(tenantDb, organizationId, {
+              chatId,
+              chatCreatedAt: new Date(chatCreatedAt),
+              content: message.content,
+              agentId: createdByAgentId,
+              agentName: userRecord.name,
+            });
+          }
+        } else if (internalService) {
+          // Internal: usar createTextMessage
+          if (message.mediaUrl?.startsWith("http")) {
+            // Mensagem com mídia
+            const storagePath = extractKeyFromUrl(message.mediaUrl);
+            const messageType =
+              message.type === "image" ? "image" : message.type === "audio" ? "audio" : "document";
 
-          await messageService.createTextMessage(messageContext, {
-            chatId,
-            content: message.content,
-            messageType,
-            agentId: createdByAgentId,
-            agentName: userRecord.name,
-            attachmentData: {
-              fileName: message.mediaName ?? "file",
-              mimeType: message.mediaMimeType ?? "application/octet-stream",
-              mediaType: messageType,
-              storagePath: storagePath ?? "",
-              storageUrl: message.mediaUrl,
-            },
-          });
-        } else {
-          // Mensagem de texto puro
-          await messageService.createTextMessage(messageContext, {
-            chatId,
-            content: message.content,
-            agentId: createdByAgentId,
-            agentName: userRecord.name,
-          });
+            await internalService.createTextMessage(messageContext, {
+              chatId,
+              content: message.content,
+              messageType,
+              agentId: createdByAgentId,
+              agentName: userRecord.name,
+              attachmentData: {
+                fileName: message.mediaName ?? "file",
+                mimeType: message.mediaMimeType ?? "application/octet-stream",
+                mediaType: messageType,
+                storagePath: storagePath ?? "",
+                storageUrl: message.mediaUrl,
+              },
+            });
+          } else {
+            // Mensagem de texto puro
+            await internalService.createTextMessage(messageContext, {
+              chatId,
+              content: message.content,
+              agentId: createdByAgentId,
+              agentName: userRecord.name,
+            });
+          }
         }
 
         // Delay de 150ms entre mensagens
@@ -298,17 +352,58 @@ export async function processScheduledMessage(
       return;
     }
 
-    // 7. Lógica existente para mensagens normais e comentários
-    const result = await messageService.createTextMessage(messageContext, {
-      chatId,
-      content,
-      messageType: contentType === "comment" ? "comment" : "text",
-      agentId: createdByAgentId,
-      agentName: userRecord.name,
-      metadata: {
+    // 7. Lógica para mensagens normais e comentários
+    let result: { message: { id: string; timestamp: Date } };
+
+    if (isWhatsAppChat && whatsappService) {
+      // WhatsApp não suporta comentários - converter para mensagem normal se necessário
+      if (contentType === "comment") {
+        logger.warn(
+          { scheduledMessageId },
+          "WhatsApp does not support comments - skipping scheduled comment",
+        );
+        // Marcar como failed pois WhatsApp não suporta comentários
+        await tenantDb
+          .update(scheduledMessage)
+          .set({
+            status: "failed",
+            errorMessage: "WhatsApp não suporta comentários internos",
+            updatedAt: new Date(),
+          })
+          .where(eq(scheduledMessage.id, scheduledMessageId));
+        return;
+      }
+
+      // WhatsApp: usar sendTextMessage
+      const whatsappResult = await whatsappService.sendTextMessage(tenantDb, organizationId, {
+        chatId,
+        chatCreatedAt: new Date(chatCreatedAt),
+        content,
         agentId: createdByAgentId,
-      },
-    });
+        agentName: userRecord.name,
+      });
+
+      result = {
+        message: {
+          id: whatsappResult.messageId,
+          timestamp: whatsappResult.messageCreatedAt,
+        },
+      };
+    } else if (internalService) {
+      // Internal: usar createTextMessage
+      result = await internalService.createTextMessage(messageContext, {
+        chatId,
+        content,
+        messageType: contentType === "comment" ? "comment" : "text",
+        agentId: createdByAgentId,
+        agentName: userRecord.name,
+        metadata: {
+          agentId: createdByAgentId,
+        },
+      });
+    } else {
+      throw new Error("No message service available");
+    }
 
     // 7. Atualizar como enviado
     await tenantDb

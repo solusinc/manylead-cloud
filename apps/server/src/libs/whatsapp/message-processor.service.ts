@@ -1,9 +1,9 @@
 import type { Channel, TenantDB, Chat, Attachment } from "@manylead/db";
 import type { TenantDatabaseManager } from "@manylead/tenant-db";
-import { and, attachment, channel, chat, contact, desc, eq, message, or, sql } from "@manylead/db";
+import { and, attachment, chat, contact, desc, eq, message, or, sql } from "@manylead/db";
 import { createMediaDownloadQueue } from "@manylead/shared/queue";
 import { formatTime } from "@manylead/shared";
-import { getDefaultDepartment, ChatParticipantService } from "@manylead/core-services";
+import { getDefaultDepartment, ChatParticipantService, getEventPublisher } from "@manylead/core-services";
 
 import type { MessageContent, MessageType } from "./message-content-extractor";
 import type { MessageData } from "~/routes/webhooks/evolution/types";
@@ -11,6 +11,7 @@ import { getSocketManager } from "~/socket";
 import { MessageContentExtractor } from "./message-content-extractor";
 import { createLogger } from "~/libs/utils/logger";
 import { getEvolutionClient } from "~/libs/evolution-client";
+import { env } from "~/env";
 
 const log = createLogger("WhatsAppMessageProcessor");
 
@@ -195,7 +196,7 @@ export class WhatsAppMessageProcessor {
       chatId: chatRecord.id,
       messageSource: "whatsapp" as const,
       sender: "customer" as const,
-      senderId: contactRecord.id,
+      senderId: null, // Customer não tem senderId (para auto-cancel funcionar)
       messageType,
       content: messageContent.text,
       whatsappMessageId: msg.key.id,
@@ -240,7 +241,19 @@ export class WhatsAppMessageProcessor {
       chatRecord.assignedTo,
     );
 
-    // 8. Emitir evento Socket.io SOMENTE se NÃO for mídia
+    // 8. Emitir evento para auto-cancelamento de scheduled messages
+    // Mensagens do customer sempre têm sender="customer", então mapear para "contact"
+    const eventPublisher = getEventPublisher(env.REDIS_URL);
+    await eventPublisher.messageCreated(
+      channel.organizationId,
+      chatRecord.id,
+      newMessage,
+      {
+        senderId: undefined, // Customer não tem senderId de agent, forçar undefined para emitir como "contact"
+      },
+    );
+
+    // 9. Emitir evento Socket.io SOMENTE se NÃO for mídia
     // Mídia: Worker emite após completar download e ter storageUrl
     // Texto: Emite imediatamente
     log.info({
