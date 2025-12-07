@@ -39,6 +39,33 @@ function getEvolutionClient() {
  */
 export const channelsRouter = createTRPCRouter({
   /**
+   * Check if organization has at least one connected channel
+   */
+  hasConnectedChannel: ownerProcedure.query(async ({ ctx }) => {
+    const organizationId = ctx.session.session.activeOrganizationId;
+
+    if (!organizationId) {
+      return false;
+    }
+
+    const tenantDb = await tenantManager.getConnection(organizationId);
+
+    const [connectedChannel] = await tenantDb
+      .select()
+      .from(channel)
+      .where(
+        and(
+          eq(channel.organizationId, organizationId),
+          eq(channel.status, "connected"),
+          eq(channel.isActive, true),
+        ),
+      )
+      .limit(1);
+
+    return !!connectedChannel;
+  }),
+
+  /**
    * List all channels for the active organization
    */
   list: ownerProcedure.query(async ({ ctx }) => {
@@ -187,6 +214,7 @@ export const channelsRouter = createTRPCRouter({
               "MESSAGES_UPDATE",
               "MESSAGES_DELETE",
               "SEND_MESSAGE",
+              "PRESENCE_UPDATE",
             ],
           },
         });
@@ -435,6 +463,7 @@ export const channelsRouter = createTRPCRouter({
               "MESSAGES_UPDATE",
               "MESSAGES_DELETE",
               "SEND_MESSAGE",
+              "PRESENCE_UPDATE",
             ],
           },
         });
@@ -523,7 +552,10 @@ export const channelsRouter = createTRPCRouter({
             "QRCODE_UPDATED",
             "CONNECTION_UPDATE",
             "MESSAGES_UPSERT",
+            "MESSAGES_UPDATE",
+            "MESSAGES_DELETE",
             "SEND_MESSAGE",
+            // "PRESENCE_UPDATE", // DISABLED: Baileys não recebe presence do WhatsApp (ver docs/TODO-FIXES.md #4)
           ],
         },
       });

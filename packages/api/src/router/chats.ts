@@ -4,6 +4,7 @@ import { z } from "zod";
 import {
   agent,
   and,
+  channel,
   chat,
   chatParticipant,
   contact,
@@ -18,7 +19,8 @@ import {
   sql,
   user,
 } from "@manylead/db";
-import { publishChatEvent, formatTime } from "@manylead/shared";
+import { publishChatEvent, formatTime, normalizePhoneNumber } from "@manylead/shared";
+import { EvolutionAPIClient } from "@manylead/evolution-api-client";
 
 import { env } from "../env";
 import {
@@ -475,6 +477,253 @@ export const chatsRouter = createTRPCRouter({
           totalMessages: 1,
         })
         .where(and(eq(chat.id, newChat.id), eq(chat.createdAt, newChat.createdAt)));
+
+      return newChat;
+    }),
+
+  /**
+   * Criar novo chat WhatsApp através do modal "Iniciar conversa"
+   * Valida se número está no WhatsApp via Evolution API
+   * Auto-atribui ao criador e seta status como "open"
+   */
+  createWhatsAppChat: memberProcedure
+    .input(
+      z.object({
+        phoneNumber: z.string().min(10, "Número muito curto"),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const sourceOrganizationId = ctx.session.session.activeOrganizationId;
+
+      if (!sourceOrganizationId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Nenhuma organização ativa",
+        });
+      }
+
+      // 1. Normalizar número (remover formatação)
+      const normalizedPhone = normalizePhoneNumber(input.phoneNumber);
+
+      // 2. Buscar primeiro canal conectado (status: 'connected' AND isActive: true)
+      const [firstConnectedChannel] = await ctx.tenantDb
+        .select()
+        .from(channel)
+        .where(
+          and(
+            eq(channel.organizationId, sourceOrganizationId),
+            eq(channel.status, "connected"),
+            eq(channel.isActive, true),
+          ),
+        )
+        .limit(1);
+
+      if (!firstConnectedChannel) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Nenhum canal WhatsApp conectado. Configure um canal nas configurações.",
+        });
+      }
+
+      // 3. Validar se número está no WhatsApp via Evolution API
+      const evolutionClient = new EvolutionAPIClient(
+        env.EVOLUTION_API_URL,
+        env.EVOLUTION_API_KEY,
+      );
+
+      const checkResult = await evolutionClient.chat.checkWhatsappNumbers(
+        firstConnectedChannel.evolutionInstanceName,
+        [normalizedPhone],
+      );
+
+      if (!checkResult[0]?.exists) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Este número não está cadastrado no WhatsApp",
+        });
+      }
+
+      // 4. Buscar/criar Contact
+      const [existingContact] = await ctx.tenantDb
+        .select()
+        .from(contact)
+        .where(
+          and(
+            eq(contact.organizationId, sourceOrganizationId),
+            eq(contact.phoneNumber, normalizedPhone),
+          ),
+        )
+        .limit(1);
+
+      let targetContact = existingContact;
+
+      if (!targetContact) {
+        // Buscar foto de perfil antes de criar contato
+        let profilePictureUrl: string | null = null;
+        try {
+          const profileResult = await evolutionClient.instance.fetchProfilePicture(
+            firstConnectedChannel.evolutionInstanceName,
+            normalizedPhone,
+          );
+          profilePictureUrl = profileResult.profilePictureUrl;
+        } catch (error) {
+          // Ignorar erro (foto pode estar privada)
+          profilePictureUrl = null;
+        }
+
+        // Criar novo contato
+        const [newContact] = await ctx.tenantDb
+          .insert(contact)
+          .values({
+            organizationId: sourceOrganizationId,
+            phoneNumber: normalizedPhone,
+            name: normalizedPhone, // Usar número como nome inicialmente
+            avatar: profilePictureUrl,
+            metadata: {
+              source: "whatsapp",
+            },
+          })
+          .returning();
+
+        if (!newContact) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Falha ao criar contato",
+          });
+        }
+
+        targetContact = newContact;
+      } else if (!targetContact.avatar) {
+        // Contato já existe mas não tem foto - buscar e atualizar
+        try {
+          const profileResult = await evolutionClient.instance.fetchProfilePicture(
+            firstConnectedChannel.evolutionInstanceName,
+            normalizedPhone,
+          );
+
+          if (profileResult.profilePictureUrl) {
+            await ctx.tenantDb
+              .update(contact)
+              .set({
+                avatar: profileResult.profilePictureUrl,
+                updatedAt: new Date(),
+              })
+              .where(eq(contact.id, targetContact.id));
+
+            targetContact = {
+              ...targetContact,
+              avatar: profileResult.profilePictureUrl,
+            };
+          }
+        } catch (error) {
+          // Ignorar erro (foto pode estar privada)
+        }
+      }
+
+      // 5. Verificar se já existe chat open/pending com este contato e canal
+      const [existingChat] = await ctx.tenantDb
+        .select()
+        .from(chat)
+        .where(
+          and(
+            eq(chat.messageSource, "whatsapp"),
+            eq(chat.contactId, targetContact.id),
+            eq(chat.channelId, firstConnectedChannel.id),
+            or(eq(chat.status, "open"), eq(chat.status, "pending")),
+          ),
+        )
+        .limit(1);
+
+      if (existingChat) {
+        // Retornar chat existente
+        return existingChat;
+      }
+
+      // 6. Criar novo Chat
+      const permissionsService = new ChatPermissionsService(ctx.tenantDb);
+      const currentAgent = await permissionsService.getCurrentAgent(ctx.session.user.id);
+      const now = new Date();
+
+      // Buscar departamento padrão
+      const departmentId = await getDefaultDepartment(
+        ctx.tenantDb,
+        sourceOrganizationId,
+      );
+
+      const [newChat] = await ctx.tenantDb
+        .insert(chat)
+        .values({
+          organizationId: sourceOrganizationId,
+          contactId: targetContact.id,
+          channelId: firstConnectedChannel.id,
+          messageSource: "whatsapp",
+          assignedTo: currentAgent.id, // Auto-atribuir ao criador
+          departmentId,
+          status: "open",
+          createdAt: now,
+          updatedAt: now,
+        })
+        .returning();
+
+      if (!newChat) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Falha ao criar chat",
+        });
+      }
+
+      // 7. Criar mensagem de sistema "Sessão criada às HH:mm"
+      const createdTime = formatTime(newChat.createdAt);
+
+      await ctx.tenantDb.insert(message).values({
+        chatId: newChat.id,
+        messageSource: newChat.messageSource,
+        sender: "system",
+        senderId: null,
+        messageType: "system",
+        content: `Sessão criada às ${createdTime}`,
+        status: "sent",
+        timestamp: newChat.createdAt,
+        metadata: {
+          systemEventType: "session_created",
+        },
+      });
+
+      // 8. Atualizar lastMessage com "Sessão criada às HH:mm"
+      await ctx.tenantDb
+        .update(chat)
+        .set({
+          lastMessageAt: newChat.createdAt,
+          lastMessageContent: `Sessão criada às ${createdTime}`,
+          lastMessageSender: "system",
+          lastMessageStatus: "sent",
+          totalMessages: 1,
+        })
+        .where(and(eq(chat.id, newChat.id), eq(chat.createdAt, newChat.createdAt)));
+
+      // 9. Criar chatParticipant para o criador
+      await ctx.tenantDb.insert(chatParticipant).values({
+        chatId: newChat.id,
+        chatCreatedAt: newChat.createdAt,
+        agentId: currentAgent.id,
+        unreadCount: 0,
+        lastReadAt: now,
+      });
+
+      // 10. Emitir evento Socket.IO broadcast para toda a organização
+      await publishChatEvent(
+        {
+          type: "chat:created",
+          organizationId: sourceOrganizationId,
+          chatId: newChat.id,
+          targetAgentId: undefined, // Broadcast para TODOS os agents
+          data: {
+            chat: newChat as unknown as Record<string, unknown>,
+            contact: targetContact as unknown as Record<string, unknown>,
+          },
+        },
+        env.REDIS_URL,
+      );
 
       return newChat;
     }),

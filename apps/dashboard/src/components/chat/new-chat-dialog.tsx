@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { FaWhatsapp } from "react-icons/fa";
 import { toast } from "sonner";
 
@@ -34,6 +34,12 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
   const [organizationInstanceCode, setOrganizationInstanceCode] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
 
+  // Check if has connected WhatsApp channel
+  const { data: hasConnectedChannel = false } = useQuery({
+    ...trpc.channels.hasConnectedChannel.queryOptions(),
+    enabled: open, // Only fetch when dialog is open
+  });
+
   const createNewSessionMutation = useMutation(
     trpc.chats.createNewSession.mutationOptions({
       onSuccess: (chat) => {
@@ -48,6 +54,37 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
     }),
   );
 
+  const createWhatsAppChatMutation = useMutation(
+    trpc.chats.createWhatsAppChat.mutationOptions({
+      onSuccess: (chat) => {
+        handleClose();
+        router.push(`/chats/${chat.id}`);
+        toast.success("Chat iniciado", {
+          description: "Conversa WhatsApp criada com sucesso",
+        });
+      },
+      onError: (error) => {
+        // Tratamento especial para erro de canal não conectado
+        if (error.message.includes("Nenhum canal")) {
+          toast.error("Canal não conectado", {
+            description: error.message,
+            action: {
+              label: "Configurar",
+              onClick: () => {
+                handleClose();
+                router.push("/settings/channels");
+              },
+            },
+          });
+        } else {
+          toast.error("Erro ao criar chat WhatsApp", {
+            description: error.message,
+          });
+        }
+      },
+    }),
+  );
+
   const handleStartChat = async () => {
     try {
       if (selectedType === "internal") {
@@ -55,10 +92,8 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
           organizationInstanceCode: organizationInstanceCode.trim(),
         });
       } else if (selectedType === "whatsapp") {
-        // TODO: Implement WhatsApp chat creation
-        console.log("Starting WhatsApp chat with number:", phoneNumber);
-        toast("Em breve", {
-          description: "Criação de chat WhatsApp será implementada em breve.",
+        await createWhatsAppChatMutation.mutateAsync({
+          phoneNumber: phoneNumber.trim(),
         });
       }
     } catch (error) {
@@ -117,8 +152,20 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
               <NewChatOption
                 icon={<FaWhatsapp className="text-foreground h-6 w-6" />}
                 label="WhatsApp"
-                description="Iniciar conversa no WhatsApp"
-                onClick={() => setSelectedType("whatsapp")}
+                description={
+                  hasConnectedChannel
+                    ? "Iniciar conversa no WhatsApp"
+                    : "Configure um canal WhatsApp primeiro"
+                }
+                onClick={() => {
+                  if (hasConnectedChannel) {
+                    setSelectedType("whatsapp");
+                  } else {
+                    handleClose();
+                    router.push("/settings/channels");
+                  }
+                }}
+                disabled={!hasConnectedChannel}
               />
             </div>
           </>
@@ -161,7 +208,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
                     value={phoneNumber}
                     onChange={(e) => setPhoneNumber(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter" && phoneNumber.trim() && !createNewSessionMutation.isPending) {
+                      if (e.key === "Enter" && phoneNumber.trim() && !createWhatsAppChatMutation.isPending) {
                         void handleStartChat();
                       }
                     }}
@@ -178,7 +225,7 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
                   variant="outline"
                   onClick={handleBack}
                   className="flex-1"
-                  disabled={createNewSessionMutation.isPending}
+                  disabled={createNewSessionMutation.isPending || createWhatsAppChatMutation.isPending}
                 >
                   Voltar
                 </Button>
@@ -187,11 +234,12 @@ export function NewChatDialog({ open, onOpenChange }: NewChatDialogProps) {
                   className="flex-1"
                   disabled={
                     createNewSessionMutation.isPending ||
+                    createWhatsAppChatMutation.isPending ||
                     (selectedType === "internal" && !organizationInstanceCode.trim()) ||
                     (selectedType === "whatsapp" && !phoneNumber.trim())
                   }
                 >
-                  {createNewSessionMutation.isPending
+                  {(createNewSessionMutation.isPending || createWhatsAppChatMutation.isPending)
                     ? "Iniciando..."
                     : "Iniciar conversa"}
                 </Button>
@@ -210,18 +258,22 @@ export function NewChatOption({
   description,
   onClick,
   className,
+  disabled = false,
 }: {
   icon: React.ReactNode;
   label: string;
   description?: string;
   onClick: () => void;
   className?: string;
+  disabled?: boolean;
 }) {
   return (
     <button
       onClick={onClick}
+      disabled={disabled}
       className={cn(
         "hover:bg-accent flex w-full items-center gap-3 rounded-lg border p-4 text-left transition-colors",
+        disabled && "cursor-not-allowed opacity-50 hover:bg-transparent",
         className,
       )}
     >

@@ -10,3 +10,4 @@ export { handleMessagesUpsert } from "./messages-upsert";
 export { handleMessagesUpdate } from "./messages-update";
 export { handleMessagesDelete } from "./messages-delete";
 export { handleSendMessage } from "./send-message";
+export { handlePresenceUpdate } from "./presence-update";

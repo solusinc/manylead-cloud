@@ -155,6 +155,17 @@ export class SocketManager {
       });
 
       /**
+       * Presence indicators (online/offline) - delegados para TypingHandler
+       */
+      socket.on("presence:available", (data: { chatId: string }) => {
+        void this.typingHandler.handlePresence(socket, data, "available");
+      });
+
+      socket.on("presence:unavailable", (data: { chatId: string }) => {
+        void this.typingHandler.handlePresence(socket, data, "unavailable");
+      });
+
+      /**
        * Disconnect handler
        */
       socket.on("disconnect", (reason) => {

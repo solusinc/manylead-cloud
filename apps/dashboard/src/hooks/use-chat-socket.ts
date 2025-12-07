@@ -112,6 +112,10 @@ export interface UseChatSocketReturn {
   // Recording indicators
   emitRecordingStart: (chatId: string) => void;
   emitRecordingStop: (chatId: string) => void;
+
+  // Presence indicators (online/offline)
+  emitPresenceAvailable: (chatId: string) => void;
+  emitPresenceUnavailable: (chatId: string) => void;
 }
 
 /**
@@ -414,6 +418,19 @@ export function useChatSocket(): UseChatSocketReturn {
     }
   };
 
+  // Emit presence events (online/offline)
+  const emitPresenceAvailable = (chatId: string) => {
+    if (socketRef.current?.connected) {
+      socketRef.current.emit("presence:available", { chatId });
+    }
+  };
+
+  const emitPresenceUnavailable = (chatId: string) => {
+    if (socketRef.current?.connected) {
+      socketRef.current.emit("presence:unavailable", { chatId });
+    }
+  };
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -443,5 +460,7 @@ export function useChatSocket(): UseChatSocketReturn {
     emitTypingStop,
     emitRecordingStart,
     emitRecordingStop,
+    emitPresenceAvailable,
+    emitPresenceUnavailable,
   };
 }

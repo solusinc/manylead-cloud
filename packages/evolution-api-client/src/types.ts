@@ -255,3 +255,53 @@ export interface DeleteMessageResponse {
   messageTimestamp: string;
   status: "PENDING";
 }
+
+/**
+ * Presence states supported by WhatsApp
+ */
+export type PresenceState =
+  | "composing" // Digitando
+  | "recording" // Gravando áudio
+  | "paused" // Pausado (limpar indicador)
+  | "available" // Online
+  | "unavailable"; // Offline
+
+/**
+ * Send presence request
+ * https://doc.evolution-api.com/v2/api-reference/chat-controller/send-presence
+ */
+export interface SendPresenceRequest {
+  number: string; // Phone number without @s.whatsapp.net
+  delay: number; // Delay in milliseconds
+  presence: PresenceState; // Presence state to send
+}
+
+/**
+ * Send presence response
+ */
+export interface SendPresenceResponse {
+  status: string; // "SUCCESS" ou error
+  message?: string; // Success/error message
+}
+
+/**
+ * Check WhatsApp numbers request
+ * https://doc.evolution-api.com/v2/api-reference/chat-controller/check-is-whatsapp
+ */
+export interface CheckWhatsAppNumbersRequest {
+  numbers: string[]; // Array of phone numbers to check
+}
+
+/**
+ * WhatsApp number check result
+ */
+export interface WhatsAppNumberCheck {
+  exists: boolean; // Whether WhatsApp account exists
+  jid: string; // WhatsApp JID (e.g., "5511999999999@s.whatsapp.net")
+  number: string; // Phone number
+}
+
+/**
+ * Check WhatsApp numbers response
+ */
+export type CheckWhatsAppNumbersResponse = WhatsAppNumberCheck[];

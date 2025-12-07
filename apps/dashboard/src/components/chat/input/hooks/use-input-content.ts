@@ -51,7 +51,7 @@ export function useInputContent(options: UseInputContentOptions = {}) {
         }
       });
 
-      // Typing indicator logic
+      // Typing indicator logic - envia apenas 1x no início
       if (value.trim() && !isTyping) {
         onTypingStart?.();
         setIsTyping(true);

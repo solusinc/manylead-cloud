@@ -1,9 +1,13 @@
-import type { Server as SocketIOServer, Socket } from "socket.io";
-import type { TenantDatabaseManager } from "@manylead/tenant-db";
+import type { Socket, Server as SocketIOServer } from "socket.io";
+
 import type { TenantDB } from "@manylead/db";
-import { chat, contact, agent, eq, and, or } from "@manylead/db";
+import type { TenantDatabaseManager } from "@manylead/tenant-db";
+import { agent, and, channel, chat, contact, eq, or } from "@manylead/db";
+import { EvolutionAPIClient } from "@manylead/evolution-api-client";
+
 import type { SocketData } from "../types";
 import { createLogger } from "~/libs/utils/logger";
+import { env } from "~/env";
 
 const log = createLogger("TypingHandler");
 
@@ -12,10 +16,94 @@ const log = createLogger("TypingHandler");
  * Unifica lógica de typing:start e typing:stop
  */
 export class TypingHandler {
+  // Cache de presences ativas para evitar spam (chatId -> timestamp)
+  private activePresences = new Map<string, number>();
+
   constructor(
     private io: SocketIOServer,
     private tenantManager: TenantDatabaseManager,
   ) {}
+
+  /**
+   * Processa evento de presença (online/offline)
+   * @param socket - Socket do cliente
+   * @param data - Dados do evento (chatId)
+   * @param action - "available" ou "unavailable"
+   */
+  async handlePresence(
+    socket: Socket,
+    data: { chatId: string },
+    action: "available" | "unavailable",
+  ): Promise<void> {
+    if (!data.chatId) {
+      socket.emit("error", { message: "chatId is required" });
+      return;
+    }
+
+    log.info(`← ${socket.id} | presence:${action} → chat:${data.chatId}`);
+
+    // Rate limiting: evitar múltiplos agents enviando presence "available" ao mesmo tempo
+    // unavailable sempre pode ser enviado (sem rate limiting)
+    if (action === "available") {
+      const now = Date.now();
+      const lastSent = this.activePresences.get(data.chatId);
+
+      // Se já enviou "available" nos últimos 60s, ignorar (outro agent já está online)
+      if (lastSent && (now - lastSent) < 60000) {
+        log.info({
+          chatId: data.chatId,
+          timeSinceLastSent: now - lastSent,
+        }, "Presence already active, skipping to avoid spam");
+        return;
+      }
+      // Marcar como ativo
+      this.activePresences.set(data.chatId, now);
+    }
+
+    // Encontrar room da organização atual
+    const orgRoom = Array.from(socket.rooms).find((room) =>
+      room.startsWith("org:"),
+    );
+
+    if (!orgRoom) return;
+
+    const organizationId = orgRoom.replace("org:", "");
+
+    try {
+      const tenantDb = await this.tenantManager.getConnection(organizationId);
+
+      // Buscar chat para identificar participantes
+      const [chatRecord] = await tenantDb
+        .select()
+        .from(chat)
+        .where(eq(chat.id, data.chatId))
+        .limit(1);
+
+      if (!chatRecord) {
+        log.warn(`Chat not found: ${data.chatId}`);
+        return;
+      }
+
+      log.info({
+        chatId: data.chatId,
+        messageSource: chatRecord.messageSource,
+        action,
+      }, `Chat messageSource: ${chatRecord.messageSource}`);
+
+      // Se WhatsApp, enviar presence via Evolution API
+      if (chatRecord.messageSource === "whatsapp") {
+        log.info({ chatId: data.chatId }, "→ WhatsApp chat detected, sending presence to Evolution API");
+        await this.handleWhatsAppPresence(data.chatId, action, tenantDb);
+        return;
+      }
+
+      // Para chats internos, não fazer nada (por enquanto)
+      // Presence "available/unavailable" é principalmente para WhatsApp
+      log.info({ chatId: data.chatId, messageSource: chatRecord.messageSource }, "Internal chat, skipping presence send");
+    } catch (error) {
+      log.error({ err: error }, `Error handling presence:${action}`);
+    }
+  }
 
   /**
    * Processa evento de digitação
@@ -39,7 +127,9 @@ export class TypingHandler {
     const userId = socketData.userId;
 
     // Encontrar room da organização atual
-    const orgRoom = Array.from(socket.rooms).find((room) => room.startsWith("org:"));
+    const orgRoom = Array.from(socket.rooms).find((room) =>
+      room.startsWith("org:"),
+    );
 
     if (!orgRoom) return;
 
@@ -57,6 +147,14 @@ export class TypingHandler {
 
       if (!chatRecord) {
         log.warn(`Chat not found: ${data.chatId}`);
+        return;
+      }
+
+      // NOVO: Se WhatsApp, enviar presence via Evolution API
+      if (chatRecord.messageSource === "whatsapp") {
+        await this.handleWhatsAppPresence(data.chatId, action, tenantDb);
+        // Não fazer broadcast local - apenas enviar para WhatsApp
+        // O typing do contato será recebido via webhook presence.update
         return;
       }
 
@@ -90,6 +188,82 @@ export class TypingHandler {
       log.info(`→ ${targetInfo.room} | ${event} (${targetInfo.type})`);
     } catch (error) {
       log.error({ err: error }, `Error handling typing:${action}`);
+    }
+  }
+
+  /**
+   * Send presence to WhatsApp via Evolution API
+   */
+  private async handleWhatsAppPresence(
+    chatId: string,
+    action: "start" | "stop" | "available" | "unavailable",
+    tenantDb: TenantDB,
+  ): Promise<void> {
+    try {
+      // 1. Buscar chat com channel e contact
+      const [chatRecord] = await tenantDb
+        .select({
+          chat,
+          channel,
+          contact,
+        })
+        .from(chat)
+        .leftJoin(channel, eq(chat.channelId, channel.id))
+        .innerJoin(contact, eq(chat.contactId, contact.id))
+        .where(eq(chat.id, chatId))
+        .limit(1);
+
+      if (!chatRecord?.channel || !chatRecord.contact.phoneNumber) {
+        log.warn({ chatId }, "Chat missing channel or contact phone");
+        return;
+      }
+
+      // 2. Chamar Evolution API
+      const evolutionClient = new EvolutionAPIClient(
+        env.EVOLUTION_API_URL,
+        env.EVOLUTION_API_KEY,
+      );
+
+      // Map action to Evolution API presence state
+      const presenceMap = {
+        start: "composing",
+        stop: "paused",
+        available: "available",
+        unavailable: "unavailable",
+      } as const;
+
+      const presence = presenceMap[action];
+
+      // Use delay=0 for unavailable to clear immediately
+      // Use 10s delay for others (composing, recording, available)
+      const delay = action === "unavailable" ? 0 : 10000;
+
+      log.info(
+        {
+          chatId,
+          action,
+          presence,
+          delay,
+          phoneNumber: chatRecord.contact.phoneNumber
+        },
+        `→ Sending presence to WhatsApp: ${presence} (delay: ${delay}ms)`,
+      );
+
+      await evolutionClient.chat.sendPresence(
+        chatRecord.channel.evolutionInstanceName,
+        {
+          number: chatRecord.contact.phoneNumber,
+          delay,
+          presence,
+        },
+      );
+
+      log.info(
+        { chatId, presence, phoneNumber: chatRecord.contact.phoneNumber },
+        "✓ Presence sent to WhatsApp",
+      );
+    } catch (error) {
+      log.error({ chatId, error }, "Failed to send presence to WhatsApp");
     }
   }
 
@@ -159,7 +333,8 @@ export class TypingHandler {
     sourceOrgId: string,
   ): Promise<TargetInfo | null> {
     try {
-      const targetTenantDb = await this.tenantManager.getConnection(targetOrgId);
+      const targetTenantDb =
+        await this.tenantManager.getConnection(targetOrgId);
 
       // Buscar contact mirrored na org target
       const targetContacts = await targetTenantDb
@@ -169,8 +344,12 @@ export class TypingHandler {
 
       const sourceContact = targetContacts.find(
         (c) =>
-          (c.metadata as { source?: string; targetOrganizationId?: string } | null)
-            ?.source === "internal" &&
+          (
+            c.metadata as {
+              source?: string;
+              targetOrganizationId?: string;
+            } | null
+          )?.source === "internal" &&
           (c.metadata as { targetOrganizationId?: string } | null)
             ?.targetOrganizationId === sourceOrgId,
       );

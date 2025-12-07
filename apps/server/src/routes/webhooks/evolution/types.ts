@@ -112,3 +112,12 @@ export interface HandlerContext {
   channelId: string;
   instanceName: string;
 }
+
+/**
+ * Presence update webhook data
+ */
+export interface PresenceUpdateData {
+  remoteJid: string; // Contact JID (e.g., "5521984848843@s.whatsapp.net")
+  presences: string[]; // Array of presence states (e.g., ["composing"])
+  participant?: string; // For group chats
+}

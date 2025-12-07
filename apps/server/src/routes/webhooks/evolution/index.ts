@@ -8,6 +8,7 @@ import {
   handleMessagesDelete,
   handleQRCodeUpdated,
   handleSendMessage,
+  handlePresenceUpdate,
 } from "./handlers";
 import type {
   ConnectionUpdateData,
@@ -17,6 +18,7 @@ import type {
   MessagesDeleteData,
   QRCodeData,
   SendMessageData,
+  PresenceUpdateData,
 } from "./types";
 import { validateEventData, validateWebhookPayload } from "./validation";
 import { createLogger } from "~/libs/utils/logger";
@@ -100,10 +102,15 @@ async function routeEvent(event: string, instance: string, data: unknown) {
       break;
     }
 
+    case "presence.update": {
+      const validatedData = validateEventData<PresenceUpdateData>(event, data);
+      await handlePresenceUpdate(instance, validatedData);
+      break;
+    }
+
     // Eventos não implementados (por enquanto)
     case "contacts.upsert":
     case "contacts.update":
-    case "presence.update":
     case "chats.upsert":
     case "chats.update":
     case "chats.delete":

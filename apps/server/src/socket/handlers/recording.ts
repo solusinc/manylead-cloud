@@ -1,9 +1,13 @@
-import type { Server as SocketIOServer, Socket } from "socket.io";
-import type { TenantDatabaseManager } from "@manylead/tenant-db";
+import type { Socket, Server as SocketIOServer } from "socket.io";
+
 import type { TenantDB } from "@manylead/db";
-import { chat, contact, agent, eq, and, or } from "@manylead/db";
+import type { TenantDatabaseManager } from "@manylead/tenant-db";
+import { agent, and, channel, chat, contact, eq, or } from "@manylead/db";
+import { EvolutionAPIClient } from "@manylead/evolution-api-client";
+
 import type { SocketData } from "../types";
 import { createLogger } from "~/libs/utils/logger";
+import { env } from "~/env";
 
 const log = createLogger("RecordingHandler");
 
@@ -39,7 +43,9 @@ export class RecordingHandler {
     const userId = socketData.userId;
 
     // Encontrar room da organização atual
-    const orgRoom = Array.from(socket.rooms).find((room) => room.startsWith("org:"));
+    const orgRoom = Array.from(socket.rooms).find((room) =>
+      room.startsWith("org:"),
+    );
 
     if (!orgRoom) return;
 
@@ -57,6 +63,14 @@ export class RecordingHandler {
 
       if (!chatRecord) {
         log.warn(`Chat not found: ${data.chatId}`);
+        return;
+      }
+
+      // NOVO: Se WhatsApp, enviar presence via Evolution API
+      if (chatRecord.messageSource === "whatsapp") {
+        await this.handleWhatsAppPresence(data.chatId, action, tenantDb);
+        // Não fazer broadcast local - apenas enviar para WhatsApp
+        // O recording do contato será recebido via webhook presence.update
         return;
       }
 
@@ -90,6 +104,59 @@ export class RecordingHandler {
       log.info(`→ ${targetInfo.room} | ${event} (${targetInfo.type})`);
     } catch (error) {
       log.error({ err: error }, `Error handling recording:${action}`);
+    }
+  }
+
+  /**
+   * Send presence to WhatsApp via Evolution API
+   */
+  private async handleWhatsAppPresence(
+    chatId: string,
+    action: "start" | "stop",
+    tenantDb: TenantDB,
+  ): Promise<void> {
+    try {
+      // 1. Buscar chat com channel e contact
+      const [chatRecord] = await tenantDb
+        .select({
+          chat,
+          channel,
+          contact,
+        })
+        .from(chat)
+        .leftJoin(channel, eq(chat.channelId, channel.id))
+        .innerJoin(contact, eq(chat.contactId, contact.id))
+        .where(eq(chat.id, chatId))
+        .limit(1);
+
+      if (!chatRecord?.channel || !chatRecord.contact.phoneNumber) {
+        log.warn({ chatId }, "Chat missing channel or contact phone");
+        return;
+      }
+
+      // 2. Chamar Evolution API
+      const evolutionClient = new EvolutionAPIClient(
+        env.EVOLUTION_API_URL,
+        env.EVOLUTION_API_KEY,
+      );
+
+      const presence = action === "start" ? "recording" : "paused";
+
+      await evolutionClient.chat.sendPresence(
+        chatRecord.channel.evolutionInstanceName,
+        {
+          number: chatRecord.contact.phoneNumber,
+          delay: 10000, // 10s delay
+          presence,
+        },
+      );
+
+      log.info(
+        { chatId, presence, phoneNumber: chatRecord.contact.phoneNumber },
+        "Presence sent to WhatsApp",
+      );
+    } catch (error) {
+      log.error({ chatId, error }, "Failed to send presence to WhatsApp");
     }
   }
 
@@ -159,7 +226,8 @@ export class RecordingHandler {
     sourceOrgId: string,
   ): Promise<TargetInfo | null> {
     try {
-      const targetTenantDb = await this.tenantManager.getConnection(targetOrgId);
+      const targetTenantDb =
+        await this.tenantManager.getConnection(targetOrgId);
 
       // Buscar contact mirrored na org target
       const targetContacts = await targetTenantDb
@@ -169,8 +237,12 @@ export class RecordingHandler {
 
       const sourceContact = targetContacts.find(
         (c) =>
-          (c.metadata as { source?: string; targetOrganizationId?: string } | null)
-            ?.source === "internal" &&
+          (
+            c.metadata as {
+              source?: string;
+              targetOrganizationId?: string;
+            } | null
+          )?.source === "internal" &&
           (c.metadata as { targetOrganizationId?: string } | null)
             ?.targetOrganizationId === sourceOrgId,
       );

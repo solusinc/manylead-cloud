@@ -62,8 +62,8 @@ export function ChatSidebarItemLastMessage({
   // Caso 4: Mensagem normal (texto ou mídia)
   return (
     <div className={cn("flex min-w-0 flex-1 items-center gap-1.5", className)}>
-      {/* Status icon - para qualquer mensagem com status */}
-      {messageStatus && (
+      {/* Status icon - apenas para mensagens de agent/contact, não para system */}
+      {messageStatus && _messageSender !== "system" && (
         <MessageStatusIcon status={messageStatus} size={14} className="shrink-0" />
       )}
 

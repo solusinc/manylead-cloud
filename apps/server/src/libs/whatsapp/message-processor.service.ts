@@ -1,6 +1,6 @@
 import type { Channel, TenantDB, Chat, Attachment } from "@manylead/db";
 import type { TenantDatabaseManager } from "@manylead/tenant-db";
-import { and, attachment, chat, contact, eq, message, sql } from "@manylead/db";
+import { and, attachment, channel, chat, contact, desc, eq, message, or, sql } from "@manylead/db";
 import { createMediaDownloadQueue } from "@manylead/shared/queue";
 import { formatTime } from "@manylead/shared";
 import { getDefaultDepartment, ChatParticipantService } from "@manylead/core-services";
@@ -56,6 +56,13 @@ export class WhatsAppMessageProcessor {
       msg.key.remoteJid,
       msg.key.remoteJidAlt,
     );
+
+    // Log para debug de LID vs phoneNumber
+    log.info({
+      remoteJid: msg.key.remoteJid,
+      remoteJidAlt: msg.key.remoteJidAlt,
+      extractedPhoneNumber: phoneNumber,
+    }, "Extracted phone number from webhook");
 
     if (!phoneNumber) {
       log.warn({ remoteJid: msg.key.remoteJid }, "Invalid phone number");
@@ -291,14 +298,20 @@ export class WhatsAppMessageProcessor {
 
   /**
    * Extrai número de telefone do remoteJid
-   * Prioriza remoteJidAlt (formato @s.whatsapp.net) sobre remoteJid (formato @lid)
+   * Prioriza remoteJid (número real @s.whatsapp.net) sobre remoteJidAlt (LID @lid)
    */
   private extractPhoneNumber(
     remoteJid: string,
     remoteJidAlt?: string,
   ): string | null {
-    // Usar remoteJidAlt se disponível (formato padrão @s.whatsapp.net)
-    const jid = remoteJidAlt ?? remoteJid;
+    // Priorizar remoteJid (número real) se terminar com @s.whatsapp.net
+    // Caso contrário usar remoteJidAlt (pode ter o número real quando remoteJid é LID)
+    let jid = remoteJid;
+
+    if (remoteJid.endsWith("@lid") && remoteJidAlt?.endsWith("@s.whatsapp.net")) {
+      jid = remoteJidAlt;
+    }
+
     const phoneNumber = jid.split("@")[0];
     return phoneNumber ?? null;
   }
@@ -413,6 +426,7 @@ export class WhatsAppMessageProcessor {
 
   /**
    * Buscar chat existente para contato/canal
+   * Busca apenas chats open/pending (ignora closed/snoozed)
    */
   private async findExistingChat(
     tenantDb: TenantDB,
@@ -427,9 +441,10 @@ export class WhatsAppMessageProcessor {
           eq(chat.contactId, contactId),
           eq(chat.channelId, channelId),
           eq(chat.messageSource, "whatsapp"),
+          or(eq(chat.status, "open"), eq(chat.status, "pending")),
         ),
       )
-      .orderBy(chat.createdAt)
+      .orderBy(desc(chat.createdAt)) // Mais recente primeiro
       .limit(1)
       .then((rows) => rows[0] ?? null);
 

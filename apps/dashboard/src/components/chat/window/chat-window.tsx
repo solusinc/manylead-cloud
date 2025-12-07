@@ -211,6 +211,24 @@ function ChatWindowContent({
     [mediaPreview, sendMedia, chatId, cancelMediaPreview, cancelReply]
   );
 
+  // Send "available" (online) presence when chat is opened
+  // Send "unavailable" (offline) when chat is closed
+  // ONLY for WhatsApp chats (cross-org will have dedicated presence table later)
+  useEffect(() => {
+    // Só enviar presence para chats WhatsApp
+    if (chat.source !== "whatsapp") {
+      return;
+    }
+
+    // Enviar "available" ao abrir o chat
+    socket.emitPresenceAvailable(chatId);
+
+    // Cleanup: enviar "unavailable" ao fechar/sair do chat
+    return () => {
+      socket.emitPresenceUnavailable(chatId);
+    };
+  }, [chatId, socket, chat.source]);
+
   return (
     <div
       className={cn(
@@ -251,10 +269,10 @@ function ChatWindowContent({
           chatCreatedAt={chatItem.chat.createdAt}
           chatStatus={chat.status}
           assignedTo={chat.assignedTo}
-          onTypingStart={chat.source === "internal" ? () => socket.emitTypingStart(chatId) : undefined}
-          onTypingStop={chat.source === "internal" ? () => socket.emitTypingStop(chatId) : undefined}
-          onRecordingStart={chat.source === "internal" ? () => socket.emitRecordingStart(chatId) : undefined}
-          onRecordingStop={chat.source === "internal" ? () => socket.emitRecordingStop(chatId) : undefined}
+          onTypingStart={() => socket.emitTypingStart(chatId)}
+          onTypingStop={() => socket.emitTypingStop(chatId)}
+          onRecordingStart={() => socket.emitRecordingStart(chatId)}
+          onRecordingStop={() => socket.emitRecordingStop(chatId)}
         />
       </div>
     </div>

@@ -68,6 +68,12 @@ export const sendMessageDataSchema = z.object({
   status: z.string().optional(),
 });
 
+export const presenceUpdateDataSchema = z.object({
+  remoteJid: z.string(),
+  presences: z.array(z.string()),
+  participant: z.string().optional(),
+});
+
 /**
  * Valida payload do webhook
  */
@@ -94,6 +100,9 @@ export function validateEventData<T>(
 
     case "send.message":
       return sendMessageDataSchema.parse(data) as T;
+
+    case "presence.update":
+      return presenceUpdateDataSchema.parse(data) as T;
 
     default:
       // Eventos não validados retornam data as-is
