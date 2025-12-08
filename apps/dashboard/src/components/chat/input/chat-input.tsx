@@ -6,10 +6,10 @@ import { useRouter } from "next/navigation";
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Mic, UserCheck } from "lucide-react";
 import TextareaAutosize from "react-textarea-autosize";
-import { toast } from "sonner";
 
 import { cn } from "@manylead/ui";
 import { Button } from "@manylead/ui/button";
+import { toast } from "@manylead/ui/toast";
 
 import type { QuickReplySelection } from "./quick-reply-dropdown";
 import { ChatCommentDialog } from "./chat-comment-dialog";
@@ -24,6 +24,7 @@ import { useSendMessage } from "./hooks/use-send-message";
 import { useInputContent } from "./hooks/use-input-content";
 import { useQuickReplySelect } from "./hooks/use-quick-reply-select";
 import { useSendAudio } from "./hooks/use-send-audio";
+import { useChat } from "../providers/chat-context";
 
 export function ChatInput({
   chatId,
@@ -49,10 +50,12 @@ export function ChatInput({
   const [isSending, setIsSending] = useState(false);
   const [mode, setMode] = useState<"text" | "recording">("text");
   const shouldFocusRef = useRef(false);
+  const hasShownNoChannelToast = useRef(false);
   const router = useRouter();
   const trpc = useTRPC();
   const queryClient = useQueryClient();
   const { replyingTo, cancelReply, setMediaPreview, setFocusInput, messageSource } = useChatReply();
+  const { hasChannel } = useChat();
 
   // Custom hooks
   const { data: currentAgent } = useCurrentAgent();
@@ -151,6 +154,20 @@ export function ChatInput({
     })
   );
 
+  // Mutation para criar novo chat WhatsApp
+  const createWhatsAppChatMutation = useMutation(
+    trpc.chats.createWhatsAppChat.mutationOptions({
+      onSuccess: (chat) => {
+        void queryClient.invalidateQueries({ queryKey: [["chats", "list"]] });
+        // Navegar para o novo chat
+        router.push(`/chats/${chat.id}`);
+      },
+      onError: (error) => {
+        toast.error(error.message || "Erro ao criar chat WhatsApp");
+      },
+    })
+  );
+
   const handleNovoAtendimento = () => {
     if (!currentChat) {
       toast.error("Erro ao carregar dados do chat");
@@ -176,9 +193,16 @@ export function ChatInput({
         organizationInstanceCode: targetOrgInstanceCode,
       });
     } else {
-      // WhatsApp - TODO: implementar criação de nova sessão WhatsApp
-      toast("Em breve", {
-        description: "Criação de nova sessão WhatsApp será implementada em breve.",
+      // WhatsApp - Criar novo chat com o mesmo número
+      const phoneNumber = currentChat.contact?.phoneNumber;
+
+      if (!phoneNumber) {
+        toast.error("Número de telefone não encontrado");
+        return;
+      }
+
+      createWhatsAppChatMutation.mutate({
+        phoneNumber,
       });
     }
   };
@@ -204,8 +228,18 @@ export function ChatInput({
     }
   }, [isSending, textareaRef]);
 
+  // Show toast when no channel available
+  useEffect(() => {
+    if (!hasChannel && !hasShownNoChannelToast.current) {
+      toast.error("Nenhum canal do WhatsApp conectado", {
+        description: "Conecte um canal primeiro para enviar mensagens.",
+      });
+      hasShownNoChannelToast.current = true;
+    }
+  }, [hasChannel]);
+
   const handleSend = useCallback(() => {
-    if (!content.trim() || isSending) return;
+    if (!content.trim() || isSending || !hasChannel) return;
 
     setIsSending(true);
 
@@ -237,7 +271,7 @@ export function ChatInput({
         setIsSending(false);
         cancelReply();
       });
-  }, [content, isSending, onTypingStop, clearContent, sendMessage, chatId, replyingTo, cancelReply]);
+  }, [content, isSending, hasChannel, onTypingStop, clearContent, sendMessage, chatId, replyingTo, cancelReply]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -498,18 +532,19 @@ export function ChatInput({
               isMultiLine ? "rounded-3xl" : "rounded-full"
             )}
           >
-            <ChatInputToolbar chatId={chatId} onEmojiSelect={insertEmoji} onFileSelect={handleFileSelect} />
+            <ChatInputToolbar chatId={chatId} onEmojiSelect={insertEmoji} onFileSelect={handleFileSelect} disabled={!hasChannel} />
 
             <ChatInputArea
               ref={textareaRef}
               value={content}
               onChange={(e) => handleContentChange(e.target.value)}
               onKeyDown={handleKeyDown}
-              disabled={isSending}
+              disabled={isSending || !hasChannel}
+              placeholder={!hasChannel ? "Conecte um canal do WhatsApp para enviar mensagens" : "Digite uma mensagem"}
               autoFocus
             />
 
-            <ChatInputMicButton onClick={handleMicClick} />
+            <ChatInputMicButton onClick={handleMicClick} disabled={!hasChannel} />
           </div>
         ) : (
           <div className="border-input bg-background flex flex-1 items-center gap-1 border rounded-full px-2 transition-all">

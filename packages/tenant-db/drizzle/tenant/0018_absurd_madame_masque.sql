@@ -1,0 +1,1 @@
+ALTER TABLE "organization_settings" ADD COLUMN "proxy_settings" jsonb DEFAULT '{"enabled":false}'::jsonb;

@@ -67,6 +67,20 @@ export const organizationSettings = pgTable(
       }[]
     >(),
 
+    // Bright Data Proxy Settings (Evolution API apenas)
+    proxySettings: jsonb("proxy_settings")
+      .$type<{
+        enabled: boolean;
+        country?: "br" | "us" | "ar" | "cl" | "mx" | "co" | "pe" | "pt" | "es";
+        sessionId?: string;
+        lastKeepAliveAt?: string;
+        rotationCount?: number;
+        lastRotatedAt?: string;
+      }>()
+      .default({ enabled: true }),
+    // Proxy habilitado por padrão com country auto-detectado por timezone
+    // ⚠️ Aplicado APENAS para Evolution API (QR_CODE), NÃO para WhatsApp Business API
+
     // Timestamps
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),

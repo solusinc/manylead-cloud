@@ -14,6 +14,7 @@
     "clean-failed": "bun with-env bun run scripts/clean-failed-jobs.ts"
   },
   "dependencies": {
+    "@manylead/bright-data": "workspace:*",
     "@manylead/clients": "workspace:*",
     "@manylead/db": "workspace:*",
     "@manylead/error": "workspace:*",

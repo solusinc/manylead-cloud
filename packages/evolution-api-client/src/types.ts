@@ -59,14 +59,12 @@ export interface CreateInstanceRequest {
     enabled: boolean;
     events?: string[];
   };
-  proxy?: {
-    enabled: boolean;
-    host?: string;
-    port?: string;
-    protocol?: string;
-    username?: string;
-    password?: string;
-  };
+  // Proxy fields (flat, not nested)
+  proxyHost?: string;
+  proxyPort?: string;
+  proxyProtocol?: string;
+  proxyUsername?: string;
+  proxyPassword?: string;
 }
 
 export interface CreateInstanceResponse {
@@ -170,6 +168,8 @@ export interface SetProxyResponse {
   host?: string;
   port?: string;
   protocol?: string;
+  username?: string;
+  password?: string;
 }
 
 export interface WebhookEvent {

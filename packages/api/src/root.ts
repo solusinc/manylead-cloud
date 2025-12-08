@@ -11,6 +11,7 @@ import { memberRouter } from "./router/member";
 import { messagesRouter } from "./router/messages";
 import { organizationRouter } from "./router/organization";
 import { organizationSettingsRouter } from "./router/organization-settings";
+import { proxySettingsRouter } from "./router/proxy-settings";
 import { quickRepliesRouter } from "./router/quick-replies";
 import { scheduledMessagesRouter } from "./router/scheduled-messages";
 import { tagsRouter } from "./router/tags";
@@ -22,6 +23,7 @@ export const appRouter = createTRPCRouter({
   user: userRouter,
   organization: organizationRouter,
   organizationSettings: organizationSettingsRouter,
+  proxySettings: proxySettingsRouter,
   invitation: invitationRouter,
   member: memberRouter,
   departments: departmentsRouter,

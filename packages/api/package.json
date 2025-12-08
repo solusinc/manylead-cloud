@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@manylead/auth": "workspace:*",
+    "@manylead/bright-data": "workspace:*",
     "@manylead/clients": "workspace:*",
     "@manylead/core-services": "workspace:*",
     "@manylead/db": "workspace:*",

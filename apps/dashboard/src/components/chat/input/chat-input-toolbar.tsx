@@ -28,17 +28,19 @@ export function ChatInputToolbar({
   chatId,
   onEmojiSelect,
   onFileSelect,
+  disabled,
   className,
   ...props
 }: {
   chatId: string;
   onEmojiSelect?: (emoji: string) => void;
   onFileSelect?: (file: File) => void;
+  disabled?: boolean;
 } & React.ComponentProps<"div">) {
   return (
     <div className={cn("flex items-center pl-1", className)} {...props}>
-      <ChatInputEmojiButton onEmojiSelect={onEmojiSelect} />
-      <ChatInputAttachButton chatId={chatId} onFileSelect={onFileSelect} />
+      <ChatInputEmojiButton onEmojiSelect={onEmojiSelect} disabled={disabled} />
+      <ChatInputAttachButton chatId={chatId} onFileSelect={onFileSelect} disabled={disabled} />
     </div>
   );
 }

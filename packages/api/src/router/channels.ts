@@ -10,9 +10,12 @@ import {
   eq,
   insertChannelSchema,
   organization,
+  organizationSettings,
   selectChannelSchema,
   updateChannelSchema,
 } from "@manylead/db";
+import { getBrightDataClient } from "@manylead/bright-data";
+import type { CreateInstanceRequest } from "@manylead/evolution-api-client";
 import { EvolutionAPIClient } from "@manylead/evolution-api-client";
 
 import { env } from "../env";
@@ -171,8 +174,12 @@ export const channelsRouter = createTRPCRouter({
         });
       }
 
-      // Verificar se já existe canal deste tipo para a organização
-      const existingChannel = await tenantDb
+      // Gerar phoneNumberId e instanceName únicos usando slug da org
+      const phoneNumberId = `${input.channelType}_${crypto.randomUUID()}`;
+      const evolutionInstanceName = org.slug;
+
+      // SEMPRE deletar canal existente (se houver) antes de criar novo
+      const existingChannels = await tenantDb
         .select()
         .from(channel)
         .where(
@@ -180,47 +187,44 @@ export const channelsRouter = createTRPCRouter({
             eq(channel.organizationId, organizationId),
             eq(channel.channelType, input.channelType),
           ),
-        )
-        .limit(1);
+        );
 
-      if (existingChannel.length > 0) {
-        const typeLabel =
-          input.channelType === CHANNEL_TYPE.QR_CODE ? "QR Code" : "Oficial";
-        throw new TRPCError({
-          code: "CONFLICT",
-          message: `Você já possui um canal ${typeLabel}. Cada organização pode ter no máximo 1 canal de cada tipo.`,
-        });
+      if (existingChannels.length > 0) {
+        console.log("DEBUG: Canal existente encontrado, deletando...");
+
+        // Deletar da Evolution API primeiro (se for QR Code)
+        if (input.channelType === CHANNEL_TYPE.QR_CODE) {
+          const evolutionClient = getEvolutionClient();
+
+          // Verificar se instância existe antes de tentar deletar
+          try {
+            const existingInstance = await evolutionClient.instance.fetch(evolutionInstanceName);
+            console.log("DEBUG: Instância existe na Evolution, deletando:", existingInstance);
+
+            // Fazer logout primeiro
+            try {
+              await evolutionClient.instance.logout(evolutionInstanceName);
+              console.log("DEBUG: Logout realizado");
+            } catch (logoutError) {
+              console.log("DEBUG: Erro no logout (ignorando):", logoutError);
+            }
+
+            // Deletar instância
+            await evolutionClient.instance.delete(evolutionInstanceName);
+            console.log("DEBUG: Instância deletada da Evolution");
+          } catch (error) {
+            console.log("DEBUG: Instância não existe na Evolution (ok, continuando)");
+          }
+        }
+
+        // Deletar todos os canais existentes do tipo
+        for (const existingChannel of existingChannels) {
+          console.log("DEBUG: Deletando canal do banco:", existingChannel.id);
+          await tenantDb.delete(channel).where(eq(channel.id, existingChannel.id));
+        }
       }
 
-      // Gerar phoneNumberId e instanceName únicos usando slug da org
-      const phoneNumberId = `${input.channelType}_${crypto.randomUUID()}`;
-      const evolutionInstanceName = org.slug;
-
-      // Criar instância na Evolution API (somente para QR Code)
-      if (input.channelType === CHANNEL_TYPE.QR_CODE) {
-        const evolutionClient = getEvolutionClient();
-        await evolutionClient.instance.create({
-          instanceName: evolutionInstanceName,
-          qrcode: true,
-          integration: "WHATSAPP-BAILEYS",
-          webhook: {
-            url: `${env.WEBHOOK_BASE_URL}/webhooks/evolution`,
-            enabled: true,
-            webhookByEvents: true,
-            events: [
-              "QRCODE_UPDATED",
-              "CONNECTION_UPDATE",
-              "MESSAGES_UPSERT",
-              "MESSAGES_UPDATE",
-              "MESSAGES_DELETE",
-              "SEND_MESSAGE",
-              "PRESENCE_UPDATE",
-            ],
-          },
-        });
-      }
-
-      // Criar canal no DB
+      // Criar canal no DB PRIMEIRO (antes da Evolution API para webhook encontrar)
       const [newChannel] = await tenantDb
         .insert(channel)
         .values({
@@ -239,6 +243,96 @@ export const channelsRouter = createTRPCRouter({
           code: "INTERNAL_SERVER_ERROR",
           message: "Falha ao criar canal",
         });
+      }
+
+      // Criar instância na Evolution API (somente para QR Code)
+      if (input.channelType === CHANNEL_TYPE.QR_CODE) {
+        try {
+          const evolutionClient = getEvolutionClient();
+
+          // Buscar orgSettings ANTES de criar instância para incluir proxy
+          console.log("DEBUG: Buscando orgSettings para organizationId:", organizationId);
+          const [orgSettings] = await tenantDb
+            .select()
+            .from(organizationSettings)
+            .where(eq(organizationSettings.organizationId, organizationId))
+            .limit(1);
+
+          console.log("DEBUG: orgSettings encontrado:", orgSettings);
+          console.log("DEBUG: proxySettings:", orgSettings?.proxySettings);
+          console.log("DEBUG: proxySettings.enabled:", orgSettings?.proxySettings?.enabled);
+
+          // Criar instância com proxy direto (SEM campo "enabled")
+          console.log("DEBUG: Criando instância:", evolutionInstanceName);
+
+          const createPayload: CreateInstanceRequest = {
+            instanceName: evolutionInstanceName,
+            qrcode: true,
+            integration: "WHATSAPP-BAILEYS",
+            webhook: {
+              url: `${env.WEBHOOK_BASE_URL}/webhooks/evolution`,
+              enabled: true,
+              webhookByEvents: true,
+              events: [
+                "QRCODE_UPDATED",
+                "CONNECTION_UPDATE",
+                "MESSAGES_UPSERT",
+                "MESSAGES_UPDATE",
+                "MESSAGES_DELETE",
+                "SEND_MESSAGE",
+                "PRESENCE_UPDATE",
+              ],
+            },
+          };
+
+          // PROXY TEMPORARIAMENTE DESABILITADO
+          /*
+          // Adicionar campos de proxy se habilitado (SEM o campo "enabled"!)
+          if (orgSettings?.proxySettings?.enabled) {
+            const brightData = getBrightDataClient();
+            const proxyConfig = brightData.getProxyConfig(
+              organizationId,
+              orgSettings.proxySettings,
+              orgSettings.timezone,
+            );
+
+            // Adicionar campos de proxy (SEM enabled)
+            createPayload.proxyHost = proxyConfig.host;
+            createPayload.proxyPort = proxyConfig.port;
+            createPayload.proxyProtocol = proxyConfig.protocol;
+            createPayload.proxyUsername = proxyConfig.username;
+            createPayload.proxyPassword = proxyConfig.password;
+
+            console.log("=== CREATE WITH PROXY ===");
+            console.log(JSON.stringify(createPayload, null, 2));
+            console.log("=========================");
+
+            // Atualizar sessionId no DB
+            await tenantDb
+              .update(organizationSettings)
+              .set({
+                proxySettings: {
+                  enabled: true,
+                  country: orgSettings.proxySettings.country,
+                  sessionId: proxyConfig.username?.split("session-")[1]?.split("-country-")[0],
+                  lastKeepAliveAt: new Date().toISOString(),
+                  rotationCount: orgSettings.proxySettings.rotationCount,
+                  lastRotatedAt: orgSettings.proxySettings.lastRotatedAt,
+                },
+                updatedAt: new Date(),
+              })
+              .where(eq(organizationSettings.organizationId, organizationId));
+          }
+          */
+
+          await evolutionClient.instance.create(createPayload);
+          console.log("DEBUG: Instância criada com sucesso");
+        } catch (error) {
+          // Se falhar ao criar instância na Evolution, deletar o channel (rollback)
+          console.log("ERROR: Falha ao criar instância, fazendo rollback do channel");
+          await tenantDb.delete(channel).where(eq(channel.id, newChannel.id));
+          throw error;
+        }
       }
 
       return selectChannelSchema.parse(newChannel);
@@ -391,7 +485,20 @@ export const channelsRouter = createTRPCRouter({
       // Deletar instância da Evolution API
       if (ch.evolutionInstanceName) {
         const evolutionClient = getEvolutionClient();
-        await evolutionClient.instance.delete(ch.evolutionInstanceName);
+
+        // Fazer logout primeiro para limpar conexões
+        try {
+          await evolutionClient.instance.logout(ch.evolutionInstanceName);
+        } catch {
+          // Ignorar erro de logout
+        }
+
+        // Deletar instância
+        try {
+          await evolutionClient.instance.delete(ch.evolutionInstanceName);
+        } catch {
+          // Ignorar erro de delete
+        }
       }
 
       // Deletar do DB

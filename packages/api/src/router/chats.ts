@@ -566,7 +566,7 @@ export const chatsRouter = createTRPCRouter({
             normalizedPhone,
           );
           profilePictureUrl = profileResult.profilePictureUrl;
-        } catch (error) {
+        } catch {
           // Ignorar erro (foto pode estar privada)
           profilePictureUrl = null;
         }
@@ -615,7 +615,7 @@ export const chatsRouter = createTRPCRouter({
               avatar: profileResult.profilePictureUrl,
             };
           }
-        } catch (error) {
+        } catch {
           // Ignorar erro (foto pode estar privada)
         }
       }

@@ -2,7 +2,7 @@ services:
   # Evolution API - WhatsApp Integration
   evolution-api:
     container_name: manylead-evolution-api
-    image: evoapicloud/evolution-api:latest
+    image: evoapicloud/evolution-api:v2.3.6
     restart: always
     ports:
       - "8081:8080"  # Porta 8081 (Evolution) - diferente do server (3002)
@@ -18,6 +18,7 @@ services:
         condition: service_started
     environment:
       - TZ=America/Sao_Paulo
+      - NODE_TLS_REJECT_UNAUTHORIZED=0
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080"]
       interval: 30s

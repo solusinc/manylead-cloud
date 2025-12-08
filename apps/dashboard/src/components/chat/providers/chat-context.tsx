@@ -53,6 +53,9 @@ interface ChatContextValue {
   isClosed: boolean;
   canEdit: boolean;
 
+  // Channel availability
+  hasChannel: boolean;
+
   // Socket functions
   emitTypingStart: () => void;
   emitTypingStop: () => void;
@@ -112,6 +115,11 @@ export function ChatProvider({
     })
   );
 
+  // Fetch channels to check if WhatsApp channel is connected
+  const { data: channels } = useQuery(
+    trpc.channels.list.queryOptions()
+  );
+
   // Find specific chat
   const chatItem = chatData?.items.find((item) => item.chat.id === chatId);
 
@@ -156,6 +164,12 @@ export function ChatProvider({
     const isOwnerOrAdmin = currentAgent.role === "owner" || currentAgent.role === "admin";
     return (isOwnerOrAdmin && isPending) || isAssignedToMe;
   }, [currentAgent, isPending, isAssignedToMe]);
+
+  // Check if has connected WhatsApp channel (only for WhatsApp chats)
+  const hasChannel = useMemo(() => {
+    if (chat?.source !== "whatsapp") return true; // Internal chats don't need channel
+    return channels?.some(ch => ch.status === "connected") ?? false;
+  }, [chat?.source, channels]);
 
   // Socket functions
   const emitTypingStart = useCallback(() => {
@@ -205,6 +219,7 @@ export function ChatProvider({
     isPending,
     isClosed,
     canEdit,
+    hasChannel,
     emitTypingStart,
     emitTypingStop,
     scrollToBottom,
