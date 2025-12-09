@@ -1,6 +1,6 @@
 import type { Channel, TenantDB, Chat, Attachment } from "@manylead/db";
 import type { TenantDatabaseManager } from "@manylead/tenant-db";
-import { and, attachment, chat, contact, desc, eq, message, or, sql } from "@manylead/db";
+import { and, attachment, chat, chatRating, contact, desc, eq, message, or, organizationSettings, sql } from "@manylead/db";
 import { createMediaDownloadQueue } from "@manylead/shared/queue";
 import { formatTime } from "@manylead/shared";
 import { getDefaultDepartment, ChatParticipantService, getEventPublisher } from "@manylead/core-services";
@@ -74,6 +74,23 @@ export class WhatsAppMessageProcessor {
     const tenantDb = await this.tenantManager.getConnection(
       channel.organizationId,
     );
+
+    // 0. Verificar se há chat aguardando rating ANTES de criar/buscar chat
+    // Se houver, processar a resposta de rating
+    if (!isGroup && phoneNumber) {
+      const ratingProcessed = await this.checkAndProcessRatingResponse(
+        tenantDb,
+        channel,
+        phoneNumber,
+        msg,
+        instanceName,
+      );
+
+      if (ratingProcessed) {
+        // Rating foi processado, não continuar com fluxo normal
+        return;
+      }
+    }
 
     // 1. Garantir que contato existe
     const contactRecord = isGroup
@@ -300,6 +317,17 @@ export class WhatsAppMessageProcessor {
       log.info("Socket.io emitted immediately (text message)");
     } else {
       log.info("Socket.io NOT emitted (media - worker will emit after download)");
+    }
+
+    // 10. Enviar welcome message APÓS salvar mensagem do cliente (para garantir ordem correta)
+    if (isChatNew) {
+      await this.sendWelcomeMessage(
+        tenantDb,
+        channel,
+        chatRecord,
+        contactRecord,
+        instanceName,
+      );
     }
 
     log.info("Message processed", {
@@ -735,5 +763,316 @@ export class WhatsAppMessageProcessor {
     const ts =
       typeof timestamp === "string" ? parseInt(timestamp, 10) : timestamp;
     return new Date(ts * 1000);
+  }
+
+  /**
+   * Verificar e processar resposta de rating
+   *
+   * @returns true se o rating foi processado (não continuar fluxo normal)
+   */
+  private async checkAndProcessRatingResponse(
+    tenantDb: TenantDB,
+    channel: Channel,
+    phoneNumber: string,
+    msg: MessageData,
+    instanceName: string,
+  ): Promise<boolean> {
+    // Buscar contato pelo phoneNumber
+    const [contactRecord] = await tenantDb
+      .select()
+      .from(contact)
+      .where(eq(contact.phoneNumber, phoneNumber))
+      .limit(1);
+
+    if (!contactRecord) {
+      return false;
+    }
+
+    // Buscar chat fechado aguardando rating
+    const [awaitingRatingChat] = await tenantDb
+      .select()
+      .from(chat)
+      .where(
+        and(
+          eq(chat.contactId, contactRecord.id),
+          eq(chat.channelId, channel.id),
+          eq(chat.status, "closed"),
+          eq(chat.ratingStatus, "awaiting"),
+        ),
+      )
+      .orderBy(desc(chat.updatedAt))
+      .limit(1);
+
+    if (!awaitingRatingChat) {
+      return false;
+    }
+
+    // Extrair conteúdo da mensagem
+    const messageContent = this.contentExtractor.extract(msg.message);
+    const rating = this.parseRatingResponse(messageContent.text);
+
+    if (rating) {
+      // Rating válido (1-5) - processar
+      await this.processValidRating(
+        tenantDb,
+        channel,
+        awaitingRatingChat,
+        contactRecord,
+        rating,
+        msg,
+        instanceName,
+      );
+      return true;
+    }
+
+    // Resposta inválida - limpar ratingStatus para permitir novo chat
+    await tenantDb
+      .update(chat)
+      .set({ ratingStatus: null })
+      .where(
+        and(
+          eq(chat.id, awaitingRatingChat.id),
+          eq(chat.createdAt, awaitingRatingChat.createdAt),
+        ),
+      );
+
+    log.info(
+      { chatId: awaitingRatingChat.id, response: messageContent.text },
+      "Invalid rating response, clearing status for new chat",
+    );
+
+    return false; // Continuar fluxo normal (criar novo chat)
+  }
+
+  /**
+   * Parse resposta de rating
+   * @returns número 1-5 ou null se inválido
+   */
+  private parseRatingResponse(content: string | undefined): number | null {
+    if (!content) return null;
+    const trimmed = content.trim();
+    return /^[1-5]$/.test(trimmed) ? parseInt(trimmed, 10) : null;
+  }
+
+  /**
+   * Processar rating válido
+   */
+  private async processValidRating(
+    tenantDb: TenantDB,
+    channel: Channel,
+    chatRecord: Chat,
+    contactRecord: typeof contact.$inferSelect,
+    rating: number,
+    msg: MessageData,
+    instanceName: string,
+  ): Promise<void> {
+    const now = new Date();
+    const timestamp = this.parseTimestamp(msg.messageTimestamp);
+
+    // 1. Salvar rating na tabela chat_rating
+    await tenantDb.insert(chatRating).values({
+      chatId: chatRecord.id,
+      chatCreatedAt: chatRecord.createdAt,
+      contactId: contactRecord.id,
+      rating,
+      ratedAt: now,
+    });
+
+    // 2. Salvar mensagem do rating (como system para não aparecer na lista de mensagens)
+    const [ratingMessage] = await tenantDb
+      .insert(message)
+      .values({
+        chatId: chatRecord.id,
+        messageSource: "whatsapp",
+        sender: "system",
+        senderId: null,
+        messageType: "system",
+        content: String(rating),
+        whatsappMessageId: msg.key.id,
+        status: "received",
+        timestamp,
+        metadata: { systemEventType: "rating_value" },
+      })
+      .returning();
+
+    // 3. Atualizar chat com ratingStatus = received
+    // NÃO atualizar lastMessage - mensagens de rating não devem aparecer na sidebar
+    await tenantDb
+      .update(chat)
+      .set({
+        ratingStatus: "received",
+        updatedAt: now,
+      })
+      .where(
+        and(eq(chat.id, chatRecord.id), eq(chat.createdAt, chatRecord.createdAt)),
+      );
+
+    // 4. Enviar agradecimento via WhatsApp
+    const thankYouMessage = "Agradecemos a sua avaliação!";
+
+    try {
+      const evolutionClient = getEvolutionClient();
+      await evolutionClient.message.sendText(instanceName, {
+        number: contactRecord.phoneNumber ?? "",
+        text: thankYouMessage,
+      });
+    } catch (error) {
+      log.error({ error, chatId: chatRecord.id }, "Failed to send rating thanks via WhatsApp");
+    }
+
+    // 5. Salvar mensagem de agradecimento
+    const [thanksMessage] = await tenantDb
+      .insert(message)
+      .values({
+        chatId: chatRecord.id,
+        messageSource: "whatsapp",
+        sender: "system",
+        senderId: null,
+        messageType: "system",
+        content: thankYouMessage,
+        status: "sent",
+        timestamp: now,
+        metadata: { systemEventType: "rating_thanks" },
+      })
+      .returning();
+
+    // 6. NÃO atualizar lastMessage - mensagens de rating/agradecimento não devem aparecer na sidebar
+
+    // 7. Emitir eventos
+    const eventPublisher = getEventPublisher(env.REDIS_URL);
+
+    if (ratingMessage) {
+      await eventPublisher.messageCreated(
+        channel.organizationId,
+        chatRecord.id,
+        ratingMessage,
+      );
+    }
+
+    if (thanksMessage) {
+      await eventPublisher.messageCreated(
+        channel.organizationId,
+        chatRecord.id,
+        thanksMessage,
+      );
+    }
+
+    // Buscar chat atualizado para emitir evento
+    const [updatedChat] = await tenantDb
+      .select()
+      .from(chat)
+      .where(
+        and(eq(chat.id, chatRecord.id), eq(chat.createdAt, chatRecord.createdAt)),
+      )
+      .limit(1);
+
+    if (updatedChat) {
+      await eventPublisher.chatUpdated(channel.organizationId, updatedChat);
+    }
+
+    log.info(
+      { chatId: chatRecord.id, rating, contactId: contactRecord.id },
+      "Rating processed successfully",
+    );
+  }
+
+  /**
+   * Enviar welcome message para novo chat
+   */
+  private async sendWelcomeMessage(
+    tenantDb: TenantDB,
+    channel: Channel,
+    chatRecord: Chat,
+    contactRecord: typeof contact.$inferSelect,
+    instanceName: string,
+  ): Promise<void> {
+    // Buscar settings da organização
+    const [settings] = await tenantDb
+      .select({ welcomeMessage: organizationSettings.welcomeMessage })
+      .from(organizationSettings)
+      .where(eq(organizationSettings.organizationId, channel.organizationId))
+      .limit(1);
+
+    if (!settings?.welcomeMessage) {
+      return;
+    }
+
+    const now = new Date();
+
+    // 1. Enviar via WhatsApp
+    const targetNumber = contactRecord.isGroup
+      ? contactRecord.groupJid
+      : contactRecord.phoneNumber;
+
+    if (!targetNumber) {
+      log.warn({ chatId: chatRecord.id }, "No target number for welcome message");
+      return;
+    }
+
+    let whatsappMessageId: string | null = null;
+    try {
+      const evolutionClient = getEvolutionClient();
+      const result = await evolutionClient.message.sendText(instanceName, {
+        number: targetNumber,
+        text: settings.welcomeMessage,
+      });
+      whatsappMessageId = result.key.id;
+    } catch (error) {
+      log.error({ error, chatId: chatRecord.id }, "Failed to send welcome message via WhatsApp");
+      return;
+    }
+
+    // 2. Salvar mensagem de sistema
+    const [welcomeMsg] = await tenantDb
+      .insert(message)
+      .values({
+        chatId: chatRecord.id,
+        messageSource: "whatsapp",
+        sender: "system",
+        senderId: null,
+        messageType: "system",
+        content: settings.welcomeMessage,
+        whatsappMessageId,
+        status: "sent",
+        sentAt: now,
+        timestamp: now,
+        metadata: { systemEventType: "welcome_message" },
+      })
+      .returning();
+
+    // 3. Atualizar lastMessage (usar "agent" para mostrar ticks no sidebar)
+    await tenantDb
+      .update(chat)
+      .set({
+        lastMessageContent: settings.welcomeMessage,
+        lastMessageSender: "agent",
+        lastMessageAt: now,
+        lastMessageType: "system",
+        lastMessageStatus: "sent",
+      })
+      .where(
+        and(eq(chat.id, chatRecord.id), eq(chat.createdAt, chatRecord.createdAt)),
+      );
+
+    // 4. Emitir eventos
+    if (welcomeMsg) {
+      // Emitir via Redis (para outros serviços)
+      const eventPublisher = getEventPublisher(env.REDIS_URL);
+      await eventPublisher.messageCreated(
+        channel.organizationId,
+        chatRecord.id,
+        welcomeMsg,
+      );
+
+      // Emitir via Socket.io (para o dashboard)
+      const socketManager = getSocketManager();
+      socketManager.emitToRoom(`org:${channel.organizationId}`, "message:new", {
+        chatId: chatRecord.id,
+        message: welcomeMsg,
+        contact: contactRecord,
+      });
+    }
+
+    log.info({ chatId: chatRecord.id }, "Welcome message sent");
   }
 }

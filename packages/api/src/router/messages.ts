@@ -66,6 +66,15 @@ export const messagesRouter = createTRPCRouter({
         conditions.push(eq(message.isDeleted, false));
       }
 
+      // Filtrar mensagens de sistema de rating/closing (não devem aparecer na lista)
+      // NOTA: welcome_message DEVE aparecer na lista
+      conditions.push(
+        sql`NOT (
+          ${message.messageType} = 'system'
+          AND ${message.metadata}->>'systemEventType' IN ('rating_request', 'rating_thanks', 'closing_message', 'rating_value')
+        )`,
+      );
+
       // Se SEM cursor: buscar as N mais recentes
       // Se COM cursor: buscar mensagens MAIS ANTIGAS que o cursor (para infinite scroll ao scrollar pro topo)
       // UUIDv7 é time-sortable, então lt(message.id, cursor) funciona

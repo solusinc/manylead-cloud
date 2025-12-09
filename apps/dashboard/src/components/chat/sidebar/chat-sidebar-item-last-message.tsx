@@ -65,7 +65,7 @@ export function ChatSidebarItemLastMessage({
   return (
     <div className={cn("flex min-w-0 flex-1 items-center gap-1.5", className)}>
       {/* Status icon - apenas para mensagens de agent, não para system nem grupos */}
-      {messageStatus && messageSender !== "system" && !isGroup && (
+      {messageStatus && messageSender === "agent" && !isGroup && (
         <MessageStatusIcon status={messageStatus} size={14} className="shrink-0" />
       )}
 

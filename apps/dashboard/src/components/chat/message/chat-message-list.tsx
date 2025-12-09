@@ -301,7 +301,29 @@ export function ChatMessageList({
               {message.messageType === "comment" ? (
                 <ChatMessageComment message={message as Message} />
               ) : message.sender === "system" ? (
-                <ChatMessageSystem message={message as Message} />
+                // Mensagens de welcome/closing/rating devem aparecer como bubbles normais (outgoing)
+                (() => {
+                  const metadata = message.metadata as { systemEventType?: string } | null;
+                  const bubbleSystemTypes = ["welcome_message", "closing_message", "rating_request", "rating_thanks"];
+                  const shouldRenderAsBubble = metadata?.systemEventType && bubbleSystemTypes.includes(metadata.systemEventType);
+
+                  if (shouldRenderAsBubble) {
+                    // Renderizar como mensagem outgoing (do agente)
+                    return (
+                      <ChatMessage
+                        message={{
+                          ...message,
+                          sender: "agent", // Forçar como agent para aparecer como outgoing
+                        } as Message}
+                        showAvatar={showAvatar}
+                        canEditMessages={false}
+                        canDeleteMessages={false}
+                        onImageLoad={() => handleImageLoad(index)}
+                      />
+                    );
+                  }
+                  return <ChatMessageSystem message={message as Message} />;
+                })()
               ) : (
                 <ChatMessage
                   message={message as Message}

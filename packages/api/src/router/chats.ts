@@ -19,7 +19,7 @@ import {
   sql,
   user,
 } from "@manylead/db";
-import { publishChatEvent, formatTime, normalizePhoneNumber } from "@manylead/shared";
+import { publishChatEvent, publishMessageEvent, formatTime, normalizePhoneNumber } from "@manylead/shared";
 import { EvolutionAPIClient } from "@manylead/evolution-api-client";
 
 import { env } from "../env";
@@ -36,6 +36,7 @@ import {
   getChatService,
   ChatCrossOrgService,
   getChatQueryBuilderService,
+  getChatPostActionsService,
 } from "@manylead/core-services/chat";
 import type { ChatContext } from "@manylead/core-services/chat";
 
@@ -1254,7 +1255,95 @@ export const chatsRouter = createTRPCRouter({
         });
       }
 
-      return await chatService.close(chatContext, input);
+      // Fechar o chat
+      const closedChat = await chatService.close(chatContext, input);
+
+      // Processar ação pós-fechamento (rating ou closing message)
+      const postActionsService = getChatPostActionsService(env.REDIS_URL);
+      const postAction = await postActionsService.determinePostCloseAction(
+        { organizationId, tenantDb: ctx.tenantDb },
+        input.endingId,
+      );
+
+      if (postAction.type !== "none" && postAction.message) {
+        // Salvar mensagem de sistema no banco
+        const postCloseMessage = await postActionsService.executePostCloseAction(
+          { organizationId, tenantDb: ctx.tenantDb },
+          closedChat,
+          postAction,
+        );
+
+        // Emitir evento socket para o dashboard
+        if (postCloseMessage) {
+          await publishMessageEvent(
+            {
+              type: "message:new",
+              organizationId,
+              chatId: closedChat.id,
+              messageId: postCloseMessage.id,
+              data: {
+                message: postCloseMessage as unknown as Record<string, unknown>,
+              },
+            },
+            env.REDIS_URL,
+          );
+        }
+
+        // Se for WhatsApp, enviar via Evolution API
+        if (closedChat.messageSource === "whatsapp") {
+          const whatsAppData = await postActionsService.getChatWhatsAppData(
+            { organizationId, tenantDb: ctx.tenantDb },
+            closedChat.id,
+            closedChat.createdAt,
+          );
+
+          if (whatsAppData?.channel && whatsAppData.contact.phoneNumber) {
+            try {
+              const evolutionClient = new EvolutionAPIClient(
+                env.EVOLUTION_API_URL,
+                env.EVOLUTION_API_KEY,
+              );
+
+              // Enviar mensagem via WhatsApp
+              const result = await evolutionClient.message.sendText(
+                whatsAppData.channel.evolutionInstanceName,
+                {
+                  number: whatsAppData.contact.phoneNumber,
+                  text: postAction.message,
+                },
+              );
+
+              // Atualizar mensagem com whatsappMessageId para tracking de status
+              // Filtrar apenas mensagens sem whatsappMessageId (recém-criadas)
+              if (result.key.id) {
+                await ctx.tenantDb
+                  .update(message)
+                  .set({
+                    whatsappMessageId: result.key.id,
+                    status: "sent",
+                    sentAt: new Date(),
+                  })
+                  .where(
+                    and(
+                      eq(message.chatId, closedChat.id),
+                      eq(message.messageType, "system"),
+                      sql`${message.metadata}->>'systemEventType' IN ('rating_request', 'closing_message')`,
+                      sql`${message.whatsappMessageId} IS NULL`,
+                    ),
+                  );
+              }
+            } catch (error) {
+              // Log error but don't fail the close operation
+              console.error("Failed to send post-close WhatsApp message", {
+                chatId: closedChat.id,
+                error,
+              });
+            }
+          }
+        }
+      }
+
+      return closedChat;
     }),
 
   /**

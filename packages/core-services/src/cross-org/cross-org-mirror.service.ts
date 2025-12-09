@@ -4,11 +4,13 @@ import {
   attachment,
   chat,
   chatParticipant,
+  chatRating,
   contact,
   eq,
   message,
   or,
   organization,
+  organizationSettings,
   sql,
 } from "@manylead/db";
 
@@ -123,6 +125,35 @@ export class CrossOrgMirrorService {
 
     if (!sourceContact) return;
 
+    // Verificar se existe chat FECHADO aguardando rating
+    // Se sim, interceptar a mensagem como resposta de rating
+    const awaitingRatingChat = await this.findAwaitingRatingChat(
+      targetTenantDb,
+      sourceContact.id,
+    );
+
+    if (awaitingRatingChat) {
+      // Verificar se a mensagem é um rating válido
+      const wasProcessedAsRating = await this.checkAndProcessRatingResponse(
+        targetOrgId,
+        targetTenantDb,
+        awaitingRatingChat,
+        messageContent,
+      );
+
+      if (wasProcessedAsRating) {
+        // Atualizar status da mensagem original como delivered
+        await sourceTenantDb
+          .update(message)
+          .set({ status: "delivered", deliveredAt: now })
+          .where(eq(message.id, messageId));
+
+        // Rating processado - não criar novo chat
+        return;
+      }
+      // Não é um rating válido - continuar criando novo chat
+    }
+
     // Buscar ou criar chat espelhado ativo
     // NUNCA pode ter dois chats abertos entre as mesmas orgs
     let mirroredChat = await this.findActiveMirroredChat(
@@ -168,6 +199,9 @@ export class CrossOrgMirrorService {
       await this.eventPublisher.chatCreated(targetOrgId, newChat, {
         contact: sourceContact,
       });
+
+      // Enviar welcome message (se configurado)
+      await this.sendWelcomeMessage(targetOrgId, targetTenantDb, newChat);
     }
 
     // Criar mensagem espelhada com referência ao ID original
@@ -349,6 +383,9 @@ export class CrossOrgMirrorService {
       await this.eventPublisher.chatCreated(targetOrgId, newChat, {
         contact: sourceContact,
       });
+
+      // Enviar welcome message (se configurado)
+      await this.sendWelcomeMessage(targetOrgId, targetTenantDb, newChat);
     }
 
     // Criar mensagem espelhada com referência ao ID original
@@ -725,6 +762,194 @@ export class CrossOrgMirrorService {
     }
   }
 
+  /**
+   * Verifica se mensagem é resposta de rating e processa
+   * Chamado ANTES de processar a mensagem normalmente
+   *
+   * @returns true se a mensagem foi processada como rating (não deve continuar processamento normal)
+   */
+  async checkAndProcessRatingResponse(
+    targetOrgId: string,
+    targetTenantDb: TenantDB,
+    targetChat: Chat,
+    messageContent: string,
+  ): Promise<boolean> {
+    // Verificar se chat está aguardando rating
+    if (targetChat.ratingStatus !== "awaiting") {
+      return false;
+    }
+
+    // Tentar parsear rating (número 1-5)
+    const rating = this.parseRatingResponse(messageContent);
+
+    if (rating !== null) {
+      // Rating válido - processar
+      await this.processValidRating(
+        targetOrgId,
+        targetTenantDb,
+        targetChat,
+        rating,
+      );
+      return true;
+    }
+
+    // Não é um rating válido - fechar o chat sem rating e criar nova sessão
+    // O fluxo normal de mirrorFirstMessage ou mirrorSubsequentMessage vai criar novo chat
+    return false;
+  }
+
+  /**
+   * Envia welcome message para um novo chat interno
+   */
+  async sendWelcomeMessage(
+    targetOrgId: string,
+    targetTenantDb: TenantDB,
+    chatRecord: Chat,
+  ): Promise<void> {
+    // Buscar settings da organização
+    const [settings] = await targetTenantDb
+      .select({
+        welcomeMessage: organizationSettings.welcomeMessage,
+      })
+      .from(organizationSettings)
+      .where(eq(organizationSettings.organizationId, targetOrgId))
+      .limit(1);
+
+    const welcomeMessage = settings?.welcomeMessage;
+    if (!welcomeMessage) return;
+
+    const now = new Date();
+
+    // Criar mensagem de sistema com welcome
+    const [newMessage] = await targetTenantDb
+      .insert(message)
+      .values({
+        chatId: chatRecord.id,
+        messageSource: "internal",
+        sender: "system",
+        senderId: null,
+        messageType: "system",
+        content: welcomeMessage,
+        status: "sent",
+        timestamp: now,
+        metadata: {
+          systemEventType: "welcome_message",
+        },
+      })
+      .returning();
+
+    // Atualizar lastMessage do chat
+    await targetTenantDb
+      .update(chat)
+      .set({
+        lastMessageAt: now,
+        lastMessageContent: welcomeMessage,
+        lastMessageSender: "agent",
+        lastMessageStatus: "sent",
+        lastMessageType: "system",
+      })
+      .where(
+        and(eq(chat.id, chatRecord.id), eq(chat.createdAt, chatRecord.createdAt)),
+      );
+
+    // Emitir evento de nova mensagem
+    if (newMessage) {
+      await this.eventPublisher.messageCreated(
+        targetOrgId,
+        chatRecord.id,
+        newMessage,
+      );
+    }
+  }
+
+  // ========== Rating Helper Methods ==========
+
+  /**
+   * Tenta parsear resposta como rating (1-5)
+   */
+  private parseRatingResponse(content: string): number | null {
+    const trimmed = content.trim();
+    const parsed = parseInt(trimmed, 10);
+    if (!isNaN(parsed) && parsed >= 1 && parsed <= 5 && trimmed === String(parsed)) {
+      return parsed;
+    }
+    return null;
+  }
+
+  /**
+   * Processa rating válido: salva rating, envia agradecimento
+   */
+  private async processValidRating(
+    targetOrgId: string,
+    targetTenantDb: TenantDB,
+    chatRecord: Chat,
+    rating: number,
+  ): Promise<void> {
+    const now = new Date();
+
+    // Salvar rating no banco
+    await targetTenantDb.insert(chatRating).values({
+      chatId: chatRecord.id,
+      chatCreatedAt: chatRecord.createdAt,
+      contactId: chatRecord.contactId,
+      rating,
+      ratedAt: now,
+    });
+
+    // Atualizar chat - marcar rating como recebido
+    await targetTenantDb
+      .update(chat)
+      .set({
+        ratingStatus: "received",
+      })
+      .where(
+        and(eq(chat.id, chatRecord.id), eq(chat.createdAt, chatRecord.createdAt)),
+      );
+
+    // Salvar mensagem de agradecimento
+    const thankYouMessage = "Agradecemos a sua avaliação!";
+
+    const [thanksMessage] = await targetTenantDb
+      .insert(message)
+      .values({
+        chatId: chatRecord.id,
+        messageSource: "internal",
+        sender: "system",
+        senderId: null,
+        messageType: "system",
+        content: thankYouMessage,
+        status: "sent",
+        timestamp: now,
+        metadata: {
+          systemEventType: "rating_thanks",
+        },
+      })
+      .returning();
+
+    // Atualizar lastMessage
+    await targetTenantDb
+      .update(chat)
+      .set({
+        lastMessageAt: now,
+        lastMessageContent: thankYouMessage,
+        lastMessageSender: "agent",
+        lastMessageStatus: "sent",
+        lastMessageType: "system",
+      })
+      .where(
+        and(eq(chat.id, chatRecord.id), eq(chat.createdAt, chatRecord.createdAt)),
+      );
+
+    // Emitir evento de mensagem de agradecimento
+    if (thanksMessage) {
+      await this.eventPublisher.messageCreated(
+        targetOrgId,
+        chatRecord.id,
+        thanksMessage,
+      );
+    }
+  }
+
   // ========== Private Helper Methods ==========
 
   private async findOrCreateSourceContact(
@@ -804,6 +1029,29 @@ export class CrossOrgMirrorService {
       .limit(1);
 
     return mirroredChat;
+  }
+
+  /**
+   * Busca chat FECHADO que está aguardando rating
+   */
+  private async findAwaitingRatingChat(
+    targetTenantDb: TenantDB,
+    sourceContactId: string,
+  ): Promise<Chat | undefined> {
+    const [awaitingChat] = await targetTenantDb
+      .select()
+      .from(chat)
+      .where(
+        and(
+          eq(chat.messageSource, "internal"),
+          eq(chat.contactId, sourceContactId),
+          eq(chat.status, "closed"),
+          eq(chat.ratingStatus, "awaiting"),
+        ),
+      )
+      .limit(1);
+
+    return awaitingChat;
   }
 
   private async updateMirroredChatAfterMessage(

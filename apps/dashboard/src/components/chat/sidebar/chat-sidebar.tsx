@@ -3,7 +3,6 @@
 import { ArrowLeft } from "lucide-react";
 import { cn } from "@manylead/ui";
 import { Button } from "@manylead/ui/button";
-import { ScrollArea } from "@manylead/ui/scroll-area";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ChatSidebarHeader } from "./chat-sidebar-header";
@@ -65,15 +64,15 @@ export function ChatSidebar({
         {view === "main" && typeof archivedCount === 'number' && archivedCount > 0 && (
           <ChatArchivedBar count={archivedCount} />
         )}
-        <ScrollArea className="flex-1">
+        <div className="flex-1 overflow-hidden">
           {/* <ChatErrorBoundaryCompact> */}
             {isSearchActive && searchMode === "contacts" ? (
               <ChatSidebarContactsList />
             ) : (
-              <ChatSidebarList activeFilter={activeFilter} />
+              <ChatSidebarList activeFilter={activeFilter} className="h-full" />
             )}
           {/* </ChatErrorBoundaryCompact> */}
-        </ScrollArea>
+        </div>
         <ChatFiltersSheet />
       </div>
     </div>

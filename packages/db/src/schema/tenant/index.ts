@@ -44,3 +44,6 @@ export * from "./endings";
 
 // Scheduled Messages
 export * from "./scheduled-messages";
+
+// Chat Ratings
+export * from "./chat-ratings";

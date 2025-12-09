@@ -97,6 +97,12 @@ export const chat = pgTable(
     endingId: uuid("ending_id"),
     // Referência ao ending.id (sem FK para simplicidade)
 
+    // Status de avaliação (rating)
+    ratingStatus: varchar("rating_status", { length: 20 }),
+    // null = sem rating solicitado
+    // "awaiting" = aguardando resposta do cliente
+    // "received" = rating já recebido
+
     // Timestamps
     createdAt: timestamp("created_at").notNull().defaultNow(),
     // Partitioning key (mensal)

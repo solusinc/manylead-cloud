@@ -17,3 +17,8 @@ export {
   ChatQueryBuilderService,
   getChatQueryBuilderService,
 } from "./chat-query-builder.service";
+export {
+  ChatPostActionsService,
+  getChatPostActionsService,
+} from "./chat-post-actions.service";
+export type { PostCloseAction, PostActionContext } from "./chat-post-actions.service";

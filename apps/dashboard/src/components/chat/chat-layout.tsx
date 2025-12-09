@@ -67,7 +67,8 @@ function ChatLayoutInner({
 
       const messageData = event.message;
       const serverId = messageData.id as string;
-      const tempId = (messageData.metadata as Record<string, unknown> | undefined)?.tempId as string | undefined;
+      const metadata = messageData.metadata as { systemEventType?: string; tempId?: string } | null;
+      const tempId = metadata?.tempId;
 
       // Find all queries for messages.list
       const queries = queryClient.getQueryCache().findAll({
@@ -146,6 +147,18 @@ function ChatLayoutInner({
           });
         } else {
           // ADD new message (no optimistic message exists)
+          // Filtrar mensagens de sistema de rating/closing (não devem aparecer na lista)
+          // NOTA: welcome_message DEVE aparecer na lista
+          const hiddenSystemEventTypes = ["rating_request", "rating_thanks", "closing_message", "rating_value"];
+          const isHiddenSystemMessage =
+            messageData.messageType === "system" &&
+            metadata?.systemEventType &&
+            hiddenSystemEventTypes.includes(metadata.systemEventType);
+
+          if (isHiddenSystemMessage) {
+            return; // Não adicionar mensagem escondida ao cache
+          }
+
           const firstPage = newPages[0];
 
           if (firstPage) {
@@ -185,12 +198,14 @@ function ChatLayoutInner({
       // Play notification sound for:
       // 1. Messages from other agents
       // 2. Own audio messages (async processing - feedback needed)
-      // Don't play sound for comments (internal notes)
+      // Don't play sound for comments, welcome messages, or rating-related messages
       const isOwnMessage = currentAgent && messageData.senderId === currentAgent.id;
       const isAudioMessage = messageData.messageType === "audio";
       const isComment = messageData.messageType === "comment";
+      const silentSystemEventTypes = ["welcome_message", "rating_value", "rating_thanks"];
+      const isSilentSystemMessage = metadata?.systemEventType && silentSystemEventTypes.includes(metadata.systemEventType);
 
-      if (currentAgent && !isComment && (!isOwnMessage || isAudioMessage)) {
+      if (currentAgent && !isComment && !isSilentSystemMessage && (!isOwnMessage || isAudioMessage)) {
         playNotificationSound();
       }
     },

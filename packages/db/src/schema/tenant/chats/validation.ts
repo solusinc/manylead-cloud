@@ -16,6 +16,7 @@ export const insertChatSchema = createInsertSchema(chat, {
   messageSource: z.enum(["whatsapp", "internal"]),
   status: z.enum(["open", "pending", "closed", "snoozed"]).default("open"),
   priority: z.enum(["low", "normal", "high", "urgent"]).default("normal"),
+  ratingStatus: z.enum(["awaiting", "received"]).nullish(),
 });
 
 /**
