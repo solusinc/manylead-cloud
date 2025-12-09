@@ -14,10 +14,11 @@ export function ChatSidebarItemLastMessage({
   isTyping = false,
   isRecording = false,
   lastMessageIsDeleted = false,
-  messageSender: _messageSender,
+  messageSender,
   messageStatus,
   messageType = "text",
   message,
+  isGroup = false,
   className,
 }: {
   isTyping?: boolean;
@@ -27,6 +28,7 @@ export function ChatSidebarItemLastMessage({
   messageStatus?: MessageStatus;
   messageType?: "text" | "image" | "video" | "audio" | "document" | "system";
   message: string;
+  isGroup?: boolean;
   className?: string;
 }) {
   // Caso 1: Usuário está gravando (prioridade máxima)
@@ -62,8 +64,8 @@ export function ChatSidebarItemLastMessage({
   // Caso 4: Mensagem normal (texto ou mídia)
   return (
     <div className={cn("flex min-w-0 flex-1 items-center gap-1.5", className)}>
-      {/* Status icon - apenas para mensagens de agent/contact, não para system */}
-      {messageStatus && _messageSender !== "system" && (
+      {/* Status icon - apenas para mensagens de agent, não para system nem grupos */}
+      {messageStatus && messageSender !== "system" && !isGroup && (
         <MessageStatusIcon status={messageStatus} size={14} className="shrink-0" />
       )}
 

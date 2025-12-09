@@ -2,6 +2,7 @@ import { EvolutionAPIClient } from "./client";
 
 export { EvolutionAPIClient };
 export type * from "./types";
+export type { GroupInfo } from "./methods/group";
 
 /**
  * Singleton instance of Evolution API Client

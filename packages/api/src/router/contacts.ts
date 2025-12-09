@@ -3,16 +3,19 @@ import { z } from "zod";
 
 import {
   agent,
+  channel,
   chat,
   contact,
   count,
   desc,
   eq,
   ilike,
+  inArray,
   or,
   user,
 } from "@manylead/db";
 import { publishChatEvent } from "@manylead/shared";
+import { EvolutionAPIClient } from "@manylead/evolution-api-client";
 
 import { env } from "../env";
 import {
@@ -484,6 +487,154 @@ export const contactsRouter = createTRPCRouter({
           contactsToInsert.length -
           contactsToUpdate.length,
         total: input.contacts.length,
+      };
+    }),
+
+  /**
+   * Buscar participantes de um grupo WhatsApp
+   * Retorna lista de participantes com nome, telefone e role (admin/member)
+   */
+  getGroupParticipants: memberProcedure
+    .input(
+      z.object({
+        contactId: z.string().uuid(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const organizationId = ctx.session.session.activeOrganizationId;
+      if (!organizationId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Nenhuma organização ativa",
+        });
+      }
+
+      // Buscar o contato (grupo) pelo ID
+      const [groupContact] = await ctx.tenantDb
+        .select()
+        .from(contact)
+        .where(eq(contact.id, input.contactId))
+        .limit(1);
+
+      if (!groupContact) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Contato não encontrado",
+        });
+      }
+
+      if (!groupContact.isGroup || !groupContact.groupJid) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Contato não é um grupo",
+        });
+      }
+
+      // Buscar canal conectado para obter instanceName
+      const [connectedChannel] = await ctx.tenantDb
+        .select()
+        .from(channel)
+        .where(eq(channel.status, "connected"))
+        .limit(1);
+
+      if (!connectedChannel?.evolutionInstanceName) {
+        throw new TRPCError({
+          code: "PRECONDITION_FAILED",
+          message: "Nenhum canal WhatsApp conectado",
+        });
+      }
+
+      // Buscar info do grupo na Evolution API
+      const evolutionClient = new EvolutionAPIClient(
+        env.EVOLUTION_API_URL,
+        env.EVOLUTION_API_KEY,
+      );
+
+      // O groupJid pode estar com @g.us ou não, a API precisa com @g.us
+      const groupJid = groupContact.groupJid.includes("@g.us")
+        ? groupContact.groupJid
+        : `${groupContact.groupJid}@g.us`;
+
+      const groupInfo = await evolutionClient.group.findGroupInfos(
+        connectedChannel.evolutionInstanceName,
+        groupJid,
+      );
+
+      if (!groupInfo) {
+        return {
+          participants: [],
+          total: 0,
+        };
+      }
+
+      // Buscar contatos existentes para os participantes (pelo phoneNumber)
+      // Evolution API retorna phoneNumber como JID (ex: "5511999999999@s.whatsapp.net")
+      // Banco armazena sem @s.whatsapp.net e sem +, ex: "5511999999999"
+      const participantPhones = (groupInfo.participants ?? []).flatMap((p) => {
+        // Remove sufixo @s.whatsapp.net se existir
+        const phone = p.phoneNumber.replace(/@s\.whatsapp\.net$/, "");
+        // Gera variações: com + e sem +
+        if (phone.startsWith("+")) {
+          return [phone, phone.slice(1)];
+        }
+        return [phone, `+${phone}`];
+      });
+
+      const existingContacts = participantPhones.length > 0
+        ? await ctx.tenantDb
+            .select({
+              phoneNumber: contact.phoneNumber,
+              customName: contact.customName,
+              name: contact.name,
+              avatar: contact.avatar,
+            })
+            .from(contact)
+            .where(inArray(contact.phoneNumber, participantPhones))
+        : [];
+
+      // Criar map de telefone -> contato para lookup rápido
+      // Normaliza removendo o + para comparação
+      const contactMap = new Map<string, (typeof existingContacts)[number]>();
+      for (const c of existingContacts) {
+        if (c.phoneNumber) {
+          const normalizedPhone = c.phoneNumber.replace(/^\+/, "");
+          contactMap.set(normalizedPhone, c);
+        }
+      }
+
+      // Número do canal conectado (normalizado)
+      const channelPhone = connectedChannel.phoneNumber
+        ?.replace(/@s\.whatsapp\.net$/, "")
+        .replace(/^\+/, "") ?? "";
+
+      // Mapear participantes para formato amigável com nome do contato se existir
+      const participants = (groupInfo.participants ?? []).map((p) => {
+        // Normaliza o telefone do participante para lookup
+        // Remove @s.whatsapp.net e +
+        const normalizedPhone = p.phoneNumber
+          .replace(/@s\.whatsapp\.net$/, "")
+          .replace(/^\+/, "");
+        const existingContact = contactMap.get(normalizedPhone);
+        // Se tem contato e o nome é diferente do telefone, usa o nome do contato
+        const hasRealName = existingContact &&
+          existingContact.name !== existingContact.phoneNumber &&
+          existingContact.name !== normalizedPhone;
+        return {
+          id: p.id,
+          phoneNumber: normalizedPhone,
+          name: existingContact?.customName ?? (hasRealName ? existingContact.name : null),
+          avatar: existingContact?.avatar ?? null,
+          isAdmin: p.admin === "admin" || p.admin === "superadmin",
+          isSuperAdmin: p.admin === "superadmin",
+          isMe: normalizedPhone === channelPhone,
+        };
+      });
+
+      return {
+        participants,
+        total: participants.length,
+        groupName: groupInfo.subject,
+        groupOwner: groupInfo.owner,
       };
     }),
 });

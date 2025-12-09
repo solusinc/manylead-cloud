@@ -11,6 +11,7 @@ import { cn } from "@manylead/ui";
 import { getDocumentType } from "~/lib/document-type-map";
 import { formatFileSize, formatDuration } from "@manylead/shared/constants";
 
+import { useChat } from "../providers/chat-context";
 import { ChatMessageActions } from "./chat-message-actions";
 import { useChatImages } from "./chat-images-context";
 import { AudioPlayer } from "./audio-player";
@@ -480,7 +481,7 @@ export const ChatMessageContent = memo(function ChatMessageContent({
   return (
     <>
       {senderName && (
-        <p className={cn("text-sm font-semibold mb-2", isOutgoing && "dark:text-white")}>
+        <p className={cn("text-sm font-semibold", isOutgoing && "dark:text-white")}>
           {senderName}
         </p>
       )}
@@ -514,7 +515,7 @@ export const ChatMessageSignature = memo(function ChatMessageSignature({
   return (
     <p
       className={cn(
-        "text-sm font-semibold mb-2",
+        "text-sm font-semibold",
         isOutgoing && "dark:text-white",
         className,
       )}
@@ -578,6 +579,9 @@ export const ChatMessageFooter = memo(function ChatMessageFooter({
   };
   className?: string;
 }) {
+  const { chat } = useChat();
+  const isGroup = chat.contact.isGroup ?? false;
+
   return (
     <div className={cn("mt-1 flex items-center justify-between gap-2", className)}>
       {/* Info da mídia - lado esquerdo */}
@@ -596,7 +600,7 @@ export const ChatMessageFooter = memo(function ChatMessageFooter({
           <span className="text-[10px] opacity-60">editado</span>
         )}
         <ChatMessageTime timestamp={timestamp} />
-        {isOutgoing && status && !isDeleted && (
+        {isOutgoing && status && !isDeleted && !isGroup && (
           <ChatMessageStatus status={status} />
         )}
       </div>
@@ -631,7 +635,7 @@ export function ChatMessageStatus({
   status: "pending" | "sent" | "delivered" | "read";
   className?: string;
 }) {
-  const iconClass = cn("h-3 w-3", className);
+  const iconClass = cn("h-3.5 w-3.5", className);
 
   switch (status) {
     case "pending":

@@ -67,8 +67,9 @@ export class RecordingHandler {
       }
 
       // NOVO: Se WhatsApp, enviar presence via Evolution API
+      // TODO: Temporariamente desabilitado
       if (chatRecord.messageSource === "whatsapp") {
-        await this.handleWhatsAppPresence(data.chatId, action, tenantDb);
+        // await this.handleWhatsAppPresence(data.chatId, action, tenantDb);
         // Não fazer broadcast local - apenas enviar para WhatsApp
         // O recording do contato será recebido via webhook presence.update
         return;

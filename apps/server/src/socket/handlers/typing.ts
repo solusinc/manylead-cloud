@@ -91,9 +91,10 @@ export class TypingHandler {
       }, `Chat messageSource: ${chatRecord.messageSource}`);
 
       // Se WhatsApp, enviar presence via Evolution API
+      // TODO: Temporariamente desabilitado
       if (chatRecord.messageSource === "whatsapp") {
-        log.info({ chatId: data.chatId }, "→ WhatsApp chat detected, sending presence to Evolution API");
-        await this.handleWhatsAppPresence(data.chatId, action, tenantDb);
+        // log.info({ chatId: data.chatId }, "→ WhatsApp chat detected, sending presence to Evolution API");
+        // await this.handleWhatsAppPresence(data.chatId, action, tenantDb);
         return;
       }
 
@@ -151,8 +152,9 @@ export class TypingHandler {
       }
 
       // NOVO: Se WhatsApp, enviar presence via Evolution API
+      // TODO: Temporariamente desabilitado
       if (chatRecord.messageSource === "whatsapp") {
-        await this.handleWhatsAppPresence(data.chatId, action, tenantDb);
+        // await this.handleWhatsAppPresence(data.chatId, action, tenantDb);
         // Não fazer broadcast local - apenas enviar para WhatsApp
         // O typing do contato será recebido via webhook presence.update
         return;

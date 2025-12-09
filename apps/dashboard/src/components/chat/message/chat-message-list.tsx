@@ -13,6 +13,7 @@ import { Skeleton } from "@manylead/ui/skeleton";
 import type { Message } from "./chat-message";
 import { useChatSocketContext } from "~/components/providers/chat-socket-provider";
 import { useChatReply } from "../providers/chat-reply-provider";
+import { useChat } from "../providers/chat-context";
 import { useTRPC } from "~/lib/trpc/react";
 import { ChatMessage } from "./chat-message";
 import { ChatMessageDateDivider } from "./chat-message-date";
@@ -48,6 +49,7 @@ export function ChatMessageList({
   const trpc = useTRPC();
   const socket = useChatSocketContext();
   const { replyingTo } = useChatReply();
+  const { chat } = useChat();
   const containerRef = useRef<HTMLDivElement>(null);
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
 
@@ -313,11 +315,11 @@ export function ChatMessageList({
           );
         })}
 
-        {/* Recording indicator (prioridade sobre typing) */}
-        {isRecording && <ChatMessageRecordingIndicator />}
+        {/* Recording indicator (prioridade sobre typing) - apenas cross-org */}
+        {isRecording && chat.source === "internal" && <ChatMessageRecordingIndicator />}
 
-        {/* Typing indicator */}
-        {!isRecording && isTyping && <ChatMessageTypingIndicator />}
+        {/* Typing indicator - apenas cross-org */}
+        {!isRecording && isTyping && chat.source === "internal" && <ChatMessageTypingIndicator />}
 
         {/* Anchor for scroll */}
         <div ref={messagesEndRef} className="h-6" />

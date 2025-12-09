@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Plus, X } from "lucide-react";
-import { FaUser, FaWhatsapp } from "react-icons/fa";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
+import { Check, MessageCircle, Plus, Shield, ShieldCheck, X } from "lucide-react";
+import { FaUser, FaUsers, FaWhatsapp } from "react-icons/fa";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { formatBrazilianPhone } from "@manylead/shared/utils";
@@ -17,6 +18,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@manylead/ui/sheet";
+import { Skeleton } from "@manylead/ui/skeleton";
 import { Textarea } from "@manylead/ui/textarea";
 import { useTRPC } from "~/lib/trpc/react";
 
@@ -26,12 +28,14 @@ interface ContactDetailsSheetProps {
   contact: {
     id: string;
     name: string;
-    phoneNumber: string;
+    phoneNumber: string | null;
     avatar: string | null;
     instanceCode?: string;
     customName?: string | null;
     notes?: string | null;
     customFields?: Record<string, string> | null;
+    isGroup?: boolean;
+    groupJid?: string | null;
   };
   source?: "whatsapp" | "internal";
 }
@@ -189,6 +193,11 @@ export function ContactDetailsSheet({
               <Plus className="mr-2 h-4 w-4" />
               adicionar campo
             </Button>
+
+            {/* Lista de participantes para grupos */}
+            {contact.isGroup && (
+              <GroupParticipantsList contactId={contact.id} />
+            )}
           </div>
         </div>
       </SheetContent>
@@ -202,9 +211,11 @@ function ContactDetailsAvatar({
 }: {
   contact: {
     name: string;
-    phoneNumber: string;
+    phoneNumber: string | null;
     avatar: string | null;
     instanceCode?: string;
+    isGroup?: boolean;
+    groupJid?: string | null;
   };
   source?: "whatsapp" | "internal";
 }) {
@@ -220,7 +231,11 @@ function ContactDetailsAvatar({
           />
         ) : (
           <AvatarFallback className="bg-muted text-muted-foreground">
-            <FaUser className="h-16 w-16" />
+            {contact.isGroup ? (
+              <FaUsers className="h-16 w-16" />
+            ) : (
+              <FaUser className="h-16 w-16" />
+            )}
           </AvatarFallback>
         )}
       </Avatar>
@@ -230,10 +245,17 @@ function ContactDetailsAvatar({
         <p className="text-muted-foreground text-sm">
           {contact.instanceCode ?? "Sem código"}
         </p>
+      ) : contact.isGroup ? (
+        <div className="flex items-center gap-1.5">
+          <p className="text-muted-foreground text-sm">
+            {contact.groupJid ?? "Grupo"}
+          </p>
+          <FaUsers className="text-muted-foreground h-4 w-4" />
+        </div>
       ) : (
         <div className="flex items-center gap-1.5">
           <p className="text-muted-foreground text-sm">
-            {formatBrazilianPhone(contact.phoneNumber)}
+            {contact.phoneNumber ? formatBrazilianPhone(contact.phoneNumber) : "Sem número"}
           </p>
           <FaWhatsapp className="text-muted-foreground h-4 w-4" />
         </div>
@@ -299,6 +321,146 @@ function ContactDetailsCustomField({
         onChange={(e) => onValueChange(e.target.value)}
         className="col-span-2"
       />
+    </div>
+  );
+}
+
+/**
+ * Lista de participantes do grupo WhatsApp
+ */
+function GroupParticipantsList({ contactId }: { contactId: string }) {
+  const trpc = useTRPC();
+  const router = useRouter();
+
+  const { data, isLoading, error } = useQuery(
+    trpc.contacts.getGroupParticipants.queryOptions({ contactId }),
+  );
+
+  const startConversationMutation = useMutation(
+    trpc.chats.createWhatsAppChat.mutationOptions({
+      onSuccess: (newChat) => {
+        router.push(`/chats/${newChat.id}`);
+      },
+      onError: (error) => {
+        toast.error(error.message || "Erro ao iniciar conversa");
+      },
+    }),
+  );
+
+  const handleStartConversation = (phoneNumber: string) => {
+    // Remove qualquer sufixo do id (ex: @s.whatsapp.net)
+    const cleanPhone = phoneNumber.replace(/@.*$/, "");
+    startConversationMutation.mutate({ phoneNumber: cleanPhone });
+  };
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3 pt-4">
+        <div className="flex items-center gap-2">
+          <FaUsers className="text-muted-foreground h-4 w-4" />
+          <span className="text-muted-foreground text-sm font-medium">
+            Participantes
+          </span>
+        </div>
+        <div className="space-y-2">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="flex items-center gap-3 py-2">
+              <Skeleton className="h-10 w-10 rounded-full" />
+              <div className="flex-1 space-y-1">
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-3 w-20" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !data?.participants.length) {
+    return (
+      <div className="space-y-3 pt-4">
+        <div className="flex items-center gap-2">
+          <FaUsers className="text-muted-foreground h-4 w-4" />
+          <span className="text-muted-foreground text-sm font-medium">
+            Participantes
+          </span>
+        </div>
+        <p className="text-muted-foreground text-sm">
+          {error ? "Erro ao carregar participantes" : "Nenhum participante encontrado"}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3 pt-4">
+      <div className="flex items-center gap-2">
+        <FaUsers className="text-muted-foreground h-4 w-4" />
+        <span className="text-muted-foreground text-sm font-medium">
+          {data.total} participantes
+        </span>
+      </div>
+
+      <div className="divide-y">
+        {data.participants.map((participant) => (
+          <div
+            key={participant.id}
+            className="flex items-center gap-3 py-3"
+          >
+            {/* Avatar */}
+            <Avatar className="h-10 w-10">
+              {participant.avatar ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={participant.avatar}
+                  alt={participant.name ?? undefined}
+                  className="object-cover"
+                />
+              ) : (
+                <AvatarFallback className="bg-muted text-muted-foreground text-xs">
+                  <FaUser className="h-4 w-4" />
+                </AvatarFallback>
+              )}
+            </Avatar>
+
+            {/* Info */}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                <span className="truncate text-sm font-medium">
+                  {participant.name ?? formatBrazilianPhone(participant.phoneNumber)}
+                </span>
+                {participant.isSuperAdmin && (
+                  <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                )}
+                {participant.isAdmin && !participant.isSuperAdmin && (
+                  <Shield className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                )}
+              </div>
+              <span className="text-muted-foreground text-xs">
+                {participant.isSuperAdmin
+                  ? "Criador do grupo"
+                  : participant.isAdmin
+                    ? "Admin"
+                    : "Membro"}
+              </span>
+            </div>
+
+            {/* Botão iniciar conversa - não mostra para o próprio usuário */}
+            {!participant.isMe && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 shrink-0"
+                onClick={() => handleStartConversation(participant.phoneNumber)}
+                disabled={startConversationMutation.isPending}
+              >
+                <MessageCircle className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

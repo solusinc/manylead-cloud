@@ -16,7 +16,8 @@ export interface AudioSendJobData {
 
   // Dados do chat
   instanceName: string;
-  phoneNumber: string;
+  phoneNumber?: string;
+  groupJid?: string;
 
   // Dados do áudio original
   audioUrl: string;

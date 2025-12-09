@@ -3,6 +3,7 @@ import { createAPIClient } from "@manylead/clients/api";
 import { createLogger } from "@manylead/clients/logger";
 import { env } from "./env";
 import { ChatMethods } from "./methods/chat";
+import { GroupMethods } from "./methods/group";
 import { HealthMethods } from "./methods/health";
 import { InstanceMethods } from "./methods/instance";
 import { MessageMethods } from "./methods/message";
@@ -18,6 +19,7 @@ export class EvolutionAPIClient {
   public readonly proxy: ProxyMethods;
   public readonly health: HealthMethods;
   public readonly chat: ChatMethods;
+  public readonly group: GroupMethods;
 
   constructor(baseURL?: string, apiKey?: string) {
     // Create logger
@@ -37,6 +39,7 @@ export class EvolutionAPIClient {
     this.proxy = new ProxyMethods(boundRequest);
     this.health = new HealthMethods(boundRequest);
     this.chat = new ChatMethods(boundRequest);
+    this.group = new GroupMethods(boundRequest);
   }
 
   private request<T>(method: string, path: string, body?: unknown): Promise<T> {

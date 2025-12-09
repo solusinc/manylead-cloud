@@ -45,27 +45,28 @@ export class WhatsAppMessageProcessor {
       return;
     }
 
-    // Ignorar mensagens de grupos (por enquanto)
-    // Grupos terminam com @g.us, individuais com @s.whatsapp.net
-    const remoteJid = msg.key.remoteJidAlt ?? msg.key.remoteJid;
-    if (remoteJid.endsWith("@g.us")) {
-      log.info({ remoteJid }, "Ignoring group message (not supported yet)");
-      return;
-    }
+    // Detectar se é mensagem de grupo
+    const isGroup = msg.key.remoteJid.endsWith("@g.us");
+    const groupJid = isGroup ? msg.key.remoteJid.split("@")[0] : null;
 
-    const phoneNumber = this.extractPhoneNumber(
-      msg.key.remoteJid,
-      msg.key.remoteJidAlt,
-    );
+    // Para grupos: participant é quem enviou a mensagem
+    // Para individuais: extrair phoneNumber do remoteJid
+    const phoneNumber = isGroup
+      ? null
+      : this.extractPhoneNumber(msg.key.remoteJid, msg.key.remoteJidAlt);
 
-    // Log para debug de LID vs phoneNumber
+    // Log para debug
     log.info({
       remoteJid: msg.key.remoteJid,
       remoteJidAlt: msg.key.remoteJidAlt,
-      extractedPhoneNumber: phoneNumber,
-    }, "Extracted phone number from webhook");
+      isGroup,
+      groupJid,
+      phoneNumber,
+      participant: msg.key.participant,
+    }, "Processing message from webhook");
 
-    if (!phoneNumber) {
+    // Validar identificador
+    if (!isGroup && !phoneNumber) {
       log.warn({ remoteJid: msg.key.remoteJid }, "Invalid phone number");
       return;
     }
@@ -75,13 +76,21 @@ export class WhatsAppMessageProcessor {
     );
 
     // 1. Garantir que contato existe
-    const contactRecord = await this.ensureContact(
-      tenantDb,
-      channel.organizationId,
-      phoneNumber,
-      msg.pushName,
-      instanceName,
-    );
+    const contactRecord = isGroup
+      ? await this.ensureGroupContact(
+          tenantDb,
+          channel.organizationId,
+          groupJid ?? "",
+          msg.pushName, // Nome do grupo
+          instanceName,
+        )
+      : await this.ensureContact(
+          tenantDb,
+          channel.organizationId,
+          phoneNumber ?? "",
+          msg.pushName,
+          instanceName,
+        );
 
     // 2. Buscar chat existente
     let chatRecord = await this.findExistingChat(
@@ -192,6 +201,22 @@ export class WhatsAppMessageProcessor {
     }
 
     // 6. Criar mensagem
+    // Construir metadata com info de participante para grupos
+    let messageMetadata: Record<string, unknown> | null = replyMetadata;
+
+    if (isGroup && msg.key.participant) {
+      // Para grupos: adicionar info do participante que enviou a mensagem
+      const participantJid = msg.key.participant.split("@")[0];
+      const participantMetadata = {
+        participantJid,
+        participantName: msg.pushName ?? participantJid,
+      };
+
+      messageMetadata = messageMetadata
+        ? { ...messageMetadata, ...participantMetadata }
+        : participantMetadata;
+    }
+
     const messageToInsert = {
       chatId: chatRecord.id,
       messageSource: "whatsapp" as const,
@@ -203,7 +228,7 @@ export class WhatsAppMessageProcessor {
       status: "received" as const,
       timestamp,
       repliedToMessageId,
-      metadata: replyMetadata,
+      metadata: messageMetadata,
     };
 
     const [newMessage] = await tenantDb
@@ -411,6 +436,93 @@ export class WhatsAppMessageProcessor {
     return contactRecord;
   }
 
+  /**
+   * Garante que contato de grupo existe, cria se necessário
+   */
+  private async ensureGroupContact(
+    tenantDb: TenantDB,
+    organizationId: string,
+    groupJid: string,
+    _participantName: string | undefined, // pushName é do participante, não do grupo
+    instanceName: string,
+  ): Promise<typeof contact.$inferSelect> {
+    // Buscar contato de grupo existente pelo JID
+    let contactRecord = await tenantDb
+      .select()
+      .from(contact)
+      .where(
+        and(
+          eq(contact.organizationId, organizationId),
+          eq(contact.groupJid, groupJid),
+        ),
+      )
+      .limit(1)
+      .then((rows) => rows[0] ?? null);
+
+    if (!contactRecord) {
+      // Buscar info do grupo na Evolution API (nome e foto)
+      const groupInfo = await this.fetchGroupInfo(instanceName, groupJid);
+      const groupName = groupInfo?.subject ?? `Grupo ${groupJid}`;
+      const groupPictureUrl = groupInfo?.pictureUrl ?? null;
+
+      const [newContact] = await tenantDb
+        .insert(contact)
+        .values({
+          organizationId,
+          phoneNumber: null, // Grupos não têm phoneNumber
+          isGroup: true,
+          groupJid,
+          name: groupName,
+          avatar: groupPictureUrl,
+          metadata: {
+            source: "whatsapp" as const,
+            firstMessageAt: new Date(),
+            whatsappProfileName: groupName,
+          },
+        })
+        .returning();
+
+      if (!newContact) {
+        throw new Error("Failed to create group contact");
+      }
+
+      contactRecord = newContact;
+      log.info({ groupJid, name: contactRecord.name }, "Group contact created");
+    }
+
+    return contactRecord;
+  }
+
+  /**
+   * Busca informações do grupo na Evolution API
+   * Endpoint: GET /group/findGroupInfos/{instance}?groupJid={groupJid}
+   */
+  private async fetchGroupInfo(
+    instanceName: string,
+    groupJid: string,
+  ): Promise<{ subject: string; pictureUrl: string | null } | null> {
+    try {
+      const evolutionClient = getEvolutionClient();
+      const groupInfo = await evolutionClient.group.findGroupInfos(
+        instanceName,
+        `${groupJid}@g.us`,
+      );
+
+      if (groupInfo) {
+        return {
+          subject: groupInfo.subject,
+          pictureUrl: groupInfo.pictureUrl ?? null,
+        };
+      }
+      return null;
+    } catch (error) {
+      log.warn(
+        { groupJid, error },
+        "Failed to fetch group info",
+      );
+      return null;
+    }
+  }
 
   /**
    * Busca foto de perfil do contato na Evolution API

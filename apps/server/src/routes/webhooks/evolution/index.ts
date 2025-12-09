@@ -104,7 +104,7 @@ async function routeEvent(event: string, instance: string, data: unknown) {
 
     case "presence.update": {
       const validatedData = validateEventData<PresenceUpdateData>(event, data);
-      await handlePresenceUpdate(instance, validatedData);
+      handlePresenceUpdate(instance, validatedData);
       break;
     }
 

@@ -100,12 +100,14 @@ export function ChatWindow({
     contact: {
       id: chatItem.contact?.id ?? "",
       name: chatItem.contact?.name ?? "Sem nome",
-      phoneNumber: chatItem.contact?.phoneNumber ?? "",
+      phoneNumber: chatItem.contact?.phoneNumber ?? null,
       avatar: chatItem.contact?.avatar ?? null,
       instanceCode: chatItem.contact?.metadata?.targetOrganizationInstanceCode,
       customName: chatItem.contact?.customName,
       notes: chatItem.contact?.notes,
       customFields: chatItem.contact?.customFields,
+      isGroup: chatItem.contact?.isGroup ?? false,
+      groupJid: chatItem.contact?.groupJid ?? null,
     },
     status: chatItem.chat.status as "open" | "closed",
     assignedTo: chatItem.chat.assignedTo,
@@ -163,12 +165,14 @@ function ChatWindowContent({
     contact: {
       id: string;
       name: string;
-      phoneNumber: string;
+      phoneNumber: string | null;
       avatar: string | null;
       instanceCode?: string;
       customName?: string | null;
       notes?: string | null;
       customFields?: Record<string, string> | null;
+      isGroup?: boolean;
+      groupJid?: string | null;
     };
     status: "open" | "closed";
     assignedTo: string | null;
@@ -211,23 +215,8 @@ function ChatWindowContent({
     [mediaPreview, sendMedia, chatId, cancelMediaPreview, cancelReply]
   );
 
-  // Send "available" (online) presence when chat is opened
-  // Send "unavailable" (offline) when chat is closed
-  // ONLY for WhatsApp chats (cross-org will have dedicated presence table later)
-  useEffect(() => {
-    // Só enviar presence para chats WhatsApp
-    if (chat.source !== "whatsapp") {
-      return;
-    }
-
-    // Enviar "available" ao abrir o chat
-    socket.emitPresenceAvailable(chatId);
-
-    // Cleanup: enviar "unavailable" ao fechar/sair do chat
-    return () => {
-      socket.emitPresenceUnavailable(chatId);
-    };
-  }, [chatId, socket, chat.source]);
+  // TODO: Presence para WhatsApp desabilitado temporariamente
+  // Cross-org terá tabela dedicada de presence no futuro
 
   return (
     <div
@@ -269,10 +258,10 @@ function ChatWindowContent({
           chatCreatedAt={chatItem.chat.createdAt}
           chatStatus={chat.status}
           assignedTo={chat.assignedTo}
-          onTypingStart={() => socket.emitTypingStart(chatId)}
-          onTypingStop={() => socket.emitTypingStop(chatId)}
-          onRecordingStart={() => socket.emitRecordingStart(chatId)}
-          onRecordingStop={() => socket.emitRecordingStop(chatId)}
+          onTypingStart={() => chat.source === "internal" && socket.emitTypingStart(chatId)}
+          onTypingStop={() => chat.source === "internal" && socket.emitTypingStop(chatId)}
+          onRecordingStart={() => chat.source === "internal" && socket.emitRecordingStart(chatId)}
+          onRecordingStop={() => chat.source === "internal" && socket.emitRecordingStop(chatId)}
         />
       </div>
     </div>

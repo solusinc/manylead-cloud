@@ -1,4 +1,5 @@
 import {
+  boolean,
   index,
   jsonb,
   pgTable,
@@ -29,7 +30,13 @@ export const contact = pgTable(
     // Identificação
     phoneNumber: varchar("phone_number", { length: 20 }),
     // Formato: 5511999999999 (sem símbolos)
-    // NULL para contatos internos (agentes ManyLead)
+    // NULL para contatos internos (agentes ManyLead) e grupos
+
+    // Grupo WhatsApp
+    isGroup: boolean("is_group").notNull().default(false),
+    groupJid: varchar("group_jid", { length: 50 }),
+    // JID do grupo (ex: "120363123456789")
+    // NULL para contatos individuais
 
     name: varchar("name", { length: 255 }).notNull(),
 
@@ -70,8 +77,15 @@ export const contact = pgTable(
       table.phoneNumber,
     ),
 
+    // Unique: um grupo por JID por organização
+    unique("contact_org_group_jid_unique").on(
+      table.organizationId,
+      table.groupJid,
+    ),
+
     index("contact_org_idx").on(table.organizationId),
     index("contact_phone_idx").on(table.phoneNumber),
+    index("contact_group_jid_idx").on(table.groupJid),
     index("contact_name_idx").on(table.name),
 
     // Index para buscar contatos recentes da org

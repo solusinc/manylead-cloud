@@ -42,8 +42,15 @@ export class WhatsAppSenderService {
   async sendText(
     params: WhatsAppSendTextParams,
   ): Promise<SendMessageResponse> {
+    // Para grupos usamos groupJid diretamente (já tem formato correto)
+    // Para contatos usamos phoneNumber
+    const number = params.groupJid ?? params.phoneNumber;
+    if (!number) {
+      throw new Error("phoneNumber ou groupJid é obrigatório");
+    }
+
     const request: SendTextMessageRequest = {
-      number: params.phoneNumber,
+      number,
       text: params.text,
       quoted: params.quoted,
     };
@@ -63,8 +70,15 @@ export class WhatsAppSenderService {
   async sendMedia(
     params: WhatsAppSendMediaParams,
   ): Promise<SendMessageResponse> {
+    // Para grupos usamos groupJid diretamente (já tem formato correto)
+    // Para contatos usamos phoneNumber
+    const number = params.groupJid ?? params.phoneNumber;
+    if (!number) {
+      throw new Error("phoneNumber ou groupJid é obrigatório");
+    }
+
     const request: SendMediaMessageRequest = {
-      number: params.phoneNumber,
+      number,
       media: params.mediaUrl,
       mediatype: params.mediaType,
       fileName: params.filename,
@@ -132,8 +146,15 @@ export class WhatsAppSenderService {
   async updateMessage(
     params: WhatsAppUpdateMessageParams,
   ): Promise<UpdateMessageResponse> {
+    // Para grupos usamos groupJid diretamente
+    // Para contatos usamos phoneNumber
+    const number = params.groupJid ?? params.phoneNumber;
+    if (!number) {
+      throw new Error("phoneNumber ou groupJid é obrigatório");
+    }
+
     const request: UpdateMessageRequest = {
-      number: params.phoneNumber,
+      number,
       text: params.text,
       key: {
         remoteJid: params.remoteJid,

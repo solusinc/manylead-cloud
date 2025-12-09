@@ -19,12 +19,14 @@ export interface Chat {
   contact: {
     id: string;
     name: string;
-    phoneNumber: string;
+    phoneNumber: string | null;
     avatar: string | null;
     instanceCode?: string;
     customName?: string | null;
     notes?: string | null;
     customFields?: Record<string, string> | null;
+    isGroup?: boolean;
+    groupJid?: string | null;
   };
   status: "open" | "closed";
   assignedTo: string | null;
@@ -116,7 +118,7 @@ export function ChatProvider({
   );
 
   // Fetch channels to check if WhatsApp channel is connected
-  const { data: channels } = useQuery(
+  const { data: channels, isLoading: isLoadingChannels } = useQuery(
     trpc.channels.list.queryOptions()
   );
 
@@ -136,12 +138,14 @@ export function ChatProvider({
       contact: {
         id: chatItem.contact?.id ?? "",
         name: chatItem.contact?.name ?? "Sem nome",
-        phoneNumber: chatItem.contact?.phoneNumber ?? "",
+        phoneNumber: chatItem.contact?.phoneNumber ?? null,
         avatar: chatItem.contact?.avatar ?? null,
         instanceCode: chatItem.contact?.metadata?.targetOrganizationInstanceCode,
         customName: chatItem.contact?.customName,
         notes: chatItem.contact?.notes,
         customFields: chatItem.contact?.customFields,
+        isGroup: chatItem.contact?.isGroup ?? false,
+        groupJid: chatItem.contact?.groupJid ?? null,
       },
       status: chatItem.chat.status as "open" | "closed",
       assignedTo: chatItem.chat.assignedTo,
@@ -168,17 +172,20 @@ export function ChatProvider({
   // Check if has connected WhatsApp channel (only for WhatsApp chats)
   const hasChannel = useMemo(() => {
     if (chat?.source !== "whatsapp") return true; // Internal chats don't need channel
+    if (isLoadingChannels) return true; // Don't show "no channel" while loading
     return channels?.some(ch => ch.status === "connected") ?? false;
-  }, [chat?.source, channels]);
+  }, [chat?.source, channels, isLoadingChannels]);
 
-  // Socket functions
+  // Socket functions - apenas para internal (cross-org)
   const emitTypingStart = useCallback(() => {
+    if (chat?.source !== "internal") return;
     socket.emitTypingStart(chatId);
-  }, [socket, chatId]);
+  }, [socket, chatId, chat?.source]);
 
   const emitTypingStop = useCallback(() => {
+    if (chat?.source !== "internal") return;
     socket.emitTypingStop(chatId);
-  }, [socket, chatId]);
+  }, [socket, chatId, chat?.source]);
 
   // Scroll functions
   const scrollToBottom = useCallback(() => {

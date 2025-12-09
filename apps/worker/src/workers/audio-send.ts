@@ -28,12 +28,20 @@ export async function processAudioSend(
     attachmentId,
     instanceName,
     phoneNumber,
+    groupJid,
     audioUrl,
     audioStoragePath,
     audioMimeType,
     caption: _caption,
     quoted,
   } = job.data;
+
+  // Para grupos usamos groupJid diretamente
+  // Para contatos usamos phoneNumber
+  const number = groupJid ?? phoneNumber;
+  if (!number) {
+    throw new Error("phoneNumber ou groupJid é obrigatório");
+  }
 
   logger.info(
     {
@@ -95,11 +103,11 @@ export async function processAudioSend(
     }
 
     // 4. Enviar para WhatsApp usando sendAudio (endpoint correto para áudio!)
-    logger.debug({ instanceName, phoneNumber }, "Sending audio to WhatsApp");
+    logger.debug({ instanceName, number }, "Sending audio to WhatsApp");
 
     const result = await evolutionCircuitBreaker.execute(async () => {
       return evolutionAPI.message.sendAudio(instanceName, {
-        number: phoneNumber,
+        number,
         audio: converted.convertedUrl,
         ptt: true, // Push-to-talk (mensagem de voz com waveform)
         quoted: audioQuoted, // Reply to message (formato Evolution API)

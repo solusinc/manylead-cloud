@@ -34,7 +34,8 @@ export function CalendarView({ data, isLoading }: CalendarViewProps) {
     trpc.scheduledMessages.cancel.mutationOptions({
       onSuccess: () => {
         void queryClient.invalidateQueries({
-          queryKey: trpc.scheduledMessages.listByOrganization.queryKey(),
+          queryKey: [["scheduledMessages"]],
+          refetchType: "all",
         });
         toast.success("Agendamento cancelado");
       },
@@ -75,7 +76,8 @@ export function CalendarView({ data, isLoading }: CalendarViewProps) {
 
   const handleUpdate = () => {
     void queryClient.invalidateQueries({
-      queryKey: trpc.scheduledMessages.listByOrganization.queryKey(),
+      queryKey: [["scheduledMessages"]],
+      refetchType: "all",
     });
   };
 

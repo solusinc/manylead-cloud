@@ -67,7 +67,7 @@ export function ScheduleItem({ item, onEdit }: ScheduleItemProps) {
 
   // Função para substituir variáveis no conteúdo
   const replaceVariables = (content: string) => {
-    const contactName = chat.contact.name || chat.contact.phoneNumber;
+    const contactName = chat.contact.name.trim() ? chat.contact.name : (chat.contact.phoneNumber ?? "Contato");
     const agentName = item.createdByUser?.name ?? "";
     const organizationName = currentOrganization?.name ?? "";
 

@@ -149,6 +149,8 @@ export async function handleConnectionUpdate(
       lastConnectedAt: state === "open" ? new Date() : ch.lastConnectedAt,
       errorMessage: statusReason?.toString(),
       updatedAt: new Date(),
+      // Garantir isActive = true quando conectado
+      ...(state === "open" && { isActive: true }),
     })
     .where(eq(channel.id, ch.id));
 

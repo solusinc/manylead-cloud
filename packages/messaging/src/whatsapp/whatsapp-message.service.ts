@@ -100,8 +100,18 @@ export class WhatsAppMessageService {
       throw new Error("Chat não possui canal configurado");
     }
 
-    if (!chatRecord.contact.phoneNumber) {
-      throw new Error("Contato não possui número de telefone");
+    // Para grupos, usamos groupJid. Para contatos individuais, phoneNumber
+    const isGroup = chatRecord.contact.isGroup;
+    const targetJid = isGroup
+      ? chatRecord.contact.groupJid
+      : chatRecord.contact.phoneNumber;
+
+    if (!targetJid) {
+      throw new Error(
+        isGroup
+          ? "Grupo não possui JID configurado"
+          : "Contato não possui número de telefone"
+      );
     }
 
     const now = new Date();
@@ -184,9 +194,11 @@ export class WhatsAppMessageService {
           .limit(1);
 
         if (repliedMessage?.whatsappMessageId) {
+          // Grupos usam @g.us, contatos individuais usam @s.whatsapp.net
+          const jidSuffix = isGroup ? "@g.us" : "@s.whatsapp.net";
           quoted = {
             key: {
-              remoteJid: `${chatRecord.contact.phoneNumber}@s.whatsapp.net`,
+              remoteJid: `${targetJid}${jidSuffix}`,
               fromMe: repliedMessage.sender === "agent",
               id: repliedMessage.whatsappMessageId,
             },
@@ -206,7 +218,8 @@ export class WhatsAppMessageService {
           messageId: newMessage.id,
           attachmentId: attachmentRecord.id,
           instanceName: chatRecord.channel.evolutionInstanceName,
-          phoneNumber: chatRecord.contact.phoneNumber,
+          phoneNumber: chatRecord.contact.phoneNumber ?? undefined,
+          groupJid: chatRecord.contact.groupJid ?? undefined,
           audioUrl: input.attachmentData.storageUrl,
           audioStoragePath: input.attachmentData.storagePath,
           audioMimeType: input.attachmentData.mimeType,
@@ -231,7 +244,8 @@ export class WhatsAppMessageService {
       const result = input.attachmentData
         ? await this.senderService.sendMedia({
             instanceName: chatRecord.channel.evolutionInstanceName,
-            phoneNumber: chatRecord.contact.phoneNumber,
+            phoneNumber: chatRecord.contact.phoneNumber ?? undefined,
+            groupJid: chatRecord.contact.groupJid ?? undefined,
             mediaType: input.attachmentData.mediaType,
             mediaUrl: input.attachmentData.storageUrl,
             filename: input.attachmentData.fileName,
@@ -240,7 +254,8 @@ export class WhatsAppMessageService {
           })
         : await this.senderService.sendText({
             instanceName: chatRecord.channel.evolutionInstanceName,
-            phoneNumber: chatRecord.contact.phoneNumber,
+            phoneNumber: chatRecord.contact.phoneNumber ?? undefined,
+            groupJid: chatRecord.contact.groupJid ?? undefined,
             text: messageContent,
             quoted,
           });
@@ -393,8 +408,18 @@ export class WhatsAppMessageService {
       throw new Error("Chat não possui canal configurado");
     }
 
-    if (!messageRecord.contact.phoneNumber) {
-      throw new Error("Contato não possui número de telefone");
+    // Para grupos, usamos groupJid. Para contatos individuais, phoneNumber
+    const isGroup = messageRecord.contact.isGroup;
+    const targetJid = isGroup
+      ? messageRecord.contact.groupJid
+      : messageRecord.contact.phoneNumber;
+
+    if (!targetJid) {
+      throw new Error(
+        isGroup
+          ? "Grupo não possui JID configurado"
+          : "Contato não possui número de telefone"
+      );
     }
 
     const now = new Date();
@@ -407,12 +432,14 @@ export class WhatsAppMessageService {
     );
 
     // 4. Chamar Evolution API para editar no WhatsApp
-    const remoteJid = `${messageRecord.contact.phoneNumber}@s.whatsapp.net`;
+    const jidSuffix = isGroup ? "@g.us" : "@s.whatsapp.net";
+    const remoteJid = `${targetJid}${jidSuffix}`;
 
     try {
       await this.senderService.updateMessage({
         instanceName: messageRecord.channel.evolutionInstanceName,
-        phoneNumber: messageRecord.contact.phoneNumber,
+        phoneNumber: messageRecord.contact.phoneNumber ?? undefined,
+        groupJid: messageRecord.contact.groupJid ?? undefined,
         text: formattedContent,
         remoteJid,
         fromMe: true, // Mensagem foi enviada por nós
@@ -538,12 +565,23 @@ export class WhatsAppMessageService {
       throw new Error("Chat não possui canal configurado");
     }
 
-    if (!messageRecord.contact.phoneNumber) {
-      throw new Error("Contato não possui número de telefone");
+    // Para grupos, usamos groupJid. Para contatos individuais, phoneNumber
+    const isGroup = messageRecord.contact.isGroup;
+    const targetJid = isGroup
+      ? messageRecord.contact.groupJid
+      : messageRecord.contact.phoneNumber;
+
+    if (!targetJid) {
+      throw new Error(
+        isGroup
+          ? "Grupo não possui JID configurado"
+          : "Contato não possui número de telefone"
+      );
     }
 
     // 3. Chamar Evolution API para deletar no WhatsApp
-    const remoteJid = `${messageRecord.contact.phoneNumber}@s.whatsapp.net`;
+    const jidSuffix = isGroup ? "@g.us" : "@s.whatsapp.net";
+    const remoteJid = `${targetJid}${jidSuffix}`;
 
     try {
       await this.senderService.deleteMessage({
@@ -655,8 +693,18 @@ export class WhatsAppMessageService {
       throw new Error("Chat não possui canal configurado");
     }
 
-    if (!chatRecord.contact.phoneNumber) {
-      throw new Error("Contato não possui número de telefone");
+    // Para grupos, usamos groupJid. Para contatos individuais, phoneNumber
+    const isGroup = chatRecord.contact.isGroup;
+    const targetJid = isGroup
+      ? chatRecord.contact.groupJid
+      : chatRecord.contact.phoneNumber;
+
+    if (!targetJid) {
+      throw new Error(
+        isGroup
+          ? "Grupo não possui JID configurado"
+          : "Contato não possui número de telefone"
+      );
     }
 
     // 2. Buscar mensagens não lidas do CONTATO
@@ -681,7 +729,8 @@ export class WhatsAppMessageService {
       return; // Nada a marcar
     }
 
-    const remoteJid = `${chatRecord.contact.phoneNumber}@s.whatsapp.net`;
+    const jidSuffix = isGroup ? "@g.us" : "@s.whatsapp.net";
+    const remoteJid = `${targetJid}${jidSuffix}`;
 
     // 3. Preparar array de mensagens para marcar como lidas
     const messagesToMarkRead = unreadMessages

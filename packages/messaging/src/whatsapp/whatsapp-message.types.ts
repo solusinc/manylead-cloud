@@ -45,7 +45,8 @@ export interface MarkAsReadInput {
 
 export interface WhatsAppSendTextParams {
   instanceName: string;
-  phoneNumber: string;
+  phoneNumber?: string;
+  groupJid?: string;
   text: string;
   quoted?: {
     key: {
@@ -58,7 +59,8 @@ export interface WhatsAppSendTextParams {
 
 export interface WhatsAppSendMediaParams {
   instanceName: string;
-  phoneNumber: string;
+  phoneNumber?: string;
+  groupJid?: string;
   mediaType: "image" | "audio" | "video" | "document";
   mediaUrl: string;
   filename?: string;
@@ -81,7 +83,8 @@ export interface WhatsAppMarkAsReadParams {
 
 export interface WhatsAppUpdateMessageParams {
   instanceName: string;
-  phoneNumber: string;
+  phoneNumber?: string;
+  groupJid?: string;
   text: string;
   remoteJid: string;
   fromMe: boolean;

@@ -68,7 +68,7 @@ export function ScheduleQuickReplyForm({
   );
 
   // Dados para substituição de variáveis no preview
-  const contactName = chat.contact.name || chat.contact.phoneNumber;
+  const contactName = chat.contact.name.trim() ? chat.contact.name : (chat.contact.phoneNumber ?? "Contato");
   const agentName = session.user.name;
   const organizationName = currentOrganization?.name ?? "";
   const defaultDateTime = schedule

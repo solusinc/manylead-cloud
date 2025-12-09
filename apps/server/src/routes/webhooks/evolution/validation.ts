@@ -101,9 +101,8 @@ export function validateEventData<T>(
     case "send.message":
       return sendMessageDataSchema.parse(data) as T;
 
+    // presence.update desabilitado temporariamente - não validar
     case "presence.update":
-      return presenceUpdateDataSchema.parse(data) as T;
-
     default:
       // Eventos não validados retornam data as-is
       return data as T;

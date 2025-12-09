@@ -43,6 +43,7 @@ interface ChatSidebarItemProps {
     contact: {
       name: string;
       avatar: string | null;
+      isGroup: boolean;
     };
     lastMessage: string;
     lastMessageAt: Date;
@@ -156,6 +157,7 @@ export function ChatSidebarItem({
           isTyping={isTyping}
           isRecording={isRecording}
           isActive={isActive}
+          isGroup={chat.contact.isGroup}
           tags={chat.tags}
           assignedTo={chat.assignedTo}
           currentAgentId={currentAgentId}
@@ -253,7 +255,7 @@ export function ChatSidebarItemAvatar({
       {/* Badge no canto inferior esquerdo */}
       <div className="border-background bg-background absolute -bottom-0.5 -left-0.5 flex h-5 w-5 items-center justify-center rounded-full border-2">
         {messageSource === "whatsapp" ? (
-          <FaWhatsapp className="h-3 w-3 text-green-500" />
+          <FaWhatsapp className="h-3 w-3" />
         ) : (
           <>
             <Image
@@ -289,6 +291,7 @@ export function ChatSidebarItemContent({
   isTyping = false,
   isRecording = false,
   isActive = false,
+  isGroup = false,
   tags,
   assignedTo,
   currentAgentId,
@@ -305,6 +308,7 @@ export function ChatSidebarItemContent({
   isTyping?: boolean;
   isRecording?: boolean;
   isActive?: boolean;
+  isGroup?: boolean;
   tags?: Pick<Tag, "id" | "name" | "color">[];
   assignedTo?: string | null;
   currentAgentId?: string;
@@ -340,6 +344,7 @@ export function ChatSidebarItemContent({
           messageStatus={messageStatus}
           messageType={messageType}
           message={message}
+          isGroup={isGroup}
         />
         {shouldShowBadge && (
           <ChatSidebarItemBadge count={debouncedUnreadCount} />

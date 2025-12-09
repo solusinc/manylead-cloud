@@ -65,6 +65,8 @@ export interface CreateInstanceRequest {
   proxyProtocol?: string;
   proxyUsername?: string;
   proxyPassword?: string;
+  // Keep WhatsApp always online
+  alwaysOnline?: boolean;
 }
 
 export interface CreateInstanceResponse {

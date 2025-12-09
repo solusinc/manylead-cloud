@@ -14,7 +14,6 @@ import {
   selectChannelSchema,
   updateChannelSchema,
 } from "@manylead/db";
-import { getBrightDataClient } from "@manylead/bright-data";
 import type { CreateInstanceRequest } from "@manylead/evolution-api-client";
 import { EvolutionAPIClient } from "@manylead/evolution-api-client";
 
@@ -212,7 +211,7 @@ export const channelsRouter = createTRPCRouter({
             // Deletar instância
             await evolutionClient.instance.delete(evolutionInstanceName);
             console.log("DEBUG: Instância deletada da Evolution");
-          } catch (error) {
+          } catch {
             console.log("DEBUG: Instância não existe na Evolution (ok, continuando)");
           }
         }
@@ -269,6 +268,7 @@ export const channelsRouter = createTRPCRouter({
             instanceName: evolutionInstanceName,
             qrcode: true,
             integration: "WHATSAPP-BAILEYS",
+            alwaysOnline: true,
             webhook: {
               url: `${env.WEBHOOK_BASE_URL}/webhooks/evolution`,
               enabled: true,
@@ -281,49 +281,50 @@ export const channelsRouter = createTRPCRouter({
                 "MESSAGES_DELETE",
                 "SEND_MESSAGE",
                 "PRESENCE_UPDATE",
+                "GROUPS_UPSERT",
+                "GROUP_UPDATE",
+                "GROUP_PARTICIPANTS_UPDATE",
               ],
             },
           };
 
-          // PROXY TEMPORARIAMENTE DESABILITADO
-          /*
-          // Adicionar campos de proxy se habilitado (SEM o campo "enabled"!)
-          if (orgSettings?.proxySettings?.enabled) {
-            const brightData = getBrightDataClient();
-            const proxyConfig = brightData.getProxyConfig(
-              organizationId,
-              orgSettings.proxySettings,
-              orgSettings.timezone,
-            );
+          // TODO: Habilitar quando Bright Data aprovar KYC
+          // // Adicionar campos de proxy se habilitado (SEM o campo "enabled"!)
+          // if (orgSettings?.proxySettings?.enabled) {
+          //   const brightData = getBrightDataClient();
+          //   const proxyConfig = brightData.getProxyConfig(
+          //     organizationId,
+          //     orgSettings.proxySettings,
+          //     orgSettings.timezone,
+          //   );
 
-            // Adicionar campos de proxy (SEM enabled)
-            createPayload.proxyHost = proxyConfig.host;
-            createPayload.proxyPort = proxyConfig.port;
-            createPayload.proxyProtocol = proxyConfig.protocol;
-            createPayload.proxyUsername = proxyConfig.username;
-            createPayload.proxyPassword = proxyConfig.password;
+          //   // Adicionar campos de proxy (SEM enabled)
+          //   createPayload.proxyHost = proxyConfig.host;
+          //   createPayload.proxyPort = proxyConfig.port;
+          //   createPayload.proxyProtocol = proxyConfig.protocol;
+          //   createPayload.proxyUsername = proxyConfig.username;
+          //   createPayload.proxyPassword = proxyConfig.password;
 
-            console.log("=== CREATE WITH PROXY ===");
-            console.log(JSON.stringify(createPayload, null, 2));
-            console.log("=========================");
+          //   console.log("=== CREATE WITH PROXY ===");
+          //   console.log(JSON.stringify(createPayload, null, 2));
+          //   console.log("=========================");
 
-            // Atualizar sessionId no DB
-            await tenantDb
-              .update(organizationSettings)
-              .set({
-                proxySettings: {
-                  enabled: true,
-                  country: orgSettings.proxySettings.country,
-                  sessionId: proxyConfig.username?.split("session-")[1]?.split("-country-")[0],
-                  lastKeepAliveAt: new Date().toISOString(),
-                  rotationCount: orgSettings.proxySettings.rotationCount,
-                  lastRotatedAt: orgSettings.proxySettings.lastRotatedAt,
-                },
-                updatedAt: new Date(),
-              })
-              .where(eq(organizationSettings.organizationId, organizationId));
-          }
-          */
+          //   // Atualizar sessionId no DB
+          //   await tenantDb
+          //     .update(organizationSettings)
+          //     .set({
+          //       proxySettings: {
+          //         enabled: true,
+          //         country: orgSettings.proxySettings.country,
+          //         sessionId: proxyConfig.username?.split("session-")[1]?.split("-country-")[0],
+          //         lastKeepAliveAt: new Date().toISOString(),
+          //         rotationCount: orgSettings.proxySettings.rotationCount,
+          //         lastRotatedAt: orgSettings.proxySettings.lastRotatedAt,
+          //       },
+          //       updatedAt: new Date(),
+          //     })
+          //     .where(eq(organizationSettings.organizationId, organizationId));
+          // }
 
           await evolutionClient.instance.create(createPayload);
           console.log("DEBUG: Instância criada com sucesso");
@@ -559,6 +560,7 @@ export const channelsRouter = createTRPCRouter({
           instanceName: ch.evolutionInstanceName,
           qrcode: true,
           integration: "WHATSAPP-BAILEYS",
+          alwaysOnline: true,
           webhook: {
             url: `${env.WEBHOOK_BASE_URL}/webhooks/evolution`,
             enabled: true,
@@ -571,6 +573,8 @@ export const channelsRouter = createTRPCRouter({
               "MESSAGES_DELETE",
               "SEND_MESSAGE",
               "PRESENCE_UPDATE",
+              "GROUPS_UPSERT",
+              "GROUP_UPDATE",
             ],
           },
         });
@@ -651,6 +655,7 @@ export const channelsRouter = createTRPCRouter({
         number: input.phoneNumber, // IMPORTANTE: número é necessário para pairing code
         qrcode: false, // Desabilitar QR code quando usar pairing code
         integration: "WHATSAPP-BAILEYS",
+        alwaysOnline: true,
         webhook: {
           url: `${env.WEBHOOK_BASE_URL}/webhooks/evolution`,
           enabled: true,
@@ -662,7 +667,9 @@ export const channelsRouter = createTRPCRouter({
             "MESSAGES_UPDATE",
             "MESSAGES_DELETE",
             "SEND_MESSAGE",
-            // "PRESENCE_UPDATE", // DISABLED: Baileys não recebe presence do WhatsApp (ver docs/TODO-FIXES.md #4)
+            "PRESENCE_UPDATE",
+            "GROUPS_UPSERT",
+            "GROUP_UPDATE",
           ],
         },
       });

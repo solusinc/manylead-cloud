@@ -2,7 +2,7 @@
 
 import { memo, useState } from "react";
 import Image from "next/image";
-import { FaUser, FaWhatsapp } from "react-icons/fa";
+import { FaUser, FaUsers, FaWhatsapp } from "react-icons/fa";
 
 import { cn } from "@manylead/ui";
 import { Avatar, AvatarFallback } from "@manylead/ui/avatar";
@@ -22,12 +22,14 @@ interface ChatWindowHeaderProps {
     contact: {
       id: string;
       name: string;
-      phoneNumber: string;
+      phoneNumber: string | null;
       avatar: string | null;
       instanceCode?: string;
       customName?: string | null;
       notes?: string | null;
       customFields?: Record<string, string> | null;
+      isGroup?: boolean;
+      groupJid?: string | null;
     };
     status: "open" | "closed";
     assignedTo: string | null;
@@ -118,9 +120,10 @@ export const ChatWindowHeaderInfo = memo(function ChatWindowHeaderInfo({
 }: {
   contact: {
     name: string;
-    phoneNumber: string;
+    phoneNumber: string | null;
     avatar: string | null;
     customName?: string | null;
+    isGroup?: boolean;
   };
   source?: "whatsapp" | "internal";
   isTyping?: boolean;
@@ -137,7 +140,11 @@ export const ChatWindowHeaderInfo = memo(function ChatWindowHeaderInfo({
           <img src={contact.avatar} alt={displayName} className="object-cover" />
         ) : (
           <AvatarFallback className="bg-muted text-muted-foreground">
-            <FaUser className="h-4 w-4" />
+            {contact.isGroup ? (
+              <FaUsers className="h-4 w-4" />
+            ) : (
+              <FaUser className="h-4 w-4" />
+            )}
           </AvatarFallback>
         )}
       </Avatar>
