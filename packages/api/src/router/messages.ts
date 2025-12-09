@@ -1,7 +1,7 @@
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
-import { agent, and, attachment, channel, chat, chatParticipant, contact, desc, eq, ilike, lt, message, sql } from "@manylead/db";
+import { agent, and, attachment, channel, chat, chatParticipant, contact, desc, eq, ilike, lt, message, organizationSettings, sql } from "@manylead/db";
 import { EvolutionAPIClient } from "@manylead/evolution-api-client";
 import { publishMessageEvent } from "@manylead/shared";
 import { extractKeyFromUrl } from "@manylead/storage";
@@ -1073,13 +1073,22 @@ export const messagesRouter = createTRPCRouter({
         });
       }
 
-      // 2. Criar Evolution API Client
+      // 2. Buscar configuração includeUserName do organizationSettings
+      const [settings] = await ctx.tenantDb
+        .select({ includeUserName: organizationSettings.includeUserName })
+        .from(organizationSettings)
+        .where(eq(organizationSettings.organizationId, organizationId))
+        .limit(1);
+
+      const includeUserName = settings?.includeUserName ?? false;
+
+      // 3. Criar Evolution API Client
       const evolutionClient = new EvolutionAPIClient(
         env.EVOLUTION_API_URL,
         env.EVOLUTION_API_KEY,
       );
 
-      // 3. Preparar attachmentData se mídia foi fornecida
+      // 4. Preparar attachmentData se mídia foi fornecida
       let attachmentData: SendWhatsAppTextInput["attachmentData"];
       if (input.mediaUrl && input.mimeType && input.fileName) {
         // Detectar mediaType a partir do mimeType
@@ -1128,6 +1137,7 @@ export const messagesRouter = createTRPCRouter({
             content: input.content,
             repliedToMessageId: input.repliedToMessageId,
             metadata: input.metadata,
+            includeUserName, // Assinatura do agente
             attachmentData, // 🆕 Passa attachmentData se fornecido
           },
         );

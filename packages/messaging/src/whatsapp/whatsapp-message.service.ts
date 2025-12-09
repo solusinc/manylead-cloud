@@ -169,11 +169,14 @@ export class WhatsAppMessageService {
     try {
       // 5. Formatar mensagem (com ou sem assinatura)
       // IMPORTANTE: Mídia NÃO leva assinatura, só o caption puro
+      // Assinatura só é adicionada se includeUserName === true
       const messageContent = input.attachmentData
         ? (input.content || "") // Mídia: caption puro sem assinatura
         : input.content
-          ? formatMessageWithSignature(input.agentName, input.content, "whatsapp")
-          : ""; // Texto: com assinatura
+          ? (input.includeUserName
+              ? formatMessageWithSignature(input.agentName, input.content, "whatsapp")
+              : input.content)
+          : ""; // Texto: com ou sem assinatura baseado em includeUserName
 
       // 6. Se tiver repliedToMessageId, buscar mensagem original para quoted
       let quoted: WhatsAppSendTextParams["quoted"];

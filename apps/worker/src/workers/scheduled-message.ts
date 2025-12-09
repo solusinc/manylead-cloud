@@ -7,6 +7,7 @@ import {
   db,
   eq,
   organization,
+  organizationSettings,
   quickReply,
   scheduledMessage,
   user,
@@ -121,6 +122,15 @@ export async function processScheduledMessage(
     }
 
     const isWhatsAppChat = chatRecord.messageSource === "whatsapp";
+
+    // Buscar configuração de includeUserName
+    const [orgSettings] = await tenantDb
+      .select({ includeUserName: organizationSettings.includeUserName })
+      .from(organizationSettings)
+      .where(eq(organizationSettings.organizationId, organizationId))
+      .limit(1);
+
+    const includeUserName = orgSettings?.includeUserName ?? false;
 
     logger.info(
       { scheduledMessageId, messageSource: chatRecord.messageSource, isWhatsAppChat },
@@ -249,6 +259,7 @@ export async function processScheduledMessage(
               content: message.content,
               agentId: createdByAgentId,
               agentName: userRecord.name,
+              includeUserName,
               attachmentData: {
                 fileName: message.mediaName ?? "file",
                 mimeType: message.mediaMimeType ?? "application/octet-stream",
@@ -265,6 +276,7 @@ export async function processScheduledMessage(
               content: message.content,
               agentId: createdByAgentId,
               agentName: userRecord.name,
+              includeUserName,
             });
           }
         } else if (internalService) {
@@ -381,6 +393,7 @@ export async function processScheduledMessage(
         content,
         agentId: createdByAgentId,
         agentName: userRecord.name,
+        includeUserName,
       });
 
       result = {

@@ -8,7 +8,12 @@ import {
   updateOrganizationSettingsSchema,
 } from "@manylead/db";
 
-import { createTRPCRouter, ownerProcedure, tenantManager } from "../trpc";
+import {
+  createTRPCRouter,
+  memberProcedure,
+  ownerProcedure,
+  tenantManager,
+} from "../trpc";
 
 /**
  * Organization Settings Router
@@ -16,6 +21,37 @@ import { createTRPCRouter, ownerProcedure, tenantManager } from "../trpc";
  * Gerencia configurações gerais da organização (timezone, working hours, etc.)
  */
 export const organizationSettingsRouter = createTRPCRouter({
+  /**
+   * Get display preferences (for members)
+   * Returns only hidePhoneDigits and includeUserName flags
+   */
+  getDisplayPreferences: memberProcedure.query(async ({ ctx }) => {
+    const organizationId = ctx.session.session.activeOrganizationId;
+
+    if (!organizationId) {
+      return {
+        hidePhoneDigits: false,
+        includeUserName: false,
+      };
+    }
+
+    const tenantDb = await tenantManager.getConnection(organizationId);
+
+    const [settings] = await tenantDb
+      .select({
+        hidePhoneDigits: organizationSettings.hidePhoneDigits,
+        includeUserName: organizationSettings.includeUserName,
+      })
+      .from(organizationSettings)
+      .where(eq(organizationSettings.organizationId, organizationId))
+      .limit(1);
+
+    return {
+      hidePhoneDigits: settings?.hidePhoneDigits ?? false,
+      includeUserName: settings?.includeUserName ?? false,
+    };
+  }),
+
   /**
    * Get organization settings
    */

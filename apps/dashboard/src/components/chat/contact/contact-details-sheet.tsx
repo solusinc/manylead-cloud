@@ -7,7 +7,6 @@ import { FaUser, FaUsers, FaWhatsapp } from "react-icons/fa";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-import { formatBrazilianPhone } from "@manylead/shared/utils";
 import { Avatar, AvatarFallback } from "@manylead/ui/avatar";
 import { Button } from "@manylead/ui/button";
 import { Input } from "@manylead/ui/input";
@@ -21,6 +20,7 @@ import {
 import { Skeleton } from "@manylead/ui/skeleton";
 import { Textarea } from "@manylead/ui/textarea";
 import { useTRPC } from "~/lib/trpc/react";
+import { usePhoneDisplay } from "~/hooks/use-phone-display";
 
 interface ContactDetailsSheetProps {
   open: boolean;
@@ -219,6 +219,8 @@ function ContactDetailsAvatar({
   };
   source?: "whatsapp" | "internal";
 }) {
+  const { formatPhone } = usePhoneDisplay();
+
   return (
     <div className="flex flex-col items-center py-8">
       <Avatar className="mb-4 h-40 w-40 border">
@@ -255,7 +257,7 @@ function ContactDetailsAvatar({
       ) : (
         <div className="flex items-center gap-1.5">
           <p className="text-muted-foreground text-sm">
-            {contact.phoneNumber ? formatBrazilianPhone(contact.phoneNumber) : "Sem número"}
+            {formatPhone(contact.phoneNumber)}
           </p>
           <FaWhatsapp className="text-muted-foreground h-4 w-4" />
         </div>
@@ -331,6 +333,7 @@ function ContactDetailsCustomField({
 function GroupParticipantsList({ contactId }: { contactId: string }) {
   const trpc = useTRPC();
   const router = useRouter();
+  const { formatPhone } = usePhoneDisplay();
 
   const { data, isLoading, error } = useQuery(
     trpc.contacts.getGroupParticipants.queryOptions({ contactId }),
@@ -428,7 +431,7 @@ function GroupParticipantsList({ contactId }: { contactId: string }) {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
                 <span className="truncate text-sm font-medium">
-                  {participant.name ?? formatBrazilianPhone(participant.phoneNumber)}
+                  {participant.name ?? formatPhone(participant.phoneNumber)}
                 </span>
                 {participant.isSuperAdmin && (
                   <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />

@@ -12,6 +12,8 @@ export interface SendWhatsAppTextInput {
   content: string;
   repliedToMessageId?: string;
   metadata?: Record<string, unknown>;
+  /** Se true, adiciona assinatura do agente (*NomeDoAgente*\n) no início da mensagem */
+  includeUserName?: boolean;
   // 🆕 Suporte opcional a attachment (mídia)
   attachmentData?: {
     mediaType: "image" | "video" | "audio" | "document";

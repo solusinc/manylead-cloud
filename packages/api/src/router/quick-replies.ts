@@ -4,6 +4,7 @@ import { z } from "zod";
 import {
   agent,
   and,
+  chat,
   count,
   db,
   desc,
@@ -12,6 +13,7 @@ import {
   inArray,
   insertQuickReplySchema,
   or,
+  organizationSettings,
   quickReply,
   scheduledMessage,
   selectQuickReplySchema,
@@ -31,8 +33,9 @@ function getContentPreview(messages: QuickReplyMessage[]): string {
 
 import { createQueue } from "@manylead/clients/queue";
 import { getRedisClient } from "@manylead/clients/redis";
+import { EvolutionAPIClient } from "@manylead/evolution-api-client";
 import { env } from "../env";
-import { getInternalMessageService } from "@manylead/messaging";
+import { getInternalMessageService, getWhatsAppMessageService } from "@manylead/messaging";
 
 import { createTRPCRouter, memberProcedure, ownerProcedure, tenantManager } from "../trpc";
 
@@ -638,6 +641,7 @@ export const quickRepliesRouter = createTRPCRouter({
   /**
    * Send quick reply messages
    * Processa e envia todas as mensagens de uma quick reply (texto + mídia)
+   * Suporta tanto chats internos quanto WhatsApp
    */
   send: memberProcedure
     .input(
@@ -688,6 +692,22 @@ export const quickRepliesRouter = createTRPCRouter({
         });
       }
 
+      // Buscar chat para identificar messageSource e createdAt
+      const [chatRecord] = await tenantDb
+        .select()
+        .from(chat)
+        .where(eq(chat.id, input.chatId))
+        .limit(1);
+
+      if (!chatRecord) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Chat não encontrado",
+        });
+      }
+
+      const isWhatsAppChat = chatRecord.messageSource === "whatsapp";
+
       // Buscar agent do usuário
       const [currentAgent] = await tenantDb
         .select()
@@ -702,6 +722,15 @@ export const quickRepliesRouter = createTRPCRouter({
         });
       }
 
+      // Buscar configuração de includeUserName
+      const [settings] = await tenantDb
+        .select({ includeUserName: organizationSettings.includeUserName })
+        .from(organizationSettings)
+        .where(eq(organizationSettings.organizationId, organizationId))
+        .limit(1);
+
+      const includeUserName = settings?.includeUserName ?? false;
+
       const messages = quickReplyData.messages;
 
       // Processar variáveis em cada mensagem
@@ -713,65 +742,113 @@ export const quickRepliesRouter = createTRPCRouter({
           .replace(/\{\{organization\.name\}\}/g, input.variables.organizationName),
       }));
 
-      // Inicializar MessageService
-      const messageService = getInternalMessageService({
-        redisUrl: env.REDIS_URL,
-        getTenantConnection: tenantManager.getConnection.bind(tenantManager),
-        getCatalogDb: () => db,
-      });
+      // Inicializar serviços baseado no tipo de chat
+      if (isWhatsAppChat) {
+        // WhatsApp: usar WhatsAppMessageService
+        const whatsappService = getWhatsAppMessageService({
+          evolutionClient: new EvolutionAPIClient(env.EVOLUTION_API_URL, env.EVOLUTION_API_KEY),
+          redisUrl: env.REDIS_URL,
+        });
 
-      const messageContext = {
-        organizationId,
-        tenantDb,
-        agentId: currentAgent.id,
-        agentName: input.variables.agentName,
-      };
+        for (const message of processedMessages) {
+          if (message.mediaUrl?.startsWith("http")) {
+            // Mensagem com mídia
+            const storagePath = extractKeyFromUrl(message.mediaUrl);
 
-      // Enviar cada mensagem
-      for (const message of processedMessages) {
-        if (message.mediaUrl?.startsWith("http")) {
-          // Mensagem com mídia
-          const storagePath = extractKeyFromUrl(message.mediaUrl);
+            let mediaType: "image" | "audio" | "document" = "document";
+            if (message.mediaMimeType?.startsWith("image/")) mediaType = "image";
+            else if (message.mediaMimeType?.startsWith("audio/")) mediaType = "audio";
 
-          if (!storagePath) {
-            throw new TRPCError({
-              code: "BAD_REQUEST",
-              message: "URL de mídia inválida",
+            await whatsappService.sendTextMessage(tenantDb, organizationId, {
+              chatId: input.chatId,
+              chatCreatedAt: chatRecord.createdAt,
+              content: message.content,
+              agentId: currentAgent.id,
+              agentName: input.variables.agentName,
+              includeUserName,
+              attachmentData: {
+                fileName: message.mediaName ?? "file",
+                mimeType: message.mediaMimeType ?? "application/octet-stream",
+                mediaType,
+                storagePath: storagePath ?? "",
+                storageUrl: message.mediaUrl,
+              },
+            });
+          } else {
+            // Mensagem de texto puro
+            await whatsappService.sendTextMessage(tenantDb, organizationId, {
+              chatId: input.chatId,
+              chatCreatedAt: chatRecord.createdAt,
+              content: message.content,
+              agentId: currentAgent.id,
+              agentName: input.variables.agentName,
+              includeUserName,
             });
           }
 
-          // Determinar messageType
-          let messageType: "image" | "video" | "audio" | "document" = "document";
-          if (message.mediaMimeType?.startsWith("image/")) messageType = "image";
-          else if (message.mediaMimeType?.startsWith("video/")) messageType = "video";
-          else if (message.mediaMimeType?.startsWith("audio/")) messageType = "audio";
-
-          await messageService.createTextMessage(messageContext, {
-            chatId: input.chatId,
-            content: message.content,
-            messageType,
-            agentId: currentAgent.id,
-            agentName: input.variables.agentName,
-            attachmentData: {
-              fileName: message.mediaName ?? "file",
-              mimeType: message.mediaMimeType ?? "application/octet-stream",
-              mediaType: messageType,
-              storagePath,
-              storageUrl: message.mediaUrl,
-            },
-          });
-        } else {
-          // Mensagem de texto
-          await messageService.createTextMessage(messageContext, {
-            chatId: input.chatId,
-            content: message.content,
-            agentId: currentAgent.id,
-            agentName: input.variables.agentName,
-          });
+          // Delay entre mensagens
+          await new Promise((resolve) => setTimeout(resolve, 150));
         }
+      } else {
+        // Internal: usar InternalMessageService
+        const messageService = getInternalMessageService({
+          redisUrl: env.REDIS_URL,
+          getTenantConnection: tenantManager.getConnection.bind(tenantManager),
+          getCatalogDb: () => db,
+        });
 
-        // Delay entre mensagens
-        await new Promise((resolve) => setTimeout(resolve, 150));
+        const messageContext = {
+          organizationId,
+          tenantDb,
+          agentId: currentAgent.id,
+          agentName: input.variables.agentName,
+        };
+
+        for (const message of processedMessages) {
+          if (message.mediaUrl?.startsWith("http")) {
+            // Mensagem com mídia
+            const storagePath = extractKeyFromUrl(message.mediaUrl);
+
+            if (!storagePath) {
+              throw new TRPCError({
+                code: "BAD_REQUEST",
+                message: "URL de mídia inválida",
+              });
+            }
+
+            // Determinar messageType
+            let messageType: "image" | "video" | "audio" | "document" = "document";
+            if (message.mediaMimeType?.startsWith("image/")) messageType = "image";
+            else if (message.mediaMimeType?.startsWith("video/")) messageType = "video";
+            else if (message.mediaMimeType?.startsWith("audio/")) messageType = "audio";
+
+            await messageService.createTextMessage(messageContext, {
+              chatId: input.chatId,
+              content: message.content,
+              messageType,
+              agentId: currentAgent.id,
+              agentName: input.variables.agentName,
+              attachmentData: {
+                fileName: message.mediaName ?? "file",
+                mimeType: message.mediaMimeType ?? "application/octet-stream",
+                mediaType: messageType,
+                storagePath,
+                storageUrl: message.mediaUrl,
+              },
+            });
+          } else {
+            // Mensagem de texto
+            await messageService.createTextMessage(messageContext, {
+              chatId: input.chatId,
+              content: message.content,
+              agentId: currentAgent.id,
+              agentName: input.variables.agentName,
+            });
+          }
+
+          // Delay entre mensagens
+          await new Promise((resolve) => setTimeout(resolve, 150));
+        }
       }
 
       // Incrementar contador de uso

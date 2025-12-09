@@ -120,3 +120,23 @@ export function formatBrazilianPhone(phone: string): string {
   // Fallback: return as E.164
   return formatToE164(phone, "55");
 }
+
+/**
+ * Masks the last N digits of a phone number with bullets (••••)
+ *
+ * @param phone - Phone number in any format
+ * @param digits - Number of digits to mask (default: 4)
+ * @returns Phone number with last digits masked
+ *
+ * @example
+ * ```ts
+ * maskPhoneLastDigits("+55 11 98484-8843") // "+55 11 98484-••••"
+ * maskPhoneLastDigits("5511984848843", 4) // "55119848••••"
+ * ```
+ */
+export function maskPhoneLastDigits(phone: string, digits = 4): string {
+  if (phone.length <= digits) {
+    return "•".repeat(phone.length);
+  }
+  return phone.slice(0, -digits) + "•".repeat(digits);
+}
