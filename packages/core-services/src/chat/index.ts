@@ -22,3 +22,8 @@ export {
   getChatPostActionsService,
 } from "./chat-post-actions.service";
 export type { PostCloseAction, PostActionContext } from "./chat-post-actions.service";
+export {
+  ChatAutoMessagesService,
+  getChatAutoMessagesService,
+} from "./chat-auto-messages.service";
+export type { WorkingHours, AutoMessageContext, SendWhatsAppCallback } from "./chat-auto-messages.service";

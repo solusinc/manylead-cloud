@@ -465,13 +465,21 @@ export const ChatMessageContent = memo(function ChatMessageContent({
     );
   }
 
-  // Renderizar markdown simples: **texto** -> <strong>texto</strong>
+  // Renderizar markdown: **texto** ou *texto* -> <strong>texto</strong> (WhatsApp style)
   const renderContent = (text: string) => {
-    const parts = text.split(/(\*\*.*?\*\*)/g);
+    // Suportar tanto **texto** quanto *texto* para negrito (WhatsApp usa *texto*)
+    // Regex: primeiro tenta **texto**, depois *texto* (evitar conflito)
+    const parts = text.split(/(\*\*[^*]+\*\*|\*[^*]+\*)/g);
 
     return parts.map((part, index) => {
+      // **texto** - dois asteriscos
       if (part.startsWith("**") && part.endsWith("**")) {
         const boldText = part.slice(2, -2);
+        return <strong key={index}>{boldText}</strong>;
+      }
+      // *texto* - um asterisco (WhatsApp style)
+      if (part.startsWith("*") && part.endsWith("*") && part.length > 2) {
+        const boldText = part.slice(1, -1);
         return <strong key={index}>{boldText}</strong>;
       }
       return part;

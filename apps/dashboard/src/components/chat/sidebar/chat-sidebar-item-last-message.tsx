@@ -8,6 +8,14 @@ import type { MessageStatus } from "../message/message-status-icon";
 import { MessageStatusIcon } from "../message/message-status-icon";
 
 /**
+ * Remove formatação markdown do texto (asteriscos para negrito)
+ */
+function stripMarkdown(text: string): string {
+  // Remove **texto** e *texto* mantendo apenas o texto interno
+  return text.replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1");
+}
+
+/**
  * Renderiza a última mensagem do chat na sidebar
  */
 export function ChatSidebarItemLastMessage({
@@ -86,14 +94,14 @@ export function ChatSidebarItemLastMessage({
       {/* Texto da mensagem ou label do tipo de mídia */}
       <p className="text-muted-foreground flex-1 truncate text-sm">
         {messageType === "image"
-          ? message.trim() || "Foto"
+          ? stripMarkdown(message.trim()) || "Foto"
           : messageType === "video"
-          ? message.trim() || "Vídeo"
+          ? stripMarkdown(message.trim()) || "Vídeo"
           : messageType === "document"
-          ? message.trim() || "Documento"
+          ? stripMarkdown(message.trim()) || "Documento"
           : messageType === "audio"
-          ? message.trim() || "Áudio"
-          : message}
+          ? stripMarkdown(message.trim()) || "Áudio"
+          : stripMarkdown(message)}
       </p>
     </div>
   );

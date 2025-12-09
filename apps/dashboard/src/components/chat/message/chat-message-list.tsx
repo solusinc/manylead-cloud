@@ -304,7 +304,7 @@ export function ChatMessageList({
                 // Mensagens de welcome/closing/rating devem aparecer como bubbles normais (outgoing)
                 (() => {
                   const metadata = message.metadata as { systemEventType?: string } | null;
-                  const bubbleSystemTypes = ["welcome_message", "closing_message", "rating_request", "rating_thanks"];
+                  const bubbleSystemTypes = ["welcome_message", "closing_message", "rating_request", "rating_thanks", "out_of_hours_message"];
                   const shouldRenderAsBubble = metadata?.systemEventType && bubbleSystemTypes.includes(metadata.systemEventType);
 
                   if (shouldRenderAsBubble) {

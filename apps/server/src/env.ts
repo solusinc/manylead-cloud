@@ -40,6 +40,14 @@ export const env = createEnv({
     EVOLUTION_API_URL: z.string().url(),
     EVOLUTION_API_KEY: z.string().min(1),
     WEBHOOK_BASE_URL: z.string().url(),
+
+    // Meta WhatsApp Business API
+    META_WEBHOOK_VERIFY_TOKEN: z.string().min(1),
+    META_APP_SECRET: z.string().optional(),
+    META_ACCESS_TOKEN: z.string().optional(),
+    META_PHONE_NUMBER_ID: z.string().optional(),
+    META_BUSINESS_ACCOUNT_ID: z.string().optional(),
+    META_API_VERSION: z.string().default("v24.0"),
   },
 
   /**
@@ -62,6 +70,12 @@ export const env = createEnv({
     EVOLUTION_API_URL: process.env.EVOLUTION_API_URL,
     EVOLUTION_API_KEY: process.env.EVOLUTION_API_KEY,
     WEBHOOK_BASE_URL: process.env.WEBHOOK_BASE_URL,
+    META_WEBHOOK_VERIFY_TOKEN: process.env.META_WEBHOOK_VERIFY_TOKEN,
+    META_APP_SECRET: process.env.META_APP_SECRET,
+    META_ACCESS_TOKEN: process.env.META_ACCESS_TOKEN,
+    META_PHONE_NUMBER_ID: process.env.META_PHONE_NUMBER_ID,
+    META_BUSINESS_ACCOUNT_ID: process.env.META_BUSINESS_ACCOUNT_ID,
+    META_API_VERSION: process.env.META_API_VERSION,
   },
 
   /**

@@ -1,9 +1,9 @@
 import type { Channel, TenantDB, Chat, Attachment } from "@manylead/db";
 import type { TenantDatabaseManager } from "@manylead/tenant-db";
-import { and, attachment, chat, chatRating, contact, desc, eq, message, or, organizationSettings, sql } from "@manylead/db";
+import { and, attachment, chat, chatRating, contact, desc, eq, message, or, sql } from "@manylead/db";
 import { createMediaDownloadQueue } from "@manylead/shared/queue";
 import { formatTime } from "@manylead/shared";
-import { getDefaultDepartment, ChatParticipantService, getEventPublisher } from "@manylead/core-services";
+import { getDefaultDepartment, ChatParticipantService, getEventPublisher, getChatAutoMessagesService } from "@manylead/core-services";
 
 import type { MessageContent, MessageType } from "./message-content-extractor";
 import type { MessageData } from "~/routes/webhooks/evolution/types";
@@ -319,9 +319,9 @@ export class WhatsAppMessageProcessor {
       log.info("Socket.io NOT emitted (media - worker will emit after download)");
     }
 
-    // 10. Enviar welcome message APÓS salvar mensagem do cliente (para garantir ordem correta)
+    // 10. Enviar welcome/out-of-hours message APÓS salvar mensagem do cliente (para garantir ordem correta)
     if (isChatNew) {
-      await this.sendWelcomeMessage(
+      await this.sendAutoMessage(
         tenantDb,
         channel,
         chatRecord,
@@ -977,102 +977,84 @@ export class WhatsAppMessageProcessor {
   }
 
   /**
-   * Enviar welcome message para novo chat
+   * Enviar welcome ou out-of-hours message para novo chat
+   * Usa ChatAutoMessagesService centralizado
    */
-  private async sendWelcomeMessage(
+  private async sendAutoMessage(
     tenantDb: TenantDB,
     channel: Channel,
     chatRecord: Chat,
     contactRecord: typeof contact.$inferSelect,
     instanceName: string,
   ): Promise<void> {
-    // Buscar settings da organização
-    const [settings] = await tenantDb
-      .select({ welcomeMessage: organizationSettings.welcomeMessage })
-      .from(organizationSettings)
-      .where(eq(organizationSettings.organizationId, channel.organizationId))
-      .limit(1);
+    const autoMessagesService = getChatAutoMessagesService(env.REDIS_URL);
+    const ctx = {
+      organizationId: channel.organizationId,
+      tenantDb,
+    };
 
-    if (!settings?.welcomeMessage) {
-      return;
-    }
+    // Callback para enviar via WhatsApp
+    const sendWhatsApp = async (text: string): Promise<string | null> => {
+      const targetNumber = contactRecord.isGroup
+        ? contactRecord.groupJid
+        : contactRecord.phoneNumber;
 
-    const now = new Date();
+      if (!targetNumber) {
+        log.warn({ chatId: chatRecord.id }, "No target number for auto message");
+        return null;
+      }
 
-    // 1. Enviar via WhatsApp
-    const targetNumber = contactRecord.isGroup
-      ? contactRecord.groupJid
-      : contactRecord.phoneNumber;
+      try {
+        const evolutionClient = getEvolutionClient();
+        const result = await evolutionClient.message.sendText(instanceName, {
+          number: targetNumber,
+          text,
+        });
+        return result.key.id;
+      } catch (error) {
+        log.error({ error, chatId: chatRecord.id }, "Failed to send auto message via WhatsApp");
+        return null;
+      }
+    };
 
-    if (!targetNumber) {
-      log.warn({ chatId: chatRecord.id }, "No target number for welcome message");
-      return;
-    }
+    // Verificar se está dentro do horário de trabalho
+    const isWithinHours = await autoMessagesService.isWithinWorkingHours(ctx);
 
-    let whatsappMessageId: string | null = null;
-    try {
-      const evolutionClient = getEvolutionClient();
-      const result = await evolutionClient.message.sendText(instanceName, {
-        number: targetNumber,
-        text: settings.welcomeMessage,
-      });
-      whatsappMessageId = result.key.id;
-    } catch (error) {
-      log.error({ error, chatId: chatRecord.id }, "Failed to send welcome message via WhatsApp");
-      return;
-    }
-
-    // 2. Salvar mensagem de sistema
-    const [welcomeMsg] = await tenantDb
-      .insert(message)
-      .values({
-        chatId: chatRecord.id,
-        messageSource: "whatsapp",
-        sender: "system",
-        senderId: null,
-        messageType: "system",
-        content: settings.welcomeMessage,
-        whatsappMessageId,
-        status: "sent",
-        sentAt: now,
-        timestamp: now,
-        metadata: { systemEventType: "welcome_message" },
-      })
-      .returning();
-
-    // 3. Atualizar lastMessage (usar "agent" para mostrar ticks no sidebar)
-    await tenantDb
-      .update(chat)
-      .set({
-        lastMessageContent: settings.welcomeMessage,
-        lastMessageSender: "agent",
-        lastMessageAt: now,
-        lastMessageType: "system",
-        lastMessageStatus: "sent",
-      })
-      .where(
-        and(eq(chat.id, chatRecord.id), eq(chat.createdAt, chatRecord.createdAt)),
+    let newMessage;
+    if (isWithinHours) {
+      // Dentro do horário: enviar welcome message
+      newMessage = await autoMessagesService.sendWelcomeMessage(
+        ctx,
+        chatRecord,
+        "whatsapp",
+        sendWhatsApp,
       );
 
-    // 4. Emitir eventos
-    if (welcomeMsg) {
-      // Emitir via Redis (para outros serviços)
-      const eventPublisher = getEventPublisher(env.REDIS_URL);
-      await eventPublisher.messageCreated(
-        channel.organizationId,
-        chatRecord.id,
-        welcomeMsg,
+      if (newMessage) {
+        log.info({ chatId: chatRecord.id }, "Welcome message sent");
+      }
+    } else {
+      // Fora do horário: enviar out-of-hours message (NÃO envia welcome)
+      newMessage = await autoMessagesService.sendOutOfHoursMessage(
+        ctx,
+        chatRecord,
+        "whatsapp",
+        sendWhatsApp,
       );
 
-      // Emitir via Socket.io (para o dashboard)
+      if (newMessage) {
+        log.info({ chatId: chatRecord.id }, "Out of hours message sent");
+      }
+    }
+
+    // Emitir via Socket.io (para o dashboard)
+    if (newMessage) {
       const socketManager = getSocketManager();
       socketManager.emitToRoom(`org:${channel.organizationId}`, "message:new", {
         chatId: chatRecord.id,
-        message: welcomeMsg,
+        message: newMessage,
         contact: contactRecord,
       });
     }
-
-    log.info({ chatId: chatRecord.id }, "Welcome message sent");
   }
 }

@@ -155,6 +155,12 @@ export class ChatPostActionsService {
       return null;
     }
 
+    // Rating/closing messages são apenas para WhatsApp
+    // Para chats internos (cross-org), não enviamos rating/closing
+    if (chatRecord.messageSource !== "whatsapp") {
+      return null;
+    }
+
     const now = new Date();
     const systemEventType =
       action.type === "rating" ? "rating_request" : "closing_message";

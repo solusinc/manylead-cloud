@@ -66,11 +66,13 @@ export const messagesRouter = createTRPCRouter({
         conditions.push(eq(message.isDeleted, false));
       }
 
-      // Filtrar mensagens de sistema de rating/closing (não devem aparecer na lista)
-      // NOTA: welcome_message DEVE aparecer na lista
+      // Filtrar mensagens de sistema de rating/closing para WhatsApp
+      // (essas mensagens são enviadas via WhatsApp API, não precisam aparecer na UI)
+      // NOTA: welcome_message e out_of_hours_message SEMPRE aparecem
       conditions.push(
         sql`NOT (
           ${message.messageType} = 'system'
+          AND ${message.messageSource} = 'whatsapp'
           AND ${message.metadata}->>'systemEventType' IN ('rating_request', 'rating_thanks', 'closing_message', 'rating_value')
         )`,
       );
