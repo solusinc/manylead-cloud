@@ -50,7 +50,7 @@ export const messageDataSchema = z
     instanceId: z.string().optional(),
     source: z.string().optional(),
     status: z.string().optional(),
-    contextInfo: z.record(z.unknown()).optional(),
+    contextInfo: z.record(z.unknown()).nullish(),
   })
   .passthrough(); // Preserva campos extras no root também
 

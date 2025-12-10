@@ -3,7 +3,7 @@
 import { memo, useEffect, useState } from "react";
 import Image from "next/image";
 import { format } from "date-fns";
-import { BanIcon, Check, CheckCheck, Clock, Star, FileX, Image as ImageIcon, Video, Mic, FileText, Loader2 } from "lucide-react";
+import { BanIcon, Check, CheckCheck, Clock, Star, FileX, Image as ImageIcon, Video, Mic, FileText, Loader2, XCircle } from "lucide-react";
 import type { Attachment } from "@manylead/db";
 
 import { cn } from "@manylead/ui";
@@ -575,7 +575,7 @@ export const ChatMessageFooter = memo(function ChatMessageFooter({
   className,
 }: {
   timestamp: Date;
-  status?: "pending" | "sent" | "delivered" | "read";
+  status?: "pending" | "sent" | "delivered" | "read" | "failed";
   isOutgoing: boolean;
   isStarred?: boolean;
   isEdited?: boolean;
@@ -589,6 +589,16 @@ export const ChatMessageFooter = memo(function ChatMessageFooter({
 }) {
   const { chat } = useChat();
   const isGroup = chat.contact.isGroup ?? false;
+  const isFailed = status === "failed";
+
+  // Se falhou, mostrar apenas X vermelho
+  if (isFailed) {
+    return (
+      <div className={cn("mt-1 flex items-center justify-end gap-1", className)}>
+        <XCircle className="h-3.5 w-3.5 text-red-500" />
+      </div>
+    );
+  }
 
   return (
     <div className={cn("mt-1 flex items-center justify-between gap-2", className)}>

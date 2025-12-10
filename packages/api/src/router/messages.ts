@@ -1147,7 +1147,9 @@ export const messagesRouter = createTRPCRouter({
             agentName: ctx.session.user.name,
             content: input.content,
             repliedToMessageId: input.repliedToMessageId,
-            metadata: input.metadata,
+            metadata: input.tempId
+              ? { ...input.metadata, tempId: input.tempId }
+              : input.metadata,
             includeUserName, // Assinatura do agente
             attachmentData, // 🆕 Passa attachmentData se fornecido
           },
