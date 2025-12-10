@@ -12,10 +12,10 @@
  *     --name manylead_isp_br \
  *     --type isp \
  *     --country br \
- *     --customer-id hl_b91d78ff \
- *     --zone manylead_isp_br \
+ *     --customer-id YOUR_CUSTOMER_ID \
+ *     --zone YOUR_ZONE_NAME \
  *     --port 33335 \
- *     --password rm4064am9fcj \
+ *     --password YOUR_PASSWORD \
  *     --pool-size 10 \
  *     --default
  */
