@@ -27,12 +27,14 @@
     "migrate": "pnpm with-env tsx src/migrate.ts",
     "seed": "pnpm with-env tsx src/seed.ts",
     "seed:local": "pnpm with-env tsx src/seed-local.ts",
+    "add-proxy-zone": "pnpm with-env tsx src/scripts/add-proxy-zone.ts",
     "push": "pnpm with-env drizzle-kit push",
     "studio": "pnpm with-env drizzle-kit studio",
     "typecheck": "tsc --noEmit --emitDeclarationOnly false",
     "with-env": "dotenv -e ../../.env --"
   },
   "dependencies": {
+    "@manylead/crypto": "workspace:*",
     "@t3-oss/env-core": "catalog:",
     "drizzle-orm": "^0.44.7",
     "drizzle-zod": "^0.8.3",

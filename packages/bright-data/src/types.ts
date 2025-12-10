@@ -1,9 +1,21 @@
 /**
  * Bright Data Proxy Types
  *
- * Per-organization proxy system using Bright Data Residential Proxies
+ * Per-organization proxy system using Bright Data Proxies
  * for WhatsApp automation via Evolution API.
+ *
+ * Supports:
+ * - Residential: Dynamic IPs with session-based sticky routing
+ * - ISP: Static dedicated IPs with automatic failover
  */
+
+/**
+ * Proxy type - determines which Bright Data zone to use
+ *
+ * - residential: Dynamic IPs, cheaper, requires session management
+ * - isp: Static dedicated IPs, more expensive, simpler configuration
+ */
+export type ProxyType = "residential" | "isp";
 
 /**
  * Supported countries for Bright Data proxy geolocation
@@ -29,9 +41,10 @@ export type ProxyProtocol = "http" | "https" | "socks5";
  */
 export interface OrganizationProxySettings {
   enabled: boolean;
-  country?: ProxyCountry;
-  sessionId?: string;          // UUID for sticky session (glob_ prefix)
-  lastKeepAliveAt?: string;    // ISO timestamp of last keep-alive ping
+  proxyType?: ProxyType;       // Default: "isp"
+  country?: ProxyCountry;      // For residential: geolocation targeting
+  sessionId?: string;          // UUID for sticky session (both types use this)
+  lastKeepAliveAt?: string;    // ISO timestamp of last keep-alive ping (residential only)
   rotationCount?: number;      // Number of IP rotations performed
   lastRotatedAt?: string;      // ISO timestamp of last rotation
 }

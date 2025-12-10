@@ -71,14 +71,17 @@ export const organizationSettings = pgTable(
     proxySettings: jsonb("proxy_settings")
       .$type<{
         enabled: boolean;
+        proxyType?: "residential" | "isp"; // Default: "isp" (Brasil), "residential" para outros países
         country?: "br" | "us" | "ar" | "cl" | "mx" | "co" | "pe" | "pt" | "es";
         sessionId?: string;
-        lastKeepAliveAt?: string;
+        lastKeepAliveAt?: string; // Apenas para residential (sessões expiram)
         rotationCount?: number;
         lastRotatedAt?: string;
       }>()
-      .default({ enabled: true }),
-    // Proxy habilitado por padrão com country auto-detectado por timezone
+      .default({ enabled: true, proxyType: "isp" }),
+    // Proxy habilitado por padrão com ISP (Brasil)
+    // ISP: IPs dedicados, não precisa keep-alive
+    // Residential: IPs dinâmicos, precisa keep-alive a cada 5 min
     // ⚠️ Aplicado APENAS para Evolution API (QR_CODE), NÃO para WhatsApp Business API
 
     // Timestamps

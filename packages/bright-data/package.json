@@ -17,6 +17,8 @@
   },
   "dependencies": {
     "@manylead/clients": "workspace:*",
+    "@manylead/crypto": "workspace:*",
+    "@manylead/db": "workspace:*",
     "@t3-oss/env-core": "catalog:",
     "uuid": "^11.0.3",
     "zod": "catalog:"

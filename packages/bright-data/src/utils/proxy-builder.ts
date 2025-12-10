@@ -2,17 +2,18 @@
  * Proxy Builder
  *
  * Builds Evolution API proxy configurations from organization settings
- * and Bright Data credentials.
+ * and Bright Data credentials. Supports both Residential and ISP proxy types.
  */
 
 import type {
   EvolutionProxyConfig,
   OrganizationProxySettings,
   ProxyCountry,
+  ProxyType,
   SessionConfig,
 } from "../types";
-import { BRIGHT_DATA_CONFIG, KEEPALIVE_CONFIG } from "../config";
-import { buildUsername, generateSessionId, needsSessionRotation } from "./session-manager";
+import { getBrightDataConfig, KEEPALIVE_CONFIG } from "../config";
+import { buildUsername, buildIspUsername, generateSessionId, needsSessionRotation } from "./session-manager";
 import { getCountryFromTimezone } from "./timezone-to-country";
 
 /**
@@ -23,18 +24,40 @@ import { getCountryFromTimezone } from "./timezone-to-country";
  * @param timezone - Organization timezone (optional)
  * @returns Proxy fields for instance creation (proxyHost, proxyPort, etc)
  */
-export function buildProxyFieldsForCreate(
+export async function buildProxyFieldsForCreate(
   organizationId: string,
   settings: OrganizationProxySettings,
   timezone?: string,
-): { proxyHost: string; proxyPort: string; proxyProtocol: string; proxyUsername: string; proxyPassword: string } | null {
+): Promise<{ proxyHost: string; proxyPort: string; proxyProtocol: string; proxyUsername: string; proxyPassword: string } | null> {
   if (!settings.enabled) {
     return null;
   }
 
+  const proxyType: ProxyType = settings.proxyType ?? "isp";
   const country: ProxyCountry =
     settings.country ?? (timezone ? getCountryFromTimezone(timezone) : "br");
 
+  const config = await getBrightDataConfig(proxyType, country);
+
+  if (!config) {
+    return null;
+  }
+
+  // ISP: simpler username with session for sticky IP allocation
+  if (proxyType === "isp") {
+    const sessionId = settings.sessionId ?? generateSessionId(organizationId);
+    const username = buildIspUsername(config.customerId, config.zone, sessionId);
+
+    return {
+      proxyHost: config.host,
+      proxyPort: config.port.toString(),
+      proxyProtocol: "http",
+      proxyUsername: username,
+      proxyPassword: config.password,
+    };
+  }
+
+  // Residential: full session management with country
   let sessionId = settings.sessionId;
   if (
     !sessionId ||
@@ -50,18 +73,14 @@ export function buildProxyFieldsForCreate(
     isNewSession: !settings.sessionId,
   };
 
-  const username = buildUsername(
-    BRIGHT_DATA_CONFIG.customerId,
-    BRIGHT_DATA_CONFIG.zone,
-    sessionConfig,
-  );
+  const username = buildUsername(config.customerId, config.zone, sessionConfig);
 
   return {
-    proxyHost: BRIGHT_DATA_CONFIG.host,
-    proxyPort: BRIGHT_DATA_CONFIG.port.toString(),
+    proxyHost: config.host,
+    proxyPort: config.port.toString(),
     proxyProtocol: "http",
     proxyUsername: username,
-    proxyPassword: BRIGHT_DATA_CONFIG.password,
+    proxyPassword: config.password,
   };
 }
 
@@ -75,34 +94,42 @@ export function buildProxyFieldsForCreate(
  * @param settings - Current proxy settings from organizationSettings.proxySettings
  * @param timezone - Organization timezone (optional, defaults to auto-detect)
  * @returns Evolution API proxy configuration
- *
- * @example
- * ```typescript
- * const config = buildEvolutionProxyConfig(
- *   "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
- *   { enabled: true, country: "br" },
- *   "America/Sao_Paulo"
- * );
- * // Returns EvolutionProxyConfig ready to send to Evolution API
- * ```
  */
-export function buildEvolutionProxyConfig(
+export async function buildEvolutionProxyConfig(
   organizationId: string,
   settings: OrganizationProxySettings,
   timezone?: string,
-): EvolutionProxyConfig {
-  // If proxy disabled, return disabled config
+): Promise<EvolutionProxyConfig> {
   if (!settings.enabled) {
-    return {
-      enabled: false,
-    };
+    return { enabled: false };
   }
 
-  // Determine country from settings or timezone
+  const proxyType: ProxyType = settings.proxyType ?? "isp";
   const country: ProxyCountry =
     settings.country ?? (timezone ? getCountryFromTimezone(timezone) : "br");
 
-  // Check if we need a new session
+  const config = await getBrightDataConfig(proxyType, country);
+
+  if (!config) {
+    return { enabled: false };
+  }
+
+  // ISP: simpler username with session for sticky IP allocation
+  if (proxyType === "isp") {
+    const sessionId = settings.sessionId ?? generateSessionId(organizationId);
+    const username = buildIspUsername(config.customerId, config.zone, sessionId);
+
+    return {
+      enabled: true,
+      host: config.host,
+      port: config.port.toString(),
+      protocol: "http",
+      username,
+      password: config.password,
+    };
+  }
+
+  // Residential: full session management with country
   let sessionId = settings.sessionId;
   let isNewSession = false;
 
@@ -114,7 +141,6 @@ export function buildEvolutionProxyConfig(
     isNewSession = true;
   }
 
-  // Build session config
   const sessionConfig: SessionConfig = {
     organizationId,
     sessionId,
@@ -122,20 +148,15 @@ export function buildEvolutionProxyConfig(
     isNewSession,
   };
 
-  // Build username with all parameters
-  const username = buildUsername(
-    BRIGHT_DATA_CONFIG.customerId,
-    BRIGHT_DATA_CONFIG.zone,
-    sessionConfig,
-  );
+  const username = buildUsername(config.customerId, config.zone, sessionConfig);
 
   return {
     enabled: true,
-    host: BRIGHT_DATA_CONFIG.host,
-    port: BRIGHT_DATA_CONFIG.port.toString(),
-    protocol: "http" as const,
+    host: config.host,
+    port: config.port.toString(),
+    protocol: "http",
     username,
-    password: BRIGHT_DATA_CONFIG.password,
+    password: config.password,
   };
 }
 
@@ -149,28 +170,45 @@ export function buildEvolutionProxyConfig(
  * @param settings - Current proxy settings
  * @param timezone - Organization timezone (optional)
  * @returns New proxy config with fresh session ID
- *
- * @example
- * ```typescript
- * const { config, newSessionId } = buildRotatedProxyConfig(
- *   "org123",
- *   currentSettings,
- *   "America/Sao_Paulo"
- * );
- * // Returns new config with different IP
- * ```
  */
-export function buildRotatedProxyConfig(
+export async function buildRotatedProxyConfig(
   organizationId: string,
   settings: OrganizationProxySettings,
   timezone?: string,
-): { config: EvolutionProxyConfig; newSessionId: string } {
+): Promise<{ config: EvolutionProxyConfig; newSessionId: string }> {
+  const proxyType: ProxyType = settings.proxyType ?? "isp";
   const country: ProxyCountry =
     settings.country ?? (timezone ? getCountryFromTimezone(timezone) : "br");
 
-  // Force new session for rotation
+  const bdConfig = await getBrightDataConfig(proxyType, country);
+
+  if (!bdConfig) {
+    return {
+      config: { enabled: false },
+      newSessionId: "",
+    };
+  }
+
   const newSessionId = generateSessionId(organizationId);
 
+  // ISP: simpler username
+  if (proxyType === "isp") {
+    const username = buildIspUsername(bdConfig.customerId, bdConfig.zone, newSessionId);
+
+    return {
+      config: {
+        enabled: true,
+        host: bdConfig.host,
+        port: bdConfig.port.toString(),
+        protocol: "http",
+        username,
+        password: bdConfig.password,
+      },
+      newSessionId,
+    };
+  }
+
+  // Residential: full session config
   const sessionConfig: SessionConfig = {
     organizationId,
     sessionId: newSessionId,
@@ -178,20 +216,16 @@ export function buildRotatedProxyConfig(
     isNewSession: true,
   };
 
-  const username = buildUsername(
-    BRIGHT_DATA_CONFIG.customerId,
-    BRIGHT_DATA_CONFIG.zone,
-    sessionConfig,
-  );
+  const username = buildUsername(bdConfig.customerId, bdConfig.zone, sessionConfig);
 
   return {
     config: {
       enabled: true,
-      host: BRIGHT_DATA_CONFIG.host,
-      port: BRIGHT_DATA_CONFIG.port.toString(),
+      host: bdConfig.host,
+      port: bdConfig.port.toString(),
       protocol: "http",
       username,
-      password: BRIGHT_DATA_CONFIG.password,
+      password: bdConfig.password,
     },
     newSessionId,
   };

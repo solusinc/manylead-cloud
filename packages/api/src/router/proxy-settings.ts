@@ -83,7 +83,7 @@ export const proxySettingsRouter = createTRPCRouter({
       let sessionId = orgSettings.proxySettings?.sessionId;
       if (input.enabled && !sessionId) {
         const brightData = getBrightDataClient();
-        const proxyConfig = brightData.getProxyConfig(
+        const proxyConfig = await brightData.getProxyConfig(
           organizationId,
           { ...orgSettings.proxySettings, enabled: true, country: input.country },
           orgSettings.timezone
@@ -156,7 +156,7 @@ export const proxySettingsRouter = createTRPCRouter({
     }
 
     const brightData = getBrightDataClient();
-    const { newSessionId, rotationCount } = brightData.rotateProxy(
+    const { newSessionId, rotationCount } = await brightData.rotateProxy(
       organizationId,
       orgSettings.proxySettings,
       orgSettings.timezone

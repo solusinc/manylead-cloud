@@ -112,6 +112,13 @@ async function processOrganizationKeepAlive(
       return { processed: false };
     }
 
+    // ISP não precisa de keep-alive - IPs são dedicados e não expiram
+    // Keep-alive é apenas para Residential (sessões expiram em 7 min)
+    const proxyType = orgSettings.proxySettings.proxyType ?? "isp";
+    if (proxyType === "isp") {
+      return { processed: false };
+    }
+
     // 2. Verificar se tem channel Evolution API ativo (QR_CODE)
     // ⚠️ Proxy APENAS para Evolution API, NÃO para WhatsApp Business API
     const [activeChannel] = await tenantDb
@@ -192,7 +199,7 @@ async function processOrganizationKeepAlive(
 
         // Rotacionar IP
         const { config: newProxyConfig, newSessionId, rotationCount } =
-          brightData.rotateProxy(
+          await brightData.rotateProxy(
             organizationId,
             orgSettings.proxySettings,
             orgSettings.timezone

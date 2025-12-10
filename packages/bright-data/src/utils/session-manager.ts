@@ -37,7 +37,7 @@ export function generateSessionId(organizationId: string): string {
 }
 
 /**
- * Build Bright Data username with session parameters
+ * Build Bright Data username with session parameters (for Residential)
  *
  * Format: brd-customer-{customer_id}-zone-{zone}-session-{session_id}-country-{country}
  *
@@ -69,6 +69,33 @@ export function buildUsername(
   ];
 
   return parts.join("-");
+}
+
+/**
+ * Build Bright Data username for ISP proxy (simpler format)
+ *
+ * ISP proxies use session for sticky IP allocation from the pool.
+ * Each unique session ID gets assigned a specific IP from the pool.
+ *
+ * Format: brd-customer-{customer_id}-zone-{zone}-session-{session_id}
+ *
+ * @param customerId - Bright Data customer ID
+ * @param zone - Bright Data ISP zone name
+ * @param sessionId - Session ID for sticky IP allocation
+ * @returns Username for ISP proxy authentication
+ *
+ * @example
+ * ```typescript
+ * buildIspUsername("hl_abc123", "manylead_isp_br", "glob_a1b2c3d4_e5f6g7h8")
+ * // => "brd-customer-hl_abc123-zone-manylead_isp_br-session-glob_a1b2c3d4_e5f6g7h8"
+ * ```
+ */
+export function buildIspUsername(
+  customerId: string,
+  zone: string,
+  sessionId: string,
+): string {
+  return `brd-customer-${customerId}-zone-${zone}-session-${sessionId}`;
 }
 
 /**

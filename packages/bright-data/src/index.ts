@@ -8,14 +8,14 @@
  * - Automatic IP rotation on failure
  * - Geolocation-based routing
  * - Health monitoring
- * - Keep-alive management
+ * - Database-driven zone configuration (no env vars needed)
  *
  * @example
  * ```typescript
  * import { getBrightDataClient } from "@manylead/bright-data";
  *
  * const brightData = getBrightDataClient();
- * const proxyConfig = brightData.getProxyConfig(
+ * const proxyConfig = await brightData.getProxyConfig(
  *   organizationId,
  *   settings,
  *   timezone
@@ -34,12 +34,34 @@ export { getCountryFromTimezone } from "./utils/timezone-to-country";
 export {
   generateSessionId,
   buildUsername,
+  buildIspUsername,
   isSessionValid,
   needsSessionRotation,
 } from "./utils/session-manager";
 
+// Configuration (database-driven)
+export {
+  getBrightDataConfig,
+  isProxyTypeConfigured,
+  clearZoneCache,
+  getAllActiveZones,
+  KEEPALIVE_CONFIG,
+} from "./config";
+
+// IP Manager (auto-scaling ISP)
+export {
+  ensureIspIpAvailable,
+  syncPoolSize,
+  getZoneIpCount,
+  addIpsToZone,
+} from "./services/ip-manager";
+
+// Environment
+export { env } from "./env";
+
 // Types
 export type {
+  ProxyType,
   ProxyCountry,
   ProxyProtocol,
   OrganizationProxySettings,
@@ -48,7 +70,3 @@ export type {
   SessionConfig,
   ProxyHealthStatus,
 } from "./types";
-
-// Configuration
-export { env } from "./env";
-export { BRIGHT_DATA_CONFIG, KEEPALIVE_CONFIG } from "./config";

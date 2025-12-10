@@ -588,6 +588,12 @@ importers:
       '@manylead/clients':
         specifier: workspace:*
         version: link:../clients
+      '@manylead/crypto':
+        specifier: workspace:*
+        version: link:../crypto
+      '@manylead/db':
+        specifier: workspace:*
+        version: link:../db
       '@t3-oss/env-core':
         specifier: 'catalog:'
         version: 0.13.8(typescript@5.9.3)(zod@4.1.12)
@@ -733,6 +739,9 @@ importers:
 
   packages/db:
     dependencies:
+      '@manylead/crypto':
+        specifier: workspace:*
+        version: link:../crypto
       '@t3-oss/env-core':
         specifier: 'catalog:'
         version: 0.13.8(typescript@5.9.3)(zod@4.1.12)

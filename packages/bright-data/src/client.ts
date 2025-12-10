@@ -67,11 +67,11 @@ export class BrightDataClient {
    * @param timezone - Organization timezone (optional)
    * @returns Evolution proxy configuration
    */
-  getProxyConfig(
+  async getProxyConfig(
     organizationId: string,
     settings: OrganizationProxySettings,
     timezone?: string,
-  ): EvolutionProxyConfig {
+  ): Promise<EvolutionProxyConfig> {
     return buildEvolutionProxyConfig(organizationId, settings, timezone);
   }
 
@@ -85,13 +85,13 @@ export class BrightDataClient {
    * @param timezone - Organization timezone (optional)
    * @returns New proxy config with fresh session ID and rotation count
    */
-  rotateProxy(
+  async rotateProxy(
     organizationId: string,
     settings: OrganizationProxySettings,
     timezone?: string,
-  ): { config: EvolutionProxyConfig; newSessionId: string; rotationCount: number } {
+  ): Promise<{ config: EvolutionProxyConfig; newSessionId: string; rotationCount: number }> {
     const rotationCount = (settings.rotationCount ?? 0) + 1;
-    const { config, newSessionId } = buildRotatedProxyConfig(
+    const { config, newSessionId } = await buildRotatedProxyConfig(
       organizationId,
       settings,
       timezone,

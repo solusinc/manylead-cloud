@@ -155,6 +155,13 @@
       "when": 1765292861478,
       "tag": "0021_shocking_loa",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1765328664145,
+      "tag": "0022_greedy_zodiak",
+      "breakpoints": true
     }
   ]
 }

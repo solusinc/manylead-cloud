@@ -16,6 +16,11 @@ import {
 } from "@manylead/db";
 import type { CreateInstanceRequest } from "@manylead/evolution-api-client";
 import { EvolutionAPIClient } from "@manylead/evolution-api-client";
+import {
+  ensureIspIpAvailable,
+  buildEvolutionProxyConfig,
+  generateSessionId,
+} from "@manylead/bright-data";
 
 import { env } from "../env";
 import { createTRPCRouter, ownerProcedure, tenantManager } from "../trpc";
@@ -288,43 +293,62 @@ export const channelsRouter = createTRPCRouter({
             },
           };
 
-          // TODO: Habilitar quando Bright Data aprovar KYC
-          // // Adicionar campos de proxy se habilitado (SEM o campo "enabled"!)
-          // if (orgSettings?.proxySettings?.enabled) {
-          //   const brightData = getBrightDataClient();
-          //   const proxyConfig = brightData.getProxyConfig(
-          //     organizationId,
-          //     orgSettings.proxySettings,
-          //     orgSettings.timezone,
-          //   );
+          // ISP Proxy: Verificar se precisa de IP e configurar proxy
+          const proxyType = orgSettings?.proxySettings?.proxyType ?? "isp";
+          const proxyEnabled = orgSettings?.proxySettings?.enabled ?? false;
 
-          //   // Adicionar campos de proxy (SEM enabled)
-          //   createPayload.proxyHost = proxyConfig.host;
-          //   createPayload.proxyPort = proxyConfig.port;
-          //   createPayload.proxyProtocol = proxyConfig.protocol;
-          //   createPayload.proxyUsername = proxyConfig.username;
-          //   createPayload.proxyPassword = proxyConfig.password;
+          if (proxyEnabled && proxyType === "isp" && orgSettings?.proxySettings) {
+            const currentProxySettings = orgSettings.proxySettings;
+            const country = currentProxySettings.country ?? "br";
+            const timezone = orgSettings.timezone;
 
-          //   console.log("=== CREATE WITH PROXY ===");
-          //   console.log(JSON.stringify(createPayload, null, 2));
-          //   console.log("=========================");
+            // Contar orgs com ISP ativo para verificar se precisa de IP
+            // Por agora, usamos o poolSize como referência
+            // TODO: Contar orgs com proxy ISP ativo no tenant
+            const activeOrgCount = 0; // Placeholder - primeira org
 
-          //   // Atualizar sessionId no DB
-          //   await tenantDb
-          //     .update(organizationSettings)
-          //     .set({
-          //       proxySettings: {
-          //         enabled: true,
-          //         country: orgSettings.proxySettings.country,
-          //         sessionId: proxyConfig.username?.split("session-")[1]?.split("-country-")[0],
-          //         lastKeepAliveAt: new Date().toISOString(),
-          //         rotationCount: orgSettings.proxySettings.rotationCount,
-          //         lastRotatedAt: orgSettings.proxySettings.lastRotatedAt,
-          //       },
-          //       updatedAt: new Date(),
-          //     })
-          //     .where(eq(organizationSettings.organizationId, organizationId));
-          // }
+            try {
+              // Garantir que tem IP disponível (adiciona via API se necessário)
+              await ensureIspIpAvailable(country, activeOrgCount);
+
+              // Gerar sessionId para esta org
+              const sessionId = generateSessionId(organizationId);
+
+              // Buscar config do proxy
+              const proxyConfig = await buildEvolutionProxyConfig(
+                organizationId,
+                { ...currentProxySettings, enabled: true, sessionId },
+                timezone,
+              );
+
+              // Adicionar campos de proxy ao payload (SEM campo enabled)
+              if (proxyConfig.enabled && proxyConfig.host) {
+                createPayload.proxyHost = proxyConfig.host;
+                createPayload.proxyPort = proxyConfig.port;
+                createPayload.proxyProtocol = proxyConfig.protocol;
+                createPayload.proxyUsername = proxyConfig.username;
+                createPayload.proxyPassword = proxyConfig.password;
+
+                console.log("[Proxy ISP] Configurado para instância:", evolutionInstanceName);
+
+                // Atualizar sessionId no DB
+                await tenantDb
+                  .update(organizationSettings)
+                  .set({
+                    proxySettings: {
+                      ...currentProxySettings,
+                      enabled: true,
+                      sessionId,
+                    },
+                    updatedAt: new Date(),
+                  })
+                  .where(eq(organizationSettings.organizationId, organizationId));
+              }
+            } catch (proxyError) {
+              console.error("[Proxy ISP] Erro ao configurar proxy:", proxyError);
+              // Continua sem proxy se falhar
+            }
+          }
 
           await evolutionClient.instance.create(createPayload);
           console.log("DEBUG: Instância criada com sucesso");
