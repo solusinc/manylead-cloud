@@ -37,11 +37,11 @@ RUN git clone --branch v0.8.0 https://github.com/pgvector/pgvector.git /tmp/pgve
 RUN apk del .build-deps
 
 # Copy custom entrypoint script
-COPY docker-entrypoint.sh /usr/local/bin/custom-entrypoint.sh
+COPY docker/postgres/docker-entrypoint.sh /usr/local/bin/custom-entrypoint.sh
 RUN chmod +x /usr/local/bin/custom-entrypoint.sh
 
 # Copy initialization script
-COPY init.sql /docker-entrypoint-initdb.d/01-extensions.sql
+COPY docker/postgres/init.sql /docker-entrypoint-initdb.d/01-extensions.sql
 
 # Use custom entrypoint that configures pg_cron with POSTGRES_DB env variable
 ENTRYPOINT ["/usr/local/bin/custom-entrypoint.sh"]
