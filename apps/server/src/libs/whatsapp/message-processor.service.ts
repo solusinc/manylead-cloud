@@ -909,13 +909,15 @@ export class WhatsAppMessageProcessor {
 
     // 4. Enviar agradecimento via WhatsApp
     const thankYouMessage = "Agradecemos a sua avaliação!";
+    let whatsappMessageId: string | null = null;
 
     try {
       const evolutionClient = getEvolutionClient();
-      await evolutionClient.message.sendText(instanceName, {
+      const result = await evolutionClient.message.sendText(instanceName, {
         number: contactRecord.phoneNumber ?? "",
         text: thankYouMessage,
       });
+      whatsappMessageId = result.key.id;
     } catch (error) {
       log.error({ error, chatId: chatRecord.id }, "Failed to send rating thanks via WhatsApp");
     }
@@ -930,6 +932,7 @@ export class WhatsAppMessageProcessor {
         senderId: null,
         messageType: "system",
         content: thankYouMessage,
+        whatsappMessageId,
         status: "sent",
         timestamp: now,
         metadata: { systemEventType: "rating_thanks" },
@@ -938,24 +941,8 @@ export class WhatsAppMessageProcessor {
 
     // 6. NÃO atualizar lastMessage - mensagens de rating/agradecimento não devem aparecer na sidebar
 
-    // 7. Emitir eventos
+    // 7. Emitir apenas evento de chat atualizado (sem eventos de mensagem para evitar loops)
     const eventPublisher = getEventPublisher(env.REDIS_URL);
-
-    if (ratingMessage) {
-      await eventPublisher.messageCreated(
-        channel.organizationId,
-        chatRecord.id,
-        ratingMessage,
-      );
-    }
-
-    if (thanksMessage) {
-      await eventPublisher.messageCreated(
-        channel.organizationId,
-        chatRecord.id,
-        thanksMessage,
-      );
-    }
 
     // Buscar chat atualizado para emitir evento
     const [updatedChat] = await tenantDb

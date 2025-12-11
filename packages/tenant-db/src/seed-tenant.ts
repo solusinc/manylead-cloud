@@ -46,11 +46,11 @@ export async function seedTenantDefaults(
     // ============================================================================
     await client`
       INSERT INTO department (id, organization_id, name, is_default, is_active)
-      VALUES (${uuidv7()}, ${organizationId}, 'Geral', true, true)
+      VALUES (${uuidv7()}, ${organizationId}, 'Comercial', true, true)
       ON CONFLICT (organization_id, name) DO NOTHING
     `;
 
-    console.log("[Seed] ✅ Created default department 'Geral'");
+    console.log("[Seed] ✅ Created default department 'Comercial'");
 
     // ============================================================================
     // 3. CRIAR TAGS PADRÕES

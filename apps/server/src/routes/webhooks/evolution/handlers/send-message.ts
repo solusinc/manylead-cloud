@@ -42,7 +42,8 @@ export async function handleSendMessage(
       .limit(1);
 
     if (!existingMessage) {
-      logger.warn("Message not found in DB", { id: data.key.id });
+      // Mensagens de sistema podem ter race condition (webhook chega antes da atualização)
+      // Não é um erro real, apenas ignorar silenciosamente
       return;
     }
 
