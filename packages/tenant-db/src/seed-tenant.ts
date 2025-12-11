@@ -9,11 +9,40 @@ export async function seedTenantDefaults(
   client: ReturnType<typeof postgres>,
   organizationId: string,
 ): Promise<void> {
-  console.log("[Seed] Creating default department, tags and endings...");
+  console.log("[Seed] Creating default organization settings, department, tags and endings...");
 
   try {
     // ============================================================================
-    // 1. CRIAR DEPARTAMENTO PADRÃO
+    // 1. CRIAR ORGANIZATION SETTINGS COM PROXY HABILITADO
+    // ============================================================================
+    await client`
+      INSERT INTO organization_settings (
+        id,
+        organization_id,
+        timezone,
+        proxy_settings,
+        created_at,
+        updated_at
+      )
+      VALUES (
+        ${uuidv7()},
+        ${organizationId},
+        'America/Sao_Paulo',
+        ${JSON.stringify({
+          enabled: true,
+          proxyType: 'isp',
+          country: 'br',
+        })},
+        NOW(),
+        NOW()
+      )
+      ON CONFLICT (organization_id) DO NOTHING
+    `;
+
+    console.log("[Seed] ✅ Created default organization settings with ISP proxy enabled");
+
+    // ============================================================================
+    // 2. CRIAR DEPARTAMENTO PADRÃO
     // ============================================================================
     await client`
       INSERT INTO department (id, organization_id, name, is_default, is_active)
@@ -24,7 +53,7 @@ export async function seedTenantDefaults(
     console.log("[Seed] ✅ Created default department 'Geral'");
 
     // ============================================================================
-    // 2. CRIAR TAGS PADRÕES
+    // 3. CRIAR TAGS PADRÕES
     // ============================================================================
     const defaultTags = [
       { name: "Aguardando retorno", color: "#22c55e" }, // verde (green-500)
@@ -43,7 +72,7 @@ export async function seedTenantDefaults(
     console.log(`[Seed] ✅ Created ${defaultTags.length} default tags`);
 
     // ============================================================================
-    // 3. CRIAR ENDINGS PADRÕES
+    // 4. CRIAR ENDINGS PADRÕES
     // ============================================================================
     const defaultEndings = [
       { title: "Dúvida" },

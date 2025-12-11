@@ -12,6 +12,7 @@ import type { CrossOrgLogoSyncJobData } from "~/workers/cross-org-logo-sync";
 import type { ScheduledMessageJobData } from "~/workers/scheduled-message";
 import type { ScheduledMessageRecoveryJobData } from "~/workers/scheduled-message-recovery";
 import type { ChannelStatusReconciliationJobData } from "~/workers/channel-status-reconciliation";
+import type { WhatsAppLogoSyncJobData } from "~/workers/whatsapp-logo-sync";
 import { env } from "~/env";
 import { getRedisClient } from "~/libs/cache/redis";
 import { processTenantProvisioning } from "~/workers/tenant-provisioning";
@@ -25,6 +26,7 @@ import { processCrossOrgLogoSync } from "~/workers/cross-org-logo-sync";
 import { processScheduledMessage } from "~/workers/scheduled-message";
 import { recoverMissedSchedules } from "~/workers/scheduled-message-recovery";
 import { processChannelStatusReconciliation } from "~/workers/channel-status-reconciliation";
+import { processWhatsAppLogoSync } from "~/workers/whatsapp-logo-sync";
 
 const logger = createLogger("Worker:Queue");
 
@@ -346,6 +348,27 @@ export function createWorkers(): Worker[] {
   workers.push(channelStatusReconciliationWorker);
 
   /**
+   * WhatsApp Logo Sync Worker
+   * Syncs WhatsApp profile picture to organization logo (only if org doesn't have logo)
+   */
+  logger.info("Creating worker for queue: whatsapp-logo-sync");
+
+  const whatsappLogoSyncWorker = createWorker<WhatsAppLogoSyncJobData>({
+    name: "whatsapp-logo-sync",
+    processor: processWhatsAppLogoSync,
+    connection,
+    concurrency: 5, // Process multiple logo syncs concurrently
+    logger,
+  });
+
+  attachEventListeners(whatsappLogoSyncWorker, {
+    queueName: "whatsapp-logo-sync",
+  });
+
+  logger.info("Worker created for queue: whatsapp-logo-sync");
+  workers.push(whatsappLogoSyncWorker);
+
+  /**
    * TODO (FASE 4): Add Tenant Migration Worker
    * const tenantMigrationWorker = new Worker(...)
    */
@@ -404,6 +427,10 @@ export function createQueuesForMonitoring(): { name: string; queue: Queue }[] {
     {
       name: "channel-status-reconciliation",
       queue: createQueue({ name: "channel-status-reconciliation", connection }),
+    },
+    {
+      name: "whatsapp-logo-sync",
+      queue: createQueue({ name: "whatsapp-logo-sync", connection }),
     },
   ];
 }

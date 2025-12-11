@@ -164,9 +164,12 @@ export const channelsRouter = createTRPCRouter({
 
       const tenantDb = await tenantManager.getConnection(organizationId);
 
-      // Buscar slug da organização
+      // Buscar slug e id da organização
       const [org] = await catalogDb
-        .select({ slug: organization.slug })
+        .select({
+          slug: organization.slug,
+          id: organization.id
+        })
         .from(organization)
         .where(eq(organization.id, organizationId))
         .limit(1);
@@ -178,9 +181,9 @@ export const channelsRouter = createTRPCRouter({
         });
       }
 
-      // Gerar phoneNumberId e instanceName únicos usando slug da org
+      // Gerar phoneNumberId e instanceName únicos usando slug_id da org
       const phoneNumberId = `${input.channelType}_${crypto.randomUUID()}`;
-      const evolutionInstanceName = org.slug;
+      const evolutionInstanceName = `${org.slug}_${org.id}`;
 
       // SEMPRE deletar canal existente (se houver) antes de criar novo
       const existingChannels = await tenantDb
@@ -245,6 +248,41 @@ export const channelsRouter = createTRPCRouter({
       if (input.channelType === CHANNEL_TYPE.QR_CODE) {
         try {
           const evolutionClient = getEvolutionClient();
+
+          // CLEANUP: Verificar se existe instância antiga com apenas o slug (sem ID)
+          // Isso garante migração suave do formato antigo (slug) para novo (slug_id)
+          const oldInstanceName = org.slug;
+          try {
+            await evolutionClient.instance.fetch(oldInstanceName);
+
+            // Se chegou aqui, instância antiga existe - deletar ela
+            try {
+              await evolutionClient.instance.logout(oldInstanceName);
+            } catch {
+              // Ignorar erro de logout
+            }
+
+            await evolutionClient.instance.delete(oldInstanceName);
+          } catch {
+            // Instância antiga não existe, continuar normalmente
+          }
+
+          // CLEANUP: Verificar se existe instância com o novo nome também
+          // (caso tenha sido criada antes mas o canal foi deletado)
+          try {
+            await evolutionClient.instance.fetch(evolutionInstanceName);
+
+            // Se chegou aqui, instância existe - deletar ela
+            try {
+              await evolutionClient.instance.logout(evolutionInstanceName);
+            } catch {
+              // Ignorar erro de logout
+            }
+
+            await evolutionClient.instance.delete(evolutionInstanceName);
+          } catch {
+            // Instância não existe, continuar normalmente
+          }
 
           // Buscar orgSettings ANTES de criar instância para incluir proxy
           const [orgSettings] = await tenantDb

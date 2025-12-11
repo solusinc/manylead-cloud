@@ -78,7 +78,10 @@ export function OrganizationSwitcher() {
                 <div className="size-8 overflow-hidden rounded-lg">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src={`https://api.dicebear.com/9.x/glass/svg?seed=${activeOrg.slug}`}
+                    src={
+                      activeOrg.logo ??
+                      `https://api.dicebear.com/9.x/glass/svg?seed=${activeOrg.slug}`
+                    }
                     alt="avatar"
                   />
                 </div>

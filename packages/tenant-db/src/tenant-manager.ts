@@ -443,11 +443,6 @@ export class TenantDatabaseManager {
       client,
       schema,
       casing: "snake_case",
-      logger: {
-        logQuery: (query, params) => {
-          this.logger.debug({ query, params }, "Drizzle query");
-        },
-      },
     });
   }
 

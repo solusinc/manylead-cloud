@@ -3,7 +3,7 @@ import { channel, CHANNEL_STATUS, eq } from "@manylead/db";
 import { getSocketManager } from "~/socket";
 import { tenantManager } from "~/libs/tenant-manager";
 import { getEvolutionClient } from "~/libs/evolution-client";
-import { channelSyncQueue } from "~/libs/queue/client";
+import { channelSyncQueue, whatsappLogoSyncQueue } from "~/libs/queue/client";
 import type { ConnectionUpdateData } from "../types";
 import { findChannelByInstanceName, WebhookLogger } from "../utils";
 
@@ -187,5 +187,26 @@ export async function handleConnectionUpdate(
     );
 
     logger.info("Channel sync job enqueued", { channelId: ch.id });
+
+    // Disparar job para sync de logo do WhatsApp (só se tiver profilePictureUrl)
+    if (finalProfilePictureUrl) {
+      await whatsappLogoSyncQueue.add(
+        "sync-whatsapp-logo",
+        {
+          organizationId: ch.organizationId,
+          profilePictureUrl: finalProfilePictureUrl,
+        },
+        {
+          jobId: `whatsapp-logo-sync-${ch.organizationId}`,
+          removeOnComplete: true,
+          removeOnFail: false,
+        }
+      );
+
+      logger.info("WhatsApp logo sync job enqueued", {
+        organizationId: ch.organizationId,
+        profilePictureUrl: finalProfilePictureUrl,
+      });
+    }
   }
 }

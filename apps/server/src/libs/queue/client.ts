@@ -33,6 +33,14 @@ export const channelSyncQueue = createQueue({
   logger,
 });
 
+// WhatsApp logo sync queue
+export const whatsappLogoSyncQueue = createQueue({
+  name: "whatsapp-logo-sync",
+  connection: getRedisClient(),
+  preset: "default",
+  logger,
+});
+
 /**
  * Close all queues
  */
@@ -40,5 +48,6 @@ export async function closeQueues() {
   await tenantProvisioningQueue.close();
   await tenantMigrationQueue.close();
   await channelSyncQueue.close();
+  await whatsappLogoSyncQueue.close();
   logger.info("All queues closed");
 }

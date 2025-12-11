@@ -13,14 +13,17 @@ const log = createLogger("WebhookUtils");
 /**
  * Extrai slug da organização do instanceName e busca o UUID
  *
- * Format: {slug}
+ * Format: {slug}_{id} (e.g., "manylead_ZY2VSzGCk3BpowGYaJRFZQ8r6YdX78eQ")
+ * Legacy format: {slug} (e.g., "manylead")
  */
 export async function extractOrganizationId(instanceName: string): Promise<string | null> {
-  // O instanceName agora é apenas o slug da organização
-  const slug = instanceName;
+  // Extrair slug do instanceName (parte antes do primeiro underscore)
+  // Formato atual: slug_id (e.g., "manylead_ZY2VSzGCk3BpowGYaJRFZQ8r6YdX78eQ")
+  // Formato antigo: slug (e.g., "manylead")
+  const slug = instanceName.split('_')[0];
 
   if (!slug) {
-    log.warn("Empty instanceName");
+    log.warn("Empty instanceName or invalid format");
     return null;
   }
 
@@ -33,13 +36,13 @@ export async function extractOrganizationId(instanceName: string): Promise<strin
       .limit(1);
 
     if (!org) {
-      log.warn({ slug }, "Organization not found for slug");
+      log.warn({ slug, instanceName }, "Organization not found for slug");
       return null;
     }
 
     return org.id;
   } catch (error) {
-    log.error({ err: error, slug }, "Error fetching organization by slug");
+    log.error({ err: error, slug, instanceName }, "Error fetching organization by slug");
     return null;
   }
 }
