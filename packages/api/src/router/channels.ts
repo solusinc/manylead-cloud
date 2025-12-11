@@ -194,36 +194,28 @@ export const channelsRouter = createTRPCRouter({
         );
 
       if (existingChannels.length > 0) {
-        console.log("DEBUG: Canal existente encontrado, deletando...");
-
         // Deletar da Evolution API primeiro (se for QR Code)
         if (input.channelType === CHANNEL_TYPE.QR_CODE) {
           const evolutionClient = getEvolutionClient();
 
-          // Verificar se instância existe antes de tentar deletar
+          // Deletar instância existente (se houver)
           try {
-            const existingInstance = await evolutionClient.instance.fetch(evolutionInstanceName);
-            console.log("DEBUG: Instância existe na Evolution, deletando:", existingInstance);
-
             // Fazer logout primeiro
             try {
               await evolutionClient.instance.logout(evolutionInstanceName);
-              console.log("DEBUG: Logout realizado");
-            } catch (logoutError) {
-              console.log("DEBUG: Erro no logout (ignorando):", logoutError);
+            } catch {
+              // Ignorar erro de logout
             }
 
             // Deletar instância
             await evolutionClient.instance.delete(evolutionInstanceName);
-            console.log("DEBUG: Instância deletada da Evolution");
           } catch {
-            console.log("DEBUG: Instância não existe na Evolution (ok, continuando)");
+            // Instância não existe na Evolution (ok, continuando)
           }
         }
 
         // Deletar todos os canais existentes do tipo
         for (const existingChannel of existingChannels) {
-          console.log("DEBUG: Deletando canal do banco:", existingChannel.id);
           await tenantDb.delete(channel).where(eq(channel.id, existingChannel.id));
         }
       }
@@ -255,19 +247,11 @@ export const channelsRouter = createTRPCRouter({
           const evolutionClient = getEvolutionClient();
 
           // Buscar orgSettings ANTES de criar instância para incluir proxy
-          console.log("DEBUG: Buscando orgSettings para organizationId:", organizationId);
           const [orgSettings] = await tenantDb
             .select()
             .from(organizationSettings)
             .where(eq(organizationSettings.organizationId, organizationId))
             .limit(1);
-
-          console.log("DEBUG: orgSettings encontrado:", orgSettings);
-          console.log("DEBUG: proxySettings:", orgSettings?.proxySettings);
-          console.log("DEBUG: proxySettings.enabled:", orgSettings?.proxySettings?.enabled);
-
-          // Criar instância com proxy direto (SEM campo "enabled")
-          console.log("DEBUG: Criando instância:", evolutionInstanceName);
 
           const createPayload: CreateInstanceRequest = {
             instanceName: evolutionInstanceName,
@@ -329,8 +313,6 @@ export const channelsRouter = createTRPCRouter({
                 createPayload.proxyUsername = proxyConfig.username;
                 createPayload.proxyPassword = proxyConfig.password;
 
-                console.log("[Proxy ISP] Configurado para instância:", evolutionInstanceName);
-
                 // Atualizar sessionId no DB
                 await tenantDb
                   .update(organizationSettings)
@@ -344,17 +326,14 @@ export const channelsRouter = createTRPCRouter({
                   })
                   .where(eq(organizationSettings.organizationId, organizationId));
               }
-            } catch (proxyError) {
-              console.error("[Proxy ISP] Erro ao configurar proxy:", proxyError);
+            } catch {
               // Continua sem proxy se falhar
             }
           }
 
           await evolutionClient.instance.create(createPayload);
-          console.log("DEBUG: Instância criada com sucesso");
         } catch (error) {
           // Se falhar ao criar instância na Evolution, deletar o channel (rollback)
-          console.log("ERROR: Falha ao criar instância, fazendo rollback do channel");
           await tenantDb.delete(channel).where(eq(channel.id, newChannel.id));
           throw error;
         }

@@ -25,6 +25,19 @@ import { proxyZone } from "../schema/catalog/proxy-zones";
 import { encrypt } from "@manylead/crypto";
 import { eq } from "drizzle-orm";
 
+interface ValidatedArgs {
+  name: string;
+  type: "isp" | "residential";
+  country: string;
+  customerId: string;
+  zone: string;
+  port: string;
+  password: string;
+  host: string;
+  poolSize?: string;
+  isDefault: boolean;
+}
+
 const args = process.argv.slice(2);
 
 function getArg(name: string): string | undefined {
@@ -35,6 +48,47 @@ function getArg(name: string): string | undefined {
 
 function hasFlag(name: string): boolean {
   return args.includes(`--${name}`);
+}
+
+function validateArgs(args: {
+  name?: string;
+  type?: "isp" | "residential";
+  country?: string;
+  customerId?: string;
+  zone?: string;
+  port?: string;
+  password?: string;
+  host: string;
+  poolSize?: string;
+  isDefault: boolean;
+}): ValidatedArgs {
+  const missing: string[] = [];
+  if (!args.name) missing.push("--name");
+  if (!args.type) missing.push("--type");
+  if (!args.country) missing.push("--country");
+  if (!args.customerId) missing.push("--customer-id");
+  if (!args.zone) missing.push("--zone");
+  if (!args.port) missing.push("--port");
+  if (!args.password) missing.push("--password");
+
+  if (missing.length > 0) {
+    console.error(`❌ Parâmetros obrigatórios faltando: ${missing.join(", ")}`);
+    console.log("\nUse --help para ver instruções.");
+    process.exit(1);
+  }
+
+  if (args.type && !["isp", "residential"].includes(args.type)) {
+    console.error("❌ --type deve ser 'isp' ou 'residential'");
+    process.exit(1);
+  }
+
+  const validCountries = ["br", "us", "ca", "ar", "cl", "mx", "co", "pe", "pt", "es", "gb", "de", "fr"];
+  if (args.country && !validCountries.includes(args.country)) {
+    console.error(`❌ --country inválido. Valores válidos: ${validCountries.join(", ")}`);
+    process.exit(1);
+  }
+
+  return args as ValidatedArgs;
 }
 
 function printUsage() {
@@ -78,86 +132,66 @@ async function main() {
     process.exit(0);
   }
 
-  const name = getArg("name");
-  const type = getArg("type") as "isp" | "residential" | undefined;
-  const country = getArg("country");
-  const customerId = getArg("customer-id");
-  const zone = getArg("zone");
-  const port = getArg("port");
-  const password = getArg("password");
-  const host = getArg("host") ?? "brd.superproxy.io";
-  const poolSize = getArg("pool-size");
-  const isDefault = hasFlag("default");
-
-  // Validação
-  const missing: string[] = [];
-  if (!name) missing.push("--name");
-  if (!type) missing.push("--type");
-  if (!country) missing.push("--country");
-  if (!customerId) missing.push("--customer-id");
-  if (!zone) missing.push("--zone");
-  if (!port) missing.push("--port");
-  if (!password) missing.push("--password");
-
-  if (missing.length > 0) {
-    console.error(`❌ Parâmetros obrigatórios faltando: ${missing.join(", ")}`);
-    console.log("\nUse --help para ver instruções.");
-    process.exit(1);
-  }
-
-  if (!["isp", "residential"].includes(type!)) {
-    console.error("❌ --type deve ser 'isp' ou 'residential'");
-    process.exit(1);
-  }
-
-  const validCountries = ["br", "us", "ca", "ar", "cl", "mx", "co", "pe", "pt", "es", "gb", "de", "fr"];
-  if (!validCountries.includes(country!)) {
-    console.error(`❌ --country inválido. Valores válidos: ${validCountries.join(", ")}`);
-    process.exit(1);
-  }
+  const validated = validateArgs({
+    name: getArg("name"),
+    type: getArg("type") as "isp" | "residential" | undefined,
+    country: getArg("country"),
+    customerId: getArg("customer-id"),
+    zone: getArg("zone"),
+    port: getArg("port"),
+    password: getArg("password"),
+    host: getArg("host") ?? "brd.superproxy.io",
+    poolSize: getArg("pool-size"),
+    isDefault: hasFlag("default"),
+  });
 
   try {
-    console.log(`\n🔄 Inserindo zona: ${name}`);
-    console.log(`   Tipo: ${type}`);
-    console.log(`   País: ${country}`);
-    console.log(`   Zona: ${zone}`);
-    console.log(`   Host: ${host}:${port}`);
-    console.log(`   Pool: ${poolSize ?? "N/A"}`);
-    console.log(`   Default: ${isDefault}`);
+    console.log(`\n🔄 Inserindo zona: ${validated.name}`);
+    console.log(`   Tipo: ${validated.type}`);
+    console.log(`   País: ${validated.country}`);
+    console.log(`   Zona: ${validated.zone}`);
+    console.log(`   Host: ${validated.host}:${validated.port}`);
+    console.log(`   Pool: ${validated.poolSize ?? "N/A"}`);
+    console.log(`   Default: ${validated.isDefault}`);
 
     // Verificar se já existe
     const [existing] = await db
       .select()
       .from(proxyZone)
-      .where(eq(proxyZone.name, name!))
+      .where(eq(proxyZone.name, validated.name))
       .limit(1);
 
     if (existing) {
-      console.error(`\n❌ Zona "${name}" já existe!`);
+      console.error(`\n❌ Zona "${validated.name}" já existe!`);
       process.exit(1);
     }
 
     // Encrypt password
-    const encryptedPassword = encrypt(password!);
+    const encryptedPassword = encrypt(validated.password);
 
     const [inserted] = await db
       .insert(proxyZone)
       .values({
-        name: name!,
-        type: type!,
-        country: country as "br",
-        customerId: customerId!,
-        zone: zone!,
-        host,
-        port: parseInt(port!, 10),
+        name: validated.name,
+        type: validated.type,
+        country: validated.country as "br",
+        customerId: validated.customerId,
+        zone: validated.zone,
+        host: validated.host,
+        port: parseInt(validated.port, 10),
         passwordEncrypted: encryptedPassword.encrypted,
         passwordIv: encryptedPassword.iv,
         passwordTag: encryptedPassword.tag,
-        poolSize: poolSize ? parseInt(poolSize, 10) : undefined,
-        isDefault,
+        poolSize: validated.poolSize ? parseInt(validated.poolSize, 10) : undefined,
+        isDefault: validated.isDefault,
         status: "active",
       })
       .returning();
+
+    if (!inserted) {
+      console.error("\n❌ Falha ao inserir zona");
+      process.exit(1);
+    }
 
     console.log(`\n✅ Zona inserida com sucesso!`);
     console.log(`   ID: ${inserted.id}`);
@@ -170,4 +204,4 @@ async function main() {
   }
 }
 
-main();
+void main();

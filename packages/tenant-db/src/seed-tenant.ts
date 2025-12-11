@@ -1,4 +1,5 @@
 import type postgres from "postgres";
+import { v7 as uuidv7 } from "uuid";
 
 /**
  * Seed de dados padrões para novos tenants
@@ -15,8 +16,8 @@ export async function seedTenantDefaults(
     // 1. CRIAR DEPARTAMENTO PADRÃO
     // ============================================================================
     await client`
-      INSERT INTO department (organization_id, name, is_default, is_active)
-      VALUES (${organizationId}, 'Geral', true, true)
+      INSERT INTO department (id, organization_id, name, is_default, is_active)
+      VALUES (${uuidv7()}, ${organizationId}, 'Geral', true, true)
       ON CONFLICT (organization_id, name) DO NOTHING
     `;
 
@@ -33,8 +34,8 @@ export async function seedTenantDefaults(
 
     for (const tagData of defaultTags) {
       await client`
-        INSERT INTO tag (organization_id, name, color)
-        VALUES (${organizationId}, ${tagData.name}, ${tagData.color})
+        INSERT INTO tag (id, organization_id, name, color)
+        VALUES (${uuidv7()}, ${organizationId}, ${tagData.name}, ${tagData.color})
         ON CONFLICT (organization_id, name) DO NOTHING
       `;
     }
@@ -54,8 +55,8 @@ export async function seedTenantDefaults(
 
     for (const endingData of defaultEndings) {
       await client`
-        INSERT INTO ending (organization_id, title, rating_behavior)
-        VALUES (${organizationId}, ${endingData.title}, 'default')
+        INSERT INTO ending (id, organization_id, title, rating_behavior)
+        VALUES (${uuidv7()}, ${organizationId}, ${endingData.title}, 'default')
         ON CONFLICT (organization_id, title) DO NOTHING
       `;
     }

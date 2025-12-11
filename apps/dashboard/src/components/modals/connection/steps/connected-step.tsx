@@ -18,7 +18,7 @@ export function ConnectedStep() {
   const trpc = useTRPC();
 
   // Buscar dados do canal
-  const { data: channel, refetch } = useQuery({
+  const { data: channel } = useQuery({
     ...trpc.channels.getById.queryOptions({ id: channelId ?? "" }),
     enabled: !!channelId,
     refetchInterval: 3000, // Polling para detectar mudanças de status
@@ -43,17 +43,12 @@ export function ConnectedStep() {
     }
   }, [channel, reset]);
 
-  // Mutation para desconectar
-  const disconnectMutation = useMutation(
-    trpc.channels.disconnect.mutationOptions({
-      onSuccess: async () => {
+  // Mutation para deletar canal (logout + delete instance + delete DB)
+  const deleteMutation = useMutation(
+    trpc.channels.delete.mutationOptions({
+      onSuccess: () => {
         toast.success("Canal desconectado");
-        // Refetch para pegar status atualizado
-        await refetch();
-        // Aguardar um pouco para garantir que o DB foi atualizado
-        setTimeout(() => {
-          reset();
-        }, 500);
+        reset();
       },
       onError: (error) => {
         toast.error(error.message || "Erro ao desconectar canal");
@@ -63,7 +58,7 @@ export function ConnectedStep() {
 
   const handleDisconnect = () => {
     if (!channelId) return;
-    disconnectMutation.mutate({ id: channelId });
+    deleteMutation.mutate({ id: channelId });
   };
 
   return (
@@ -102,10 +97,10 @@ export function ConnectedStep() {
         variant="destructive"
         size="lg"
         onClick={handleDisconnect}
-        disabled={disconnectMutation.isPending}
+        disabled={deleteMutation.isPending}
       >
         <XCircle className="mr-2 h-5 w-5" />
-        {disconnectMutation.isPending ? "desconectando..." : "desconectar"}
+        {deleteMutation.isPending ? "desconectando..." : "desconectar"}
       </Button>
 
       {/* Botão voltar */}

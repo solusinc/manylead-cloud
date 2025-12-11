@@ -38,7 +38,11 @@ export const tenant = pgTable(
 
     // Database
     databaseName: varchar("database_name", { length: 100 }).notNull().unique(),
-    connectionString: text("connection_string").notNull(),
+
+    // Encrypted connection string (AES-256-GCM via @manylead/crypto)
+    connectionStringEncrypted: text("connection_string_encrypted").notNull(),
+    connectionStringIv: varchar("connection_string_iv", { length: 64 }).notNull(),
+    connectionStringTag: varchar("connection_string_tag", { length: 64 }).notNull(),
 
     // Database Host (FK)
     databaseHostId: uuid("database_host_id")

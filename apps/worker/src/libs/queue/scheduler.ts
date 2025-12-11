@@ -187,38 +187,6 @@ export async function setupCronJobs() {
       `Cron job configured: scheduled-message-recovery (${isTestMode ? "every 30s (TEST MODE)" : "every 5 minutes"})`
     );
 
-    // 6. Proxy Keep-Alive (Bright Data sticky sessions)
-    const proxyKeepAliveQueue = createQueue({
-      name: "proxy-keep-alive",
-      connection,
-      preset: "default",
-    });
-
-    // Remove existing repeatable jobs to prevent duplicates
-    const existingProxyKeepAliveJobs = await proxyKeepAliveQueue.getRepeatableJobs();
-    for (const job of existingProxyKeepAliveJobs) {
-      await proxyKeepAliveQueue.removeRepeatableByKey(job.key);
-      logger.info(
-        { jobKey: job.key, jobName: job.name },
-        "Removed existing repeatable job before creating new one"
-      );
-    }
-
-    await proxyKeepAliveQueue.add(
-      "proxy-keep-alive-check",
-      { organizationId: "system" },
-      {
-        repeat: {
-          pattern: isTestMode ? "*/30 * * * * *" : "*/5 * * * *", // Test: 30s | Prod: Every 5 minutes
-        },
-        jobId: "proxy-keep-alive",
-      }
-    );
-
-    logger.info(
-      `Cron job configured: proxy-keep-alive (${isTestMode ? "every 30s (TEST MODE)" : "every 5 minutes"})`
-    );
-
     if (isTestMode) {
       logger.warn(`⚠️  TEST MODE ENABLED - Cron jobs running every 30 seconds${dryRun ? " with dry-run" : ""}`);
     }
@@ -268,11 +236,6 @@ export async function removeCronJobs() {
       connection,
     });
 
-    const proxyKeepAliveQueue = createQueue({
-      name: "proxy-keep-alive",
-      connection,
-    });
-
     await cleanupQueue.removeRepeatable("daily-cleanup", {
       pattern: "0 3 * * *",
     });
@@ -290,10 +253,6 @@ export async function removeCronJobs() {
     });
 
     await recoveryQueue.removeRepeatable("recover-missed-schedules", {
-      pattern: "*/5 * * * *",
-    });
-
-    await proxyKeepAliveQueue.removeRepeatable("proxy-keep-alive-check", {
       pattern: "*/5 * * * *",
     });
 

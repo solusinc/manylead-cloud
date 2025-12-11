@@ -61,3 +61,9 @@ export type NewTenant = z.infer<typeof insertTenantSchema>;
 export type UpdateTenant = z.infer<typeof updateTenantSchema>;
 export type TenantStatus = z.infer<typeof tenantStatusSchema>;
 export type TenantTier = z.infer<typeof tenantTierSchema>;
+
+/**
+ * Tenant with decrypted connection string
+ * Used in tenant-manager after decrypting the connectionString from database
+ */
+export type DecryptedTenant = Tenant & { connectionString: string };

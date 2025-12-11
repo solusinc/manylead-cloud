@@ -72,11 +72,42 @@ const TIMEZONES = [
   { value: "Pacific/Auckland", label: "New Zealand (NZST) GMT+12" },
 ];
 
-const dayScheduleSchema = z.object({
-  start: z.string(),
-  end: z.string(),
-  enabled: z.boolean(),
-});
+const dayScheduleSchema = z
+  .object({
+    start: z.string(),
+    end: z.string(),
+    enabled: z.boolean(),
+  })
+  .refine(
+    (data) => {
+      if (!data.enabled) return true;
+
+      // Validar que o horário final não ultrapasse 23:59
+      const endParts = data.end.split(":").map(Number);
+      const endHours = endParts[0];
+      const endMinutes = endParts[1];
+
+      if (endHours === undefined || endMinutes === undefined) return false;
+      if (endHours > 23 || (endHours === 23 && endMinutes > 59)) {
+        return false;
+      }
+
+      // Validar que o horário final seja maior que o inicial
+      const startParts = data.start.split(":").map(Number);
+      const startHours = startParts[0];
+      const startMinutes = startParts[1];
+
+      if (startHours === undefined || startMinutes === undefined) return false;
+
+      const startTotalMinutes = startHours * 60 + startMinutes;
+      const endTotalMinutes = endHours * 60 + endMinutes;
+
+      return endTotalMinutes > startTotalMinutes;
+    },
+    {
+      message: "O horário final deve ser maior que o inicial e não pode ultrapassar 23:59",
+    }
+  );
 
 const _schema = z.object({
   timezone: z.string().min(1, "Fuso horário é obrigatório"),
@@ -250,39 +281,121 @@ export function FormWorkingHours({
                       >
                         {(dayEnabled) =>
                           dayEnabled ? (
-                            <div className="flex items-center gap-2">
-                              <form.Field
-                                name={`workingHours.schedule.${day.key}.start`}
-                              >
-                                {(field) => (
-                                  <Input
-                                    type="time"
-                                    value={field.state.value}
-                                    onChange={(e) =>
-                                      field.handleChange(e.target.value)
-                                    }
-                                    className="w-[120px] scheme-light dark:scheme-dark"
-                                  />
-                                )}
-                              </form.Field>
-                              <span className="text-muted-foreground text-sm">
-                                até
-                              </span>
-                              <form.Field
-                                name={`workingHours.schedule.${day.key}.end`}
-                              >
-                                {(field) => (
-                                  <Input
-                                    type="time"
-                                    value={field.state.value}
-                                    onChange={(e) =>
-                                      field.handleChange(e.target.value)
-                                    }
-                                    className="w-[120px] scheme-light dark:scheme-dark"
-                                  />
-                                )}
-                              </form.Field>
-                            </div>
+                            <form.Field
+                              name={`workingHours.schedule.${day.key}.end`}
+                              validators={{
+                                onChange: ({ value, fieldApi }) => {
+                                  const endParts = value.split(":").map(Number);
+                                  const endHours = endParts[0];
+                                  const endMinutes = endParts[1];
+
+                                  if (endHours === undefined || endMinutes === undefined) {
+                                    return undefined;
+                                  }
+
+                                  // Validar máximo 23:59
+                                  if (
+                                    endHours > 23 ||
+                                    (endHours === 23 && endMinutes > 59)
+                                  ) {
+                                    return "O horário final não pode ultrapassar 23:59";
+                                  }
+
+                                  const startField = String(
+                                    fieldApi.form.getFieldValue(
+                                      `workingHours.schedule.${day.key}.start`
+                                    )
+                                  );
+                                  const startParts = startField.split(":").map(Number);
+                                  const startHours = startParts[0];
+                                  const startMinutes = startParts[1];
+
+                                  if (
+                                    startHours === undefined ||
+                                    startMinutes === undefined
+                                  ) {
+                                    return undefined;
+                                  }
+
+                                  const startTotal = startHours * 60 + startMinutes;
+                                  const endTotal = endHours * 60 + endMinutes;
+
+                                  if (endTotal <= startTotal) {
+                                    return "O horário final deve ser maior que o inicial";
+                                  }
+                                },
+                              }}
+                            >
+                              {(endField) => (
+                                <div className="grid gap-1">
+                                  <div className="flex items-center gap-2">
+                                    <form.Field
+                                      name={`workingHours.schedule.${day.key}.start`}
+                                      validators={{
+                                        onChange: ({ value, fieldApi }) => {
+                                          const endFieldValue = String(
+                                            fieldApi.form.getFieldValue(
+                                              `workingHours.schedule.${day.key}.end`
+                                            )
+                                          );
+
+                                          const startParts = value.split(":").map(Number);
+                                          const endParts = endFieldValue.split(":").map(Number);
+
+                                          const startHours = startParts[0];
+                                          const startMinutes = startParts[1];
+                                          const endHours = endParts[0];
+                                          const endMinutes = endParts[1];
+
+                                          if (
+                                            startHours === undefined ||
+                                            startMinutes === undefined ||
+                                            endHours === undefined ||
+                                            endMinutes === undefined
+                                          ) {
+                                            return undefined;
+                                          }
+
+                                          const startTotal = startHours * 60 + startMinutes;
+                                          const endTotal = endHours * 60 + endMinutes;
+
+                                          if (endTotal <= startTotal) {
+                                            return "O horário final deve ser maior que o inicial";
+                                          }
+                                        },
+                                      }}
+                                    >
+                                      {(startField) => (
+                                        <Input
+                                          type="time"
+                                          value={startField.state.value}
+                                          onChange={(e) =>
+                                            startField.handleChange(e.target.value)
+                                          }
+                                          className="w-[120px] scheme-light dark:scheme-dark"
+                                        />
+                                      )}
+                                    </form.Field>
+                                    <span className="text-muted-foreground text-sm">
+                                      até
+                                    </span>
+                                    <Input
+                                      type="time"
+                                      value={endField.state.value}
+                                      onChange={(e) =>
+                                        endField.handleChange(e.target.value)
+                                      }
+                                      className="w-[120px] scheme-light dark:scheme-dark"
+                                    />
+                                  </div>
+                                  {endField.state.meta.errors.length > 0 && (
+                                    <p className="text-destructive text-xs">
+                                      {endField.state.meta.errors[0]}
+                                    </p>
+                                  )}
+                                </div>
+                              )}
+                            </form.Field>
                           ) : (
                             <span className="text-muted-foreground text-sm">
                               Desativado

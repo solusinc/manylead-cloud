@@ -1,1 +1,0 @@
-ALTER TABLE "organization_settings" ALTER COLUMN "proxy_settings" SET DEFAULT '{"enabled":true,"proxyType":"isp"}'::jsonb;

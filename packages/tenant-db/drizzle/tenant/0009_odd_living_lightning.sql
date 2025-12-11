@@ -1,1 +1,0 @@
-ALTER TABLE "chat" ADD COLUMN "last_message_status" varchar(20);

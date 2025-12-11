@@ -1266,30 +1266,7 @@ export const chatsRouter = createTRPCRouter({
       );
 
       if (postAction.type !== "none" && postAction.message) {
-        // Salvar mensagem de sistema no banco
-        const postCloseMessage = await postActionsService.executePostCloseAction(
-          { organizationId, tenantDb: ctx.tenantDb },
-          closedChat,
-          postAction,
-        );
-
-        // Emitir evento socket para o dashboard
-        if (postCloseMessage) {
-          await publishMessageEvent(
-            {
-              type: "message:new",
-              organizationId,
-              chatId: closedChat.id,
-              messageId: postCloseMessage.id,
-              data: {
-                message: postCloseMessage as unknown as Record<string, unknown>,
-              },
-            },
-            env.REDIS_URL,
-          );
-        }
-
-        // Se for WhatsApp, enviar via Evolution API
+        // Para WhatsApp: verificar se canal existe ANTES de criar mensagem
         if (closedChat.messageSource === "whatsapp") {
           const whatsAppData = await postActionsService.getChatWhatsAppData(
             { organizationId, tenantDb: ctx.tenantDb },
@@ -1297,7 +1274,36 @@ export const chatsRouter = createTRPCRouter({
             closedChat.createdAt,
           );
 
-          if (whatsAppData?.channel && whatsAppData.contact.phoneNumber) {
+          // Se não tem canal ou phoneNumber, não criar mensagem de rating/ending
+          if (!whatsAppData?.channel || !whatsAppData.contact.phoneNumber) {
+            return closedChat;
+          }
+
+          // Salvar mensagem de sistema no banco
+          const postCloseMessage = await postActionsService.executePostCloseAction(
+            { organizationId, tenantDb: ctx.tenantDb },
+            closedChat,
+            postAction,
+          );
+
+          // Emitir evento socket para o dashboard
+          if (postCloseMessage) {
+            await publishMessageEvent(
+              {
+                type: "message:new",
+                organizationId,
+                chatId: closedChat.id,
+                messageId: postCloseMessage.id,
+                data: {
+                  message: postCloseMessage as unknown as Record<string, unknown>,
+                },
+              },
+              env.REDIS_URL,
+            );
+          }
+
+          // Enviar via Evolution API
+          if (postCloseMessage) {
             try {
               const evolutionClient = new EvolutionAPIClient(
                 env.EVOLUTION_API_URL,

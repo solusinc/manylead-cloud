@@ -9,8 +9,9 @@ import { createLogger } from "@manylead/clients/logger";
 import { createPostgresClient } from "@manylead/clients/postgres";
 import { createQueue } from "@manylead/clients/queue";
 import { createRedisClient } from "@manylead/clients/redis";
+import { encrypt, decrypt } from "@manylead/crypto";
 
-import type { Tenant } from "@manylead/db";
+import type { Tenant, DecryptedTenant } from "@manylead/db";
 import * as schema from "@manylead/db";
 import { databaseHost, organization, tenant } from "@manylead/db";
 
@@ -160,6 +161,9 @@ export class TenantDatabaseManager {
       password: postgresPassword,
     });
 
+    // Encrypt connection string
+    const encryptedConnectionString = encrypt(connectionString);
+
     // Criar registro do tenant com status "provisioning"
     const result = await this.catalogDb
       .insert(tenant)
@@ -168,7 +172,9 @@ export class TenantDatabaseManager {
         slug: params.slug,
         name: params.name,
         databaseName: dbName,
-        connectionString,
+        connectionStringEncrypted: encryptedConnectionString.encrypted,
+        connectionStringIv: encryptedConnectionString.iv,
+        connectionStringTag: encryptedConnectionString.tag,
         databaseHostId: host.id,
         host: host.host,
         port: connectionPort, // Use connection port (6432 if PgBouncer, host.port otherwise)
@@ -237,14 +243,17 @@ export class TenantDatabaseManager {
    */
   async getTenantByOrganization(
     organizationId: string,
-  ): Promise<Tenant | null> {
+  ): Promise<DecryptedTenant | null> {
     const result = await this.catalogDb
       .select()
       .from(tenant)
       .where(eq(tenant.organizationId, organizationId))
       .limit(1);
 
-    return result[0] ?? null;
+    const encryptedTenant = result[0];
+    if (!encryptedTenant) return null;
+
+    return this.decryptTenantConnectionString(encryptedTenant);
   }
 
   /**
@@ -306,9 +315,16 @@ export class TenantDatabaseManager {
       );
       await adminClient.end();
 
+      // Decrypt connection string
+      const connectionString = decrypt<string>({
+        encrypted: existingTenant.connectionStringEncrypted,
+        iv: existingTenant.connectionStringIv,
+        tag: existingTenant.connectionStringTag,
+      });
+
       // Create tenant client for migrations (migration preset)
       const tenantClient = createPostgresClient({
-        connectionString: existingTenant.connectionString,
+        connectionString,
         preset: "migration",
         logger: this.logger,
       });
@@ -376,7 +392,8 @@ export class TenantDatabaseManager {
 
   async getConnection(organizationId: string) {
     // Try Redis cache (distributed)
-    let tenantRecord = await this.tenantCache.get(organizationId);
+    let tenantRecord: DecryptedTenant | null =
+      (await this.tenantCache.get(organizationId)) as DecryptedTenant | null;
 
     if (!tenantRecord) {
       // Redis cache miss - query catalog database
@@ -386,11 +403,14 @@ export class TenantDatabaseManager {
         .where(eq(tenant.organizationId, organizationId))
         .limit(1);
 
-      tenantRecord = result[0] ?? null;
+      const encryptedTenant = result[0] ?? null;
 
-      // Save to Redis cache for next time
-      if (tenantRecord) {
-        await this.tenantCache.set(organizationId, tenantRecord);
+      if (encryptedTenant) {
+        // Decrypt connection string once (only on cache miss)
+        tenantRecord = this.decryptTenantConnectionString(encryptedTenant);
+
+        // Save to Redis cache for next time (already decrypted)
+        await this.tenantCache.set(organizationId, tenantRecord as Tenant);
       }
     }
 
@@ -423,27 +443,96 @@ export class TenantDatabaseManager {
       client,
       schema,
       casing: "snake_case",
+      logger: {
+        logQuery: (query, params) => {
+          this.logger.debug({ query, params }, "Drizzle query");
+        },
+      },
     });
   }
 
-  async getTenantBySlug(slug: string): Promise<Tenant | null> {
+  /**
+   * Get direct connection (bypass pgbouncer) for administrative operations
+   * Use this during provisioning to avoid CONNECTION_ENDED errors
+   */
+  async getDirectConnection(organizationId: string) {
+    const result = await this.catalogDb
+      .select()
+      .from(tenant)
+      .where(eq(tenant.organizationId, organizationId))
+      .limit(1);
+
+    const encryptedTenant = result[0] ?? null;
+
+    if (!encryptedTenant) {
+      throw new Error(`Tenant not found: ${organizationId}`);
+    }
+
+    // Decrypt connection string
+    const tenantRecord = this.decryptTenantConnectionString(encryptedTenant);
+
+    // Convert pgbouncer port (6432) to direct port (5432)
+    const directConnectionString = tenantRecord.connectionString.replace(
+      ":6432/",
+      ":5432/",
+    );
+
+    // Create direct client (no caching - for one-time admin operations)
+    const client = createPostgresClient({
+      connectionString: directConnectionString,
+      preset: "migration", // Use migration preset (prepare: false, max: 1)
+      logger: this.logger,
+    });
+
+    return drizzle({
+      client,
+      schema,
+      casing: "snake_case",
+    });
+  }
+
+  /**
+   * Helper function to decrypt connection string from tenant record
+   */
+  private decryptTenantConnectionString(
+    encryptedTenant: Tenant,
+  ): DecryptedTenant {
+    const connectionString = decrypt<string>({
+      encrypted: encryptedTenant.connectionStringEncrypted,
+      iv: encryptedTenant.connectionStringIv,
+      tag: encryptedTenant.connectionStringTag,
+    });
+
+    return {
+      ...encryptedTenant,
+      connectionString,
+    } as DecryptedTenant;
+  }
+
+  async getTenantBySlug(slug: string): Promise<DecryptedTenant | null> {
     const result = await this.catalogDb
       .select()
       .from(tenant)
       .where(eq(tenant.slug, slug))
       .limit(1);
 
-    return result[0] ?? null;
+    const encryptedTenant = result[0];
+    if (!encryptedTenant) return null;
+
+    return this.decryptTenantConnectionString(encryptedTenant);
   }
 
-  async getTenantById(tenantId: string): Promise<Tenant | null> {
+  async getTenantById(tenantId: string): Promise<DecryptedTenant | null> {
     const result = await this.catalogDb
       .select()
       .from(tenant)
       .where(eq(tenant.id, tenantId))
       .limit(1);
 
-    return result[0] ?? null;
+    const encryptedTenant = result[0];
+    if (!encryptedTenant) return null;
+
+    return this.decryptTenantConnectionString(encryptedTenant);
   }
 
   async migrateTenant(tenantId: string): Promise<void> {
@@ -747,6 +836,14 @@ export class TenantDatabaseManager {
     });
 
     try {
+      // Terminate all connections to the database before dropping
+      await adminClient.unsafe(`
+        SELECT pg_terminate_backend(pid)
+        FROM pg_stat_activity
+        WHERE datname = '${tenantRecord.databaseName}'
+        AND pid <> pg_backend_pid()
+      `);
+
       await adminClient.unsafe(
         `DROP DATABASE IF EXISTS "${tenantRecord.databaseName}"`,
       );

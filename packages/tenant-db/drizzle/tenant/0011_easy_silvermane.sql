@@ -1,1 +1,0 @@
-ALTER TABLE "message" ADD COLUMN "sender_name" varchar(255);

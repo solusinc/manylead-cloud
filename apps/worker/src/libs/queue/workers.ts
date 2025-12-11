@@ -12,7 +12,6 @@ import type { CrossOrgLogoSyncJobData } from "~/workers/cross-org-logo-sync";
 import type { ScheduledMessageJobData } from "~/workers/scheduled-message";
 import type { ScheduledMessageRecoveryJobData } from "~/workers/scheduled-message-recovery";
 import type { ChannelStatusReconciliationJobData } from "~/workers/channel-status-reconciliation";
-import type { ProxyKeepAliveJobData } from "~/workers/proxy-keep-alive";
 import { env } from "~/env";
 import { getRedisClient } from "~/libs/cache/redis";
 import { processTenantProvisioning } from "~/workers/tenant-provisioning";
@@ -26,7 +25,6 @@ import { processCrossOrgLogoSync } from "~/workers/cross-org-logo-sync";
 import { processScheduledMessage } from "~/workers/scheduled-message";
 import { recoverMissedSchedules } from "~/workers/scheduled-message-recovery";
 import { processChannelStatusReconciliation } from "~/workers/channel-status-reconciliation";
-import { processProxyKeepAlive } from "~/workers/proxy-keep-alive";
 
 const logger = createLogger("Worker:Queue");
 
@@ -348,30 +346,6 @@ export function createWorkers(): Worker[] {
   workers.push(channelStatusReconciliationWorker);
 
   /**
-   * Proxy Keep-Alive Worker (Cron)
-   * Mantém sticky sessions ativas do Bright Data para organizações com proxy enabled
-   * - Verifica a cada 5 minutos se precisa keep-alive
-   * - Faz request leve via Evolution API
-   * - Rotaciona IP automaticamente em caso de erro 502
-   */
-  logger.info("Creating worker for queue: proxy-keep-alive");
-
-  const proxyKeepAliveWorker = createWorker<ProxyKeepAliveJobData>({
-    name: "proxy-keep-alive",
-    processor: processProxyKeepAlive,
-    connection,
-    concurrency: 1, // Process one organization at a time
-    logger,
-  });
-
-  attachEventListeners(proxyKeepAliveWorker, {
-    queueName: "proxy-keep-alive",
-  });
-
-  logger.info("Worker created for queue: proxy-keep-alive");
-  workers.push(proxyKeepAliveWorker);
-
-  /**
    * TODO (FASE 4): Add Tenant Migration Worker
    * const tenantMigrationWorker = new Worker(...)
    */
@@ -430,10 +404,6 @@ export function createQueuesForMonitoring(): { name: string; queue: Queue }[] {
     {
       name: "channel-status-reconciliation",
       queue: createQueue({ name: "channel-status-reconciliation", connection }),
-    },
-    {
-      name: "proxy-keep-alive",
-      queue: createQueue({ name: "proxy-keep-alive", connection }),
     },
   ];
 }

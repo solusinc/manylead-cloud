@@ -57,25 +57,15 @@ export async function handleConnectionUpdate(
     (state === "close" && ch.evolutionConnectionState === "open");
 
   if (isDowngrade) {
-    logger.warn("Potential stale webhook detected, verifying real state", {
-      webhookState: state,
-      dbState: ch.evolutionConnectionState,
-      transition: `${ch.evolutionConnectionState} -> ${state}`,
-    });
-
+    // Verificar estado real silenciosamente (evita spam de logs)
     try {
       const evolutionClient = getEvolutionClient();
       const instanceData = await evolutionClient.instance.fetch(instanceName);
       const instance = Array.isArray(instanceData) ? instanceData[0] : instanceData;
       const realState = instance?.connectionStatus;
 
-      // Se estado real é diferente do webhook, ignorar webhook desatualizado
+      // Se estado real é diferente do webhook, ignorar silenciosamente
       if (realState && realState !== state) {
-        logger.warn("Ignoring stale webhook - real state differs", {
-          webhookState: state,
-          realState,
-          dbState: ch.evolutionConnectionState,
-        });
         return; // Ignorar webhook desatualizado
       }
 

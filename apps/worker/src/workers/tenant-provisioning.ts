@@ -121,7 +121,11 @@ export async function processTenantProvisioning(
     // Get the tenant that was already created by the API
     const tenant = await tenantManager.getTenantByOrganization(organizationId);
     if (!tenant) {
-      throw new Error(`Tenant not found for organization ${organizationId}`);
+      logger.warn(
+        { organizationId, jobId: job.id },
+        "Tenant not found - likely deleted. Skipping provisioning job.",
+      );
+      return; // Silently skip - tenant was deleted
     }
 
     logger.info({ organizationId, tenantId: tenant.id }, "Tenant found, creating physical database...");
@@ -145,7 +149,12 @@ export async function processTenantProvisioning(
     // Step 5: Create owner agent
     await updateProgress(job, organizationId, PROGRESS.CREATING_OWNER);
 
-    const tenantDb = await tenantManager.getConnection(organizationId);
+    // Use direct connection (bypass pgbouncer) to avoid CONNECTION_ENDED errors
+    // during provisioning. PGBouncer closes connections between transactions,
+    // which can cause issues when creating the owner agent immediately after
+    // running migrations/seeds.
+    const tenantDb = await tenantManager.getDirectConnection(organizationId);
+
     await tenantDb.insert(agent).values({
       userId: ownerId,
       role: "owner",
