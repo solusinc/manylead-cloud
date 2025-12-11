@@ -25,7 +25,8 @@ exec docker-entrypoint.sh postgres \
   -c work_mem=4MB \
   -c min_wal_size=1GB \
   -c max_wal_size=4GB \
-  -c max_worker_processes=4 \
+  -c max_worker_processes=8 \
   -c max_parallel_workers_per_gather=2 \
   -c max_parallel_workers=4 \
-  -c max_parallel_maintenance_workers=2
+  -c max_parallel_maintenance_workers=2 \
+  -c timescaledb.telemetry_level=off
