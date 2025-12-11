@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback } from "react";
+import { useCallback } from "react";
 
 /**
  * Hook para deduplicação de mensagens usando Map com TTL
@@ -7,23 +7,39 @@ import { useRef, useEffect, useCallback } from "react";
  * Usado para evitar duplicação quando:
  * - Optimistic update adiciona mensagem
  * - Socket retorna a mesma mensagem rapidamente
+ * - HMR cria múltiplas instâncias do componente (desenvolvimento)
  *
  * Pattern: WhatsApp/Telegram/Discord deduplication
+ *
+ * IMPORTANTE: Singleton global para funcionar entre múltiplas instâncias (HMR)
  */
 
 const DEDUP_TTL_MS = 60000; // 60 segundos
 const CLEANUP_INTERVAL_MS = 5000; // 5 segundos
 
-export function useMessageDeduplication() {
-  // Map<messageId, timestamp>
-  const processedIds = useRef(new Map<string, number>());
+// SINGLETON: Global dedup store (persiste entre HMR)
+// Map<messageId, timestamp>
+const globalProcessedIds = new Map<string, number>();
 
+// Auto-cleanup interval (run once globally)
+if (typeof window !== "undefined") {
+  setInterval(() => {
+    const now = Date.now();
+    globalProcessedIds.forEach((timestamp, id) => {
+      if (now - timestamp > DEDUP_TTL_MS) {
+        globalProcessedIds.delete(id);
+      }
+    });
+  }, CLEANUP_INTERVAL_MS);
+}
+
+export function useMessageDeduplication() {
   /**
    * Registrar ID como processado
    * Memoized com useCallback para evitar re-renders desnecessários
    */
   const register = useCallback((id: string) => {
-    processedIds.current.set(id, Date.now());
+    globalProcessedIds.set(id, Date.now());
   }, []);
 
   /**
@@ -31,7 +47,7 @@ export function useMessageDeduplication() {
    * Memoized com useCallback para evitar re-renders desnecessários
    */
   const isProcessed = useCallback((id: string): boolean => {
-    return processedIds.current.has(id);
+    return globalProcessedIds.has(id);
   }, []);
 
   /**
@@ -40,23 +56,7 @@ export function useMessageDeduplication() {
    * Memoized com useCallback para evitar re-renders desnecessários
    */
   const isAnyProcessed = useCallback((ids: (string | undefined)[]): boolean => {
-    return ids.some((id) => id && processedIds.current.has(id));
-  }, []);
-
-  /**
-   * Limpar IDs expirados (TTL)
-   */
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const now = Date.now();
-      processedIds.current.forEach((timestamp, id) => {
-        if (now - timestamp > DEDUP_TTL_MS) {
-          processedIds.current.delete(id);
-        }
-      });
-    }, CLEANUP_INTERVAL_MS);
-
-    return () => clearInterval(interval);
+    return ids.some((id) => id && globalProcessedIds.has(id));
   }, []);
 
   return {

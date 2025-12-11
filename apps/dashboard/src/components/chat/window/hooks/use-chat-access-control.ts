@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 
 import { useAccessDeniedModal } from "~/components/providers/access-denied-modal-provider";
 import { useChatSocketContext } from "~/components/providers/chat-socket-provider";
@@ -25,8 +25,8 @@ interface ChatItem {
 export function useChatAccessControl(chatId: string, chatItem: ChatItem | undefined) {
   const trpc = useTRPC();
   const socket = useChatSocketContext();
-  const queryClient = useQueryClient();
   const hasMarkedAsReadRef = useRef(false);
+  const hasProcessedChatUpdateRef = useRef(false); // Prevent duplicate onChatUpdated
   const isMountedRef = useRef(true);
   const { showAccessDeniedModal } = useAccessDeniedModal();
   const { data: currentAgent } = useCurrentAgent();
@@ -35,9 +35,8 @@ export function useChatAccessControl(chatId: string, chatItem: ChatItem | undefi
   const markAsReadMutation = useMutation(
     trpc.chats.markAsRead.mutationOptions({
       onSuccess: () => {
-        void queryClient.invalidateQueries({
-          queryKey: [["chats", "list"]],
-        });
+        // Don't invalidate - socket will emit onChatUpdated
+        // Avoids duplicate queries
       },
     })
   );
@@ -47,9 +46,10 @@ export function useChatAccessControl(chatId: string, chatItem: ChatItem | undefi
     trpc.messages.markAllAsRead.mutationOptions()
   );
 
-  // Resetar flag quando trocar de chat
+  // Resetar flags quando trocar de chat
   useEffect(() => {
     hasMarkedAsReadRef.current = false;
+    hasProcessedChatUpdateRef.current = false;
   }, [chatId]);
 
   // Controlar estado de montagem do componente
@@ -60,9 +60,16 @@ export function useChatAccessControl(chatId: string, chatItem: ChatItem | undefi
     };
   }, []);
 
-  // Marcar chat como lido quando abrir (apenas uma vez por chat)
+  // Extract stable values to prevent re-runs on cache updates
+  const chatCreatedAt = chatItem?.chat.createdAt;
+  const unreadCount = chatItem?.chat.unreadCount ?? 0;
+  const assignedTo = chatItem?.chat.assignedTo;
+
+  // Marcar chat como lido quando abrir pela PRIMEIRA VEZ (não quando assigned)
+  // IMPORTANTE: Não dispara quando assignedTo muda (evita duplicação com onChatUpdated)
   useEffect(() => {
-    if (chatItem && !hasMarkedAsReadRef.current && chatItem.chat.unreadCount > 0) {
+    // Só marcar se já estava assigned desde o início E ainda não marcou
+    if (!hasMarkedAsReadRef.current && unreadCount > 0 && assignedTo === currentAgent?.id) {
       // Verificar se o chat está realmente ativo na URL
       const currentPath = window.location.pathname;
       const isInThisChat = currentPath.includes(`/chats/${chatId}`);
@@ -71,73 +78,33 @@ export function useChatAccessControl(chatId: string, chatItem: ChatItem | undefi
         return; // Não marcar como lido se não estiver vendo o chat
       }
 
-      // REGRA: Só marcar como lido se o chat estiver assigned ao agente atual
-      const isAssignedToMe = chatItem.chat.assignedTo === currentAgent?.id;
-
-      if (!isAssignedToMe) {
-        return; // Não marcar como lido se não estiver assigned ao usuário
-      }
-
       hasMarkedAsReadRef.current = true;
 
       // Marcar o chat como lido (zera unreadCount)
-      markAsReadMutation.mutate({
-        id: chatItem.chat.id,
-        createdAt: chatItem.chat.createdAt,
-      });
+      if (chatCreatedAt) {
+        markAsReadMutation.mutate({
+          id: chatId,
+          createdAt: chatCreatedAt,
+        });
+      }
 
       // Marcar todas as mensagens do contato como lidas (atualiza ticks)
       markAllMessagesAsReadMutation.mutate({
-        chatId: chatItem.chat.id,
+        chatId: chatId,
       });
     }
-  }, [chatItem, markAsReadMutation, markAllMessagesAsReadMutation, chatId, currentAgent]);
+  }, [chatId, chatCreatedAt, unreadCount, assignedTo, markAsReadMutation, markAllMessagesAsReadMutation, currentAgent?.id]);
 
   // Marcar como lido automaticamente quando receber mensagem no chat ativo
-  useSocketListener(
-    socket,
-    "onMessageNew",
-    (event) => {
-      // Verificar se componente ainda está montado
-      if (!isMountedRef.current) return;
-
-      // Verificar em tempo real se ainda está no chat
-      const currentPath = window.location.pathname;
-      const isInThisChat = currentPath.includes(`/chats/${chatId}`);
-
-      if (!isInThisChat) return;
-
-      // REGRA: Só marcar como lido se o chat estiver assigned ao agente atual
-      const isAssignedToMe = chatItem?.chat.assignedTo === currentAgent?.id;
-
-      if (!isAssignedToMe) {
-        return; // Não marcar como lido se não estiver assigned ao usuário
-      }
-
-      const messageChatId = event.message.chatId as string;
-      if (messageChatId === chatId && chatItem) {
-        // Marcar o chat como lido (zera unreadCount)
-        markAsReadMutation.mutate({
-          id: chatItem.chat.id,
-          createdAt: chatItem.chat.createdAt,
-        });
-
-        // Marcar todas as mensagens do contato como lidas (atualiza ticks)
-        markAllMessagesAsReadMutation.mutate({
-          chatId: chatItem.chat.id,
-        });
-      }
-    },
-    [chatId, chatItem, markAsReadMutation, markAllMessagesAsReadMutation, currentAgent],
-    !!chatItem // enabled only if chatItem exists
-  );
+  // NOTA: Não marca automaticamente - espera usuário abrir o chat ou onChatUpdated disparar
+  // Removido para evitar duplicação com onChatUpdated (linha 140)
 
   // Detectar quando o chat é atualizado (transferência/assignment)
   useSocketListener(
     socket,
     "onChatUpdated",
     (event) => {
-      if (!chatItem || !currentAgent) return;
+      if (!chatCreatedAt || !currentAgent) return;
 
       const updatedChatId = event.chat.id as string;
       const updatedAssignedTo = event.chat.assignedTo as string | null;
@@ -149,8 +116,9 @@ export function useChatAccessControl(chatId: string, chatItem: ChatItem | undefi
       // CASO 1: Chat foi transferido PARA o agente atual (marcar como lido)
       if (
         updatedAssignedTo === currentAgent.id &&
-        chatItem.chat.assignedTo !== currentAgent.id && // Estava assigned para outro (ou null)
-        updatedUnreadCount > 0 // Só marcar se realmente tem mensagens não lidas (evita loop)
+        assignedTo !== currentAgent.id && // Estava assigned para outro (ou null)
+        updatedUnreadCount > 0 && // Só marcar se realmente tem mensagens não lidas (evita loop)
+        !hasProcessedChatUpdateRef.current // Prevenir processamento duplicado
       ) {
 
         // Verificar se o chat está realmente ativo na URL
@@ -158,15 +126,17 @@ export function useChatAccessControl(chatId: string, chatItem: ChatItem | undefi
         const isInThisChat = currentPath.includes(`/chats/${chatId}`);
 
         if (isInThisChat) {
+          hasProcessedChatUpdateRef.current = true; // Mark as processed
+
           // Marcar o chat como lido (zera unreadCount)
           markAsReadMutation.mutate({
-            id: chatItem.chat.id,
-            createdAt: chatItem.chat.createdAt,
+            id: chatId,
+            createdAt: chatCreatedAt,
           });
 
           // Marcar todas as mensagens do contato como lidas (atualiza ticks)
           markAllMessagesAsReadMutation.mutate({
-            chatId: chatItem.chat.id,
+            chatId: chatId,
           });
         }
       }
@@ -192,12 +162,13 @@ export function useChatAccessControl(chatId: string, chatItem: ChatItem | undefi
     },
     [
       chatId,
-      chatItem,
+      chatCreatedAt,
+      assignedTo,
       currentAgent,
       markAsReadMutation,
       markAllMessagesAsReadMutation,
       showAccessDeniedModal,
     ],
-    !!(chatItem && currentAgent)
+    !!(chatCreatedAt && currentAgent)
   );
 }

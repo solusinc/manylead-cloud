@@ -10,7 +10,9 @@ import { useMessageDeduplication } from "~/hooks/use-message-deduplication";
 import { useSocketListener } from "~/hooks/chat/use-socket-listener";
 import { useNotificationSound } from "~/hooks/use-notification-sound";
 import { useCurrentAgent } from "~/hooks/chat/use-current-agent";
+import { useChatCacheUpdater } from "~/hooks/use-chat-cache-updater";
 import type { WhatsAppMessageStatusEvent } from "~/hooks/use-chat-socket";
+import { chatListInvalidator } from "~/utils/batch-invalidator";
 import { ChatSidebar } from "./sidebar";
 import { ChatWindowEmpty } from "./window";
 
@@ -41,6 +43,7 @@ function ChatLayoutInner({
   const { register, isAnyProcessed } = useMessageDeduplication();
   const { playNotificationSound } = useNotificationSound();
   const { data: currentAgent } = useCurrentAgent();
+  const { updateChatInCache, invalidateChatsWithoutRefetch, invalidateActiveChats } = useChatCacheUpdater();
 
   // Conectar ao Socket.io quando o layout montar
   useEffect(() => {
@@ -69,6 +72,15 @@ function ChatLayoutInner({
       const serverId = messageData.id as string;
       const metadata = messageData.metadata as { systemEventType?: string; tempId?: string } | null;
       const tempId = metadata?.tempId;
+
+      // === EARLY DEDUP CHECK: Check if already processed ===
+      if (isAnyProcessed([serverId])) {
+        return; // Already processed this message
+      }
+
+      // Register immediately to prevent duplicate processing
+      register(serverId);
+      if (tempId) register(tempId);
 
       // Find all queries for messages.list
       const queries = queryClient.getQueryCache().findAll({
@@ -118,10 +130,6 @@ function ChatLayoutInner({
             page.items.some((item) => item.message.id === tempId)
           );
         }
-
-        // Register in dedup store
-        register(serverId);
-        if (tempId) register(tempId);
 
         const newPages = [...queryState.pages];
 
@@ -179,6 +187,7 @@ function ChatLayoutInner({
               pages: newPages,
               pageParams: queryState.pageParams,
             });
+
           }
         }
 
@@ -189,17 +198,44 @@ function ChatLayoutInner({
         });
       });
 
-      // Invalidate chats list to update last message preview
-      // Need to refetch because we don't manually update the chat cache
-      void queryClient.invalidateQueries({
-        queryKey: [["chats", "list"]],
+      // Compute isOwnMessage once for reuse
+      const isOwnMessage = currentAgent && messageData.senderId === currentAgent.id;
+
+      // ALWAYS update chat cache in sidebar (even if chat not open)
+      const chatId = messageData.chatId as string;
+
+      // System messages (welcome, out_of_hours) should show as "agent" in sidebar
+      const systemMessageTypes = ["welcome_message", "out_of_hours_message"];
+      const isSystemMessageFromAgent =
+        messageData.sender === "system" &&
+        metadata?.systemEventType &&
+        systemMessageTypes.includes(metadata.systemEventType);
+
+      const chatWasUpdated = updateChatInCache(chatId, (current) => ({
+        lastMessageContent: messageData.content as string,
+        lastMessageAt: new Date(messageData.timestamp as string),
+        lastMessageSender: isSystemMessageFromAgent ? "agent" : (messageData.sender as string),
+        lastMessageStatus: messageData.status as string,
+        // Increment unreadCount if message is NOT from current agent
+        unreadCount: isOwnMessage ? current.unreadCount : (current.unreadCount ?? 0) + 1,
+      }));
+
+      // Batch invalidate with 50ms debounce (5 messages in 200ms = 1 API call instead of 5)
+      chatListInvalidator.invalidate("message-new", () => {
+        // If chat was found in cache, just force re-render
+        // If not found (new chat), do full refetch
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+        if (chatWasUpdated) {
+          invalidateChatsWithoutRefetch(); // Force re-render WITHOUT refetch
+        } else {
+          invalidateActiveChats(); // New chat - need refetch
+        }
       });
 
       // Play notification sound for:
       // 1. Messages from other agents
       // 2. Own audio messages (async processing - feedback needed)
       // Don't play sound for comments, welcome messages, or rating-related messages
-      const isOwnMessage = currentAgent && messageData.senderId === currentAgent.id;
       const isAudioMessage = messageData.messageType === "audio";
       const isComment = messageData.messageType === "comment";
       const silentSystemEventTypes = ["welcome_message", "rating_value", "rating_thanks"];
@@ -209,48 +245,58 @@ function ChatLayoutInner({
         playNotificationSound();
       }
     },
-    [queryClient, register, isAnyProcessed, playNotificationSound, currentAgent?.id]
+    [queryClient, register, isAnyProcessed, playNotificationSound, currentAgent?.id, updateChatInCache]
   );
 
-  // 2. Quando um novo chat é criado - invalidar queries
+  // 2. Quando um novo chat é criado - batch invalidate
   useSocketListener(
     socket,
     'onChatCreated',
     () => {
-      void queryClient.invalidateQueries({
-        queryKey: [["chats"]],
-        refetchType: "active",
+      // Batch invalidate with debounce (multiple chats created in burst)
+      chatListInvalidator.invalidate("chat-created", () => {
+        invalidateActiveChats(); // Refetch active queries only
       });
     },
-    [queryClient]
+    [invalidateActiveChats]
   );
 
-  // 3. Quando um chat é atualizado (assign/transfer) - invalidar queries
+  // 3. Quando um chat é atualizado (assign/transfer) - batch invalidate
   useSocketListener(
     socket,
     'onChatUpdated',
-    () => {
-      // Forçar refetch imediato quando chat é atualizado (assign/transfer)
-      void queryClient.invalidateQueries({
-        queryKey: [["chats"]],
-        refetchType: "active",
-      });
+    (event) => {
+      const chatId = event.chat.id as string;
+      const eventId = `chat-updated-${chatId}`;
 
-      // Invalidate archived count to update badge
-      void queryClient.invalidateQueries({
-        queryKey: [["chats", "getArchivedCount"]],
-      });
+      // Dedup check to prevent processing same event twice
+      if (isAnyProcessed([eventId])) {
+        return;
+      }
 
-      // Invalidate messages to fetch system messages (transfer, assignment, etc)
-      void queryClient.invalidateQueries({
-        queryKey: [["messages"]],
-        refetchType: "none", // Just mark as stale - socket will bring new message
+      register(eventId);
+
+      // Batch invalidate with debounce (multiple updates in burst)
+      chatListInvalidator.invalidate("chat-updated", () => {
+        // Refetch active chats (assign/transfer changes visibility)
+        invalidateActiveChats();
+
+        // Invalidate archived count to update badge
+        void queryClient.invalidateQueries({
+          queryKey: [["chats", "getArchivedCount"]],
+        });
+
+        // Invalidate messages to fetch system messages (transfer, assignment, etc)
+        void queryClient.invalidateQueries({
+          queryKey: [["messages"]],
+          refetchType: "none", // Just mark as stale - socket will bring new message
+        });
       });
     },
-    [queryClient]
+    [queryClient, invalidateActiveChats, register, isAnyProcessed]
   );
 
-  // 4. Quando uma mensagem é atualizada (status read/delivered) - atualizar sidebar
+  // 4. Quando uma mensagem é atualizada (status read/delivered) - update cache directly
   useSocketListener(
     socket,
     'onMessageUpdated',
@@ -263,66 +309,25 @@ function ChatLayoutInner({
         sender: string;
       };
 
-      // Atualizar o lastMessageStatus no cache do chat sidebar
-      // Buscar todas as queries de chats e atualizar a que tem esse chat
-      const queries = queryClient.getQueryCache().findAll({
-        queryKey: [["chats", "list"]],
-        exact: false,
-      });
-
-      queries.forEach((query) => {
-        const queryState = query.state.data as {
-          items: {
-            chat: {
-              id: string;
-              lastMessageAt?: Date;
-              lastMessageContent?: string;
-              lastMessageStatus?: string;
-              lastMessageSender?: string;
-            };
-          }[];
-        } | undefined;
-
-        if (!queryState?.items) return;
-
-        // Procurar o chat que contém essa mensagem
-        const chatIndex = queryState.items.findIndex((item) => item.chat.id === message.chatId);
-        if (chatIndex === -1) return;
-
-        const chat = queryState.items[chatIndex];
-        if (!chat) return;
-
-        // Atualizar SOMENTE se essa é a última mensagem do chat
-        // (comparar timestamp)
+      // Update cache using helper (O(1) + O(n) instead of O(n*m))
+      updateChatInCache(message.chatId, (current) => {
+        // Only update if this is the last message (timestamp check)
         const isLastMessage =
-          !chat.chat.lastMessageAt ||
-          new Date(message.timestamp).getTime() >= new Date(chat.chat.lastMessageAt).getTime();
+          !current.lastMessageAt ||
+          new Date(message.timestamp).getTime() >= new Date(current.lastMessageAt).getTime();
 
-        if (isLastMessage) {
-          const newItems = [...queryState.items];
-          newItems[chatIndex] = {
-            ...chat,
-            chat: {
-              ...chat.chat,
-              lastMessageStatus: message.status,
-              lastMessageSender: message.sender,
-            },
-          };
+        if (!isLastMessage) return {};
 
-          queryClient.setQueryData(query.queryKey, {
-            ...queryState,
-            items: newItems,
-          });
-
-          // Force re-render
-          void queryClient.invalidateQueries({
-            queryKey: query.queryKey,
-            refetchType: "none",
-          });
-        }
+        return {
+          lastMessageStatus: message.status,
+          lastMessageSender: message.sender,
+        };
       });
+
+      // Force re-render WITHOUT refetch
+      invalidateChatsWithoutRefetch();
     },
-    [queryClient]
+    [updateChatInCache, invalidateChatsWithoutRefetch]
   );
 
   // 5. WhatsApp message status updates (ticks) - atualizar mensagens e sidebar
@@ -330,6 +335,15 @@ function ChatLayoutInner({
     socket,
     'onWhatsAppMessageStatus',
     (event: WhatsAppMessageStatusEvent) => {
+      const eventId = `whatsapp-status-${event.messageId}-${event.status}`;
+
+      // Dedup check
+      if (isAnyProcessed([eventId])) {
+        return;
+      }
+
+      register(eventId);
+
       // Update message in messages cache
       const queries = queryClient.getQueryCache().findAll({
         queryKey: [["messages", "list"]],
@@ -383,72 +397,43 @@ function ChatLayoutInner({
       });
 
       // Update lastMessageStatus in chats cache (for sidebar)
-      const chatQueries = queryClient.getQueryCache().findAll({
-        queryKey: [["chats", "list"]],
-        exact: false,
-      });
-
-      chatQueries.forEach((query) => {
-        const queryState = query.state.data as {
-          items: {
-            chat: {
-              id: string;
-              lastMessageAt?: Date;
-              lastMessageStatus?: string;
-              lastMessageSender?: string;
-            };
-          }[];
-        } | undefined;
-
-        if (!queryState?.items) return;
-
-        const chatIndex = queryState.items.findIndex((item) => item.chat.id === event.chatId);
-        if (chatIndex === -1) return;
-
-        const chat = queryState.items[chatIndex];
-        if (!chat) return;
-
+      const wasUpdated = updateChatInCache(event.chatId, (current) => {
         // Only update if this is the last message (compare timestamps)
         const isLastMessage =
-          !chat.chat.lastMessageAt ||
-          new Date(event.timestamp).getTime() >= new Date(chat.chat.lastMessageAt).getTime();
+          !current.lastMessageAt ||
+          new Date(event.timestamp).getTime() >= new Date(current.lastMessageAt).getTime();
 
-        if (isLastMessage) {
-          const newItems = [...queryState.items];
-          newItems[chatIndex] = {
-            ...chat,
-            chat: {
-              ...chat.chat,
-              lastMessageStatus: event.status,
-            },
-          };
+        if (!isLastMessage) return {};
 
-          queryClient.setQueryData(query.queryKey, {
-            ...queryState,
-            items: newItems,
-          });
-
-          void queryClient.invalidateQueries({
-            queryKey: query.queryKey,
-            refetchType: "none",
-          });
-        }
+        return {
+          lastMessageStatus: event.status,
+        };
       });
+
+      // Always invalidate to force re-render
+      // If chat was found, use refetchType: none (just re-render with cache)
+      // If not found, do full refetch
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+      if (wasUpdated) {
+        invalidateChatsWithoutRefetch();
+      } else {
+        invalidateActiveChats();
+      }
     },
-    [queryClient]
+    [queryClient, updateChatInCache, invalidateActiveChats, register, isAnyProcessed]
   );
 
-  // 6. Quando logo de contato cross-org é atualizado - invalidar chats
+  // 6. Quando logo de contato cross-org é atualizado - batch invalidate
   useSocketListener(
     socket,
     'onContactLogoUpdated',
     () => {
-      // Invalidar queries de chats para refetch e pegar logo atualizado
-      void queryClient.invalidateQueries({
-        queryKey: [["chats", "list"]],
+      // Batch invalidate logo updates (multiple contacts may update)
+      chatListInvalidator.invalidate("contact-logo", () => {
+        invalidateActiveChats(); // Refetch to get updated logo
       });
     },
-    [queryClient]
+    [invalidateActiveChats]
   );
 
   return (

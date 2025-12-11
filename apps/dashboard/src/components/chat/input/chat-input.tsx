@@ -47,7 +47,6 @@ export function ChatInput({
   onRecordingStart?: () => void;
   onRecordingStop?: () => void;
 } & React.ComponentProps<"div">) {
-  const [isSending, setIsSending] = useState(false);
   const [mode, setMode] = useState<"text" | "recording">("text");
   const shouldFocusRef = useRef(false);
   const hasShownNoChannelToast = useRef(false);
@@ -96,30 +95,13 @@ export function ChatInput({
     enabled: chatStatus === "closed",
   });
 
-  // Mutation para marcar chat como lido
-  const markAsReadMutation = useMutation(trpc.chats.markAsRead.mutationOptions());
-
-  // Mutation para marcar todas as mensagens como lidas
-  const markAllMessagesAsReadMutation = useMutation(
-    trpc.messages.markAllAsRead.mutationOptions()
-  );
 
   // Mutation para atribuir chat ao agent atual
   const assignMutation = useMutation(
     trpc.chats.assign.mutationOptions({
       onSuccess: () => {
-        void queryClient.invalidateQueries({ queryKey: [["chats", "list"]] });
-
-        // Marcar chat como lido após pegar atendimento
-        markAsReadMutation.mutate({
-          id: chatId,
-          createdAt: chatCreatedAt,
-        });
-
-        // Marcar todas as mensagens como lidas
-        markAllMessagesAsReadMutation.mutate({
-          chatId,
-        });
+        // Socket will emit onChatUpdated which triggers markAsRead in use-chat-access-control.ts
+        // No need to manually mark as read here - avoiding duplicate mutations
       },
       onError: (error) => {
         toast.error(error.message || "Erro ao atribuir chat");
@@ -222,11 +204,11 @@ export function ChatInput({
 
   // Auto-focus after sending
   useEffect(() => {
-    if (shouldFocusRef.current && !isSending) {
+    if (shouldFocusRef.current) {
       textareaRef.current?.focus();
       shouldFocusRef.current = false;
     }
-  }, [isSending, textareaRef]);
+  }, [textareaRef]);
 
   // Show toast when no channel available
   useEffect(() => {
@@ -239,9 +221,7 @@ export function ChatInput({
   }, [hasChannel]);
 
   const handleSend = useCallback(() => {
-    if (!content.trim() || isSending || !hasChannel) return;
-
-    setIsSending(true);
+    if (!content.trim() || !hasChannel) return;
 
     // Stop typing indicator IMEDIATAMENTE antes de enviar
     onTypingStop?.();
@@ -250,8 +230,9 @@ export function ChatInput({
     const messageContent = content.trim();
     clearContent();
     shouldFocusRef.current = true;
+    cancelReply();
 
-    // Send message with reply metadata if replying
+    // Send message with reply metadata if replying (fire and forget - optimistic)
     sendMessage({
       chatId,
       content: messageContent,
@@ -263,15 +244,12 @@ export function ChatInput({
             repliedToMessageType: replyingTo.messageType,
           }
         : undefined,
-    })
-      .catch((error) => {
-        console.error("Failed to send message:", error);
-      })
-      .finally(() => {
-        setIsSending(false);
-        cancelReply();
-      });
-  }, [content, isSending, hasChannel, onTypingStop, clearContent, sendMessage, chatId, replyingTo, cancelReply]);
+    }).catch((error: unknown) => {
+      console.error("Failed to send message:", error);
+    });
+
+    // Don't block UI - message will appear optimistically
+  }, [content, hasChannel, onTypingStop, clearContent, sendMessage, chatId, replyingTo, cancelReply]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -301,8 +279,6 @@ export function ChatInput({
       const newContent = content.replace(/(?:^|\s)\/[\w]*$/, "").trim();
       closeQuickReply();
 
-      setIsSending(true);
-
       // Stop typing indicator quando envia quick reply
       onTypingStop?.();
 
@@ -319,10 +295,9 @@ export function ChatInput({
           // Multiple messages sent: limpar o input completamente
           clearContent();
         }
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("Failed to handle quick reply:", error);
       } finally {
-        setIsSending(false);
         textareaRef.current?.focus();
       }
     },
@@ -539,7 +514,7 @@ export function ChatInput({
               value={content}
               onChange={(e) => handleContentChange(e.target.value)}
               onKeyDown={handleKeyDown}
-              disabled={isSending || !hasChannel}
+              disabled={!hasChannel}
               placeholder={!hasChannel ? "Conecte um canal do WhatsApp para enviar mensagens" : "Digite uma mensagem"}
               autoFocus
             />

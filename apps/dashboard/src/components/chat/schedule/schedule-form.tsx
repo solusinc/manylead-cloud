@@ -6,10 +6,10 @@ import { useQuery } from "@tanstack/react-query";
 import { isTRPCClientError } from "@trpc/client";
 import { addHours, format } from "date-fns";
 import { ArrowLeft } from "lucide-react";
-import { toast } from "sonner";
 
 import type { ScheduledMessage } from "@manylead/db";
 import { Button } from "@manylead/ui/button";
+import { toast } from "@manylead/ui/toast";
 import { Checkbox } from "@manylead/ui/checkbox";
 import { Label } from "@manylead/ui/label";
 import { Textarea } from "@manylead/ui/textarea";
@@ -64,8 +64,9 @@ export function ScheduleForm({
 
       // Validar data no futuro
       const scheduledDate = new Date(value.scheduledAt);
-      if (scheduledDate <= new Date()) {
-        toast.error("Data deve ser no futuro");
+      const now = new Date();
+      if (scheduledDate <= now) {
+        toast.error("A data de agendamento deve ser no futuro");
         return;
       }
 
