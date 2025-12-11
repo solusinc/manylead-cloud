@@ -3,12 +3,10 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { format, isThisWeek, isToday, isYesterday } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Archive, ChevronDown, Clock, Pin, User } from "lucide-react";
 import { FaUser, FaWhatsapp } from "react-icons/fa";
-import { toast } from "sonner";
 
 import type { Tag } from "@manylead/db";
 import { cn } from "@manylead/ui";
@@ -19,7 +17,8 @@ import { Button } from "@manylead/ui/button";
 import type { MessageStatus } from "../message/message-status-icon";
 import { QuickActions } from "~/components/dropdowns/quick-actions";
 import { useDebouncedValue } from "~/hooks/use-debounced-value";
-import { useTRPC } from "~/lib/trpc/react";
+import { useOptimisticChatArchive } from "~/hooks/use-optimistic-chat-archive";
+import { useOptimisticChatPin } from "~/hooks/use-optimistic-chat-pin";
 import { useChatViewStore } from "~/stores/use-chat-view-store";
 import { ChatSidebarItemLastMessage } from "./chat-sidebar-item-last-message";
 
@@ -82,34 +81,13 @@ export function ChatSidebarItem({
 }: ChatSidebarItemProps & React.ComponentProps<"a">) {
   const isClosed = chat.status === "closed";
   const isPending = chat.status === "pending";
-  const trpc = useTRPC();
-  const queryClient = useQueryClient();
   const view = useChatViewStore((state) => state.view);
 
-  const togglePinMutation = useMutation(
-    trpc.chats.togglePin.mutationOptions({
-      onSuccess: () => {
-        void queryClient.invalidateQueries({ queryKey: [["chats"]] });
-      },
-      onError: (error) => {
-        toast.error(error.message || "Erro ao fixar conversa");
-      },
-    }),
-  );
+  // Optimistic pin - instant UI feedback
+  const togglePinMutation = useOptimisticChatPin();
 
-  const toggleArchiveMutation = useMutation(
-    trpc.chats.toggleArchive.mutationOptions({
-      onSuccess: () => {
-        void queryClient.invalidateQueries({ queryKey: [["chats"]] });
-        void queryClient.invalidateQueries({
-          queryKey: [["chats", "getArchivedCount"]],
-        });
-      },
-      onError: (error) => {
-        toast.error(error.message || "Erro ao arquivar conversa");
-      },
-    }),
-  );
+  // Optimistic archive - instant UI feedback
+  const toggleArchiveMutation = useOptimisticChatArchive();
 
   const handleTogglePin = () => {
     togglePinMutation.mutate({

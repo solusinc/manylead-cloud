@@ -23,7 +23,7 @@ import {
 } from "@manylead/bright-data";
 
 import { env } from "../env";
-import { createTRPCRouter, ownerProcedure, tenantManager } from "../trpc";
+import { createTRPCRouter, memberProcedure, ownerProcedure, tenantManager } from "../trpc";
 
 // Helper para criar Evolution API Client com env vars do runtime
 function getEvolutionClient() {
@@ -75,7 +75,7 @@ export const channelsRouter = createTRPCRouter({
   /**
    * List all channels for the active organization
    */
-  list: ownerProcedure.query(async ({ ctx }) => {
+  list: memberProcedure.query(async ({ ctx }) => {
     const organizationId = ctx.session.session.activeOrganizationId;
 
     if (!organizationId) {

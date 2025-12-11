@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ChevronDown,
   Download,
@@ -10,7 +9,6 @@ import {
   Star,
   Trash2,
 } from "lucide-react";
-import { toast } from "sonner";
 
 import { cn } from "@manylead/ui";
 import { Button } from "@manylead/ui/button";
@@ -21,8 +19,8 @@ import {
   DropdownMenuTrigger,
 } from "@manylead/ui/dropdown-menu";
 
-import { useTRPC } from "~/lib/trpc/react";
 import { useChatReply } from "../providers/chat-reply-provider";
+import { useOptimisticMessageStar } from "~/hooks/use-optimistic-message-star";
 import { EditMessageDialog, DeleteMessageDialog } from "./chat-message-dialogs";
 import type { Message } from "./chat-message";
 
@@ -197,19 +195,8 @@ export function ChatMessageActions({
  * Ação de favoritar/desfavoritar mensagem
  */
 export function ChatMessageActionStar({ message }: { message: Message }) {
-  const trpc = useTRPC();
-  const queryClient = useQueryClient();
-
-  const toggleStarMutation = useMutation(
-    trpc.messages.toggleStar.mutationOptions({
-      onSuccess: () => {
-        void queryClient.invalidateQueries({ queryKey: [["messages"]] });
-      },
-      onError: (error) => {
-        toast.error(error.message || "Erro ao favoritar mensagem");
-      },
-    }),
-  );
+  // Optimistic star - instant UI feedback
+  const toggleStarMutation = useOptimisticMessageStar();
 
   const handleToggleStar = () => {
     toggleStarMutation.mutate({

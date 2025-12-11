@@ -38,12 +38,14 @@ interface ChatStarredSheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   chatId: string;
+  contactName: string;
 }
 
 export function ChatStarredSheet({
   open,
   onOpenChange,
   chatId,
+  contactName,
 }: ChatStarredSheetProps) {
   const trpc = useTRPC();
   const setFocusMessage = useMessageFocusStore((state) => state.setFocusMessage);
@@ -98,6 +100,7 @@ export function ChatStarredSheet({
                   message={item.message}
                   attachment={item.attachment}
                   isOwnMessage={item.isOwnMessage}
+                  contactName={contactName}
                   onClick={() => handleResultClick(item.message.id)}
                 />
               ))}
@@ -122,6 +125,7 @@ interface StarredMessageItemProps {
   };
   attachment: Attachment | null;
   isOwnMessage: boolean;
+  contactName: string;
   onClick: () => void;
 }
 
@@ -129,10 +133,11 @@ function StarredMessageItem({
   message,
   attachment,
   isOwnMessage,
+  contactName,
   onClick,
 }: StarredMessageItemProps) {
-  // Usar o senderName do campo direto da mensagem
-  const displayName = message.senderName ?? (message.sender === "agent" ? "Agente" : "Contato");
+  // Usar o senderName do campo direto da mensagem, ou contactName do chat
+  const displayName = message.senderName ?? (message.sender === "agent" ? "Agente" : contactName);
 
   // Se tem attachment, não precisa extrair nome do conteúdo
   // Se não tem attachment, extrair do formato **Nome**\nConteúdo

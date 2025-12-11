@@ -12,10 +12,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@manylead/ui/dropdown-menu";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useTRPC } from "~/lib/trpc/react";
-import { toast } from "sonner";
 import { useCurrentAgent } from "~/hooks/chat/use-current-agent";
+import { useOptimisticChatTransfer } from "~/hooks/use-optimistic-chat-transfer";
 
 interface ChatTransferDropdownProps {
   chatId: string;
@@ -30,7 +30,6 @@ export function ChatTransferDropdown({
   const [activeTab, setActiveTab] = useState<"users" | "departments">("users");
   const { isOpen, setIsOpen, onClose } = useDisclosure();
   const trpc = useTRPC();
-  const queryClient = useQueryClient();
 
   // Buscar agente atual
   const { data: currentAgent } = useCurrentAgent();
@@ -41,19 +40,8 @@ export function ChatTransferDropdown({
   // Buscar departamentos
   const { data: departments } = useQuery(trpc.departments.list.queryOptions());
 
-  // Mutation de transferência
-  const transferMutation = useMutation(
-    trpc.chats.transfer.mutationOptions({
-      onSuccess: () => {
-        // Invalidar queries para atualizar a lista
-        void queryClient.invalidateQueries({ queryKey: [["chats", "list"]] });
-        onClose();
-      },
-      onError: (error) => {
-        toast.error(error.message || "Erro ao transferir chat");
-      },
-    })
-  );
+  // Optimistic transfer - instant UI feedback
+  const transferMutation = useOptimisticChatTransfer(onClose);
 
   // Filtrar usuários baseado na busca (excluir agente atual)
   const filteredAgents = agents?.filter((agent) =>

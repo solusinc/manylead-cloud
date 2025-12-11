@@ -87,8 +87,6 @@ export class CrossOrgMirrorService {
       duration?: number | null;
     },
   ): Promise<void> {
-    console.log("[CrossOrgMirror] mirrorFirstMessage called for sourceOrgId:", sourceOrgId);
-
     // Buscar contact source para pegar targetOrganizationId
     const [contactRecord] = await sourceTenantDb
       .select()
@@ -132,8 +130,6 @@ export class CrossOrgMirrorService {
       sourceContact.id,
     );
 
-    console.log("[CrossOrgMirror] mirrorFirstMessage - mirroredChat found:", mirroredChat ? mirroredChat.id : "null (will create new)");
-
     // Se não encontrar chat ativo, criar novo
     if (!mirroredChat) {
       // Buscar departamento padrão da org target
@@ -165,11 +161,9 @@ export class CrossOrgMirrorService {
         .returning();
 
       if (!newChat) {
-        console.log("[CrossOrgMirror] ERROR: newChat is null after insert!");
         return;
       }
 
-      console.log("[CrossOrgMirror] newChat created:", newChat.id);
       mirroredChat = newChat;
 
       // Emitir evento chat:created apenas para chats novos
@@ -294,8 +288,6 @@ export class CrossOrgMirrorService {
       duration?: number | null;
     },
   ): Promise<void> {
-    console.log("[CrossOrgMirror] mirrorSubsequentMessage called for sourceOrgId:", sourceOrgId);
-
     // Buscar contact source para pegar targetOrganizationId
     const [contactRecord] = await sourceTenantDb
       .select()

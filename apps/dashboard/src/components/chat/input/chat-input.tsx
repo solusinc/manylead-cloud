@@ -20,6 +20,7 @@ import { AudioRecorder } from "./audio-recorder";
 import { useTRPC } from "~/lib/trpc/react";
 import { useChatReply } from "../providers/chat-reply-provider";
 import { useCurrentAgent } from "~/hooks/chat/use-current-agent";
+import { useOptimisticChatAssign } from "~/hooks/use-optimistic-chat-assign";
 import { useSendMessage } from "./hooks/use-send-message";
 import { useInputContent } from "./hooks/use-input-content";
 import { useQuickReplySelect } from "./hooks/use-quick-reply-select";
@@ -96,18 +97,8 @@ export function ChatInput({
   });
 
 
-  // Mutation para atribuir chat ao agent atual
-  const assignMutation = useMutation(
-    trpc.chats.assign.mutationOptions({
-      onSuccess: () => {
-        // Socket will emit onChatUpdated which triggers markAsRead in use-chat-access-control.ts
-        // No need to manually mark as read here - avoiding duplicate mutations
-      },
-      onError: (error) => {
-        toast.error(error.message || "Erro ao atribuir chat");
-      },
-    })
-  );
+  // Optimistic assign - instant UI feedback
+  const assignMutation = useOptimisticChatAssign();
 
   const handleAtender = () => {
     if (!currentAgent?.id) {
@@ -125,13 +116,13 @@ export function ChatInput({
   // Mutation para criar nova sessão (chat interno)
   const createNewSessionMutation = useMutation(
     trpc.chats.createNewSession.mutationOptions({
-      onSuccess: (chat) => {
+      onSuccess: (chat: { id: string }) => {
         void queryClient.invalidateQueries({ queryKey: [["chats", "list"]] });
         // Navegar para o novo chat
         router.push(`/chats/${chat.id}`);
       },
-      onError: (error) => {
-        toast.error(error.message || "Erro ao criar nova sessão");
+      onError: (error: { message?: string }) => {
+        toast.error(error.message ?? "Erro ao criar nova sessão");
       },
     })
   );
@@ -139,13 +130,13 @@ export function ChatInput({
   // Mutation para criar novo chat WhatsApp
   const createWhatsAppChatMutation = useMutation(
     trpc.chats.createWhatsAppChat.mutationOptions({
-      onSuccess: (chat) => {
+      onSuccess: (chat: { id: string }) => {
         void queryClient.invalidateQueries({ queryKey: [["chats", "list"]] });
         // Navegar para o novo chat
         router.push(`/chats/${chat.id}`);
       },
-      onError: (error) => {
-        toast.error(error.message || "Erro ao criar chat WhatsApp");
+      onError: (error: { message?: string }) => {
+        toast.error(error.message ?? "Erro ao criar chat WhatsApp");
       },
     })
   );
@@ -434,10 +425,10 @@ export function ChatInput({
             variant="default"
             size="default"
             onClick={handleNovoAtendimento}
-            disabled={createNewSessionMutation.isPending}
+            disabled={createNewSessionMutation.isPending || createWhatsAppChatMutation.isPending}
           >
             <UserCheck className="mr-2 h-4 w-4" />
-            {createNewSessionMutation.isPending ? "Criando..." : "Novo atendimento"}
+            {(createNewSessionMutation.isPending || createWhatsAppChatMutation.isPending) ? "Criando..." : "Novo atendimento"}
           </Button>
         </div>
       </div>

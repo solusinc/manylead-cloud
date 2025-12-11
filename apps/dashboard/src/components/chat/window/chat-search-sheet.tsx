@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { format, isToday, isYesterday, isThisWeek } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Search, X } from "lucide-react";
@@ -51,8 +51,22 @@ export function ChatSearchSheet({
   contactName,
 }: ChatSearchSheetProps) {
   const [searchTerm, setSearchTerm] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
   const trpc = useTRPC();
   const setFocusMessage = useMessageFocusStore((state) => state.setFocusMessage);
+
+  // Resetar e focar input quando abrir
+  useEffect(() => {
+    if (open) {
+      // Resetar input
+      setSearchTerm("");
+      // Timeout para aguardar animação do sheet
+      const timer = setTimeout(() => {
+        inputRef.current?.focus();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [open]);
 
   // Buscar mensagens quando tiver termo de busca
   const { data: searchResults, isLoading } = useQuery({
@@ -92,12 +106,12 @@ export function ChatSearchSheet({
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
+              ref={inputRef}
               type="text"
               placeholder={`Pesquisar em ${contactName}`}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="pl-10"
-              autoFocus
             />
           </div>
         </div>
@@ -124,6 +138,7 @@ export function ChatSearchSheet({
                     message={item.message}
                     attachment={item.attachment}
                     isOwnMessage={item.isOwnMessage}
+                    contactName={contactName}
                     onClick={() => handleResultClick(item.message.id)}
                   />
                 ))}
@@ -148,6 +163,7 @@ interface SearchResultBubbleProps {
   };
   attachment: Attachment | null;
   isOwnMessage: boolean;
+  contactName: string;
   onClick: () => void;
 }
 
@@ -155,10 +171,11 @@ function SearchResultBubble({
   message,
   attachment,
   isOwnMessage,
+  contactName,
   onClick,
 }: SearchResultBubbleProps) {
-  // Usar o senderName do campo direto da mensagem
-  const senderName = message.senderName ?? (message.sender === "agent" ? "Agente" : "Contato");
+  // Usar o senderName do campo direto da mensagem, ou contactName do chat
+  const senderName = message.senderName ?? (message.sender === "agent" ? "Agente" : contactName);
 
   // Extrair conteúdo sem formatação **Nome**\n
   const extractNameAndContent = (content: string) => {

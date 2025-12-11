@@ -96,6 +96,7 @@ export function ChatWindowHeader({
           open={starredOpen}
           onOpenChange={setStarredOpen}
           chatId={chat.id}
+          contactName={contactDisplayName}
         />
       </ChatImagesProvider>
 

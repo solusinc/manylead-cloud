@@ -125,9 +125,6 @@ export class InternalMessageService {
     );
 
     // Espelhamento cross-org (se aplicável)
-    console.log("[InternalMessageService] createTextMessage - chatRecord.messageSource:", chatRecord.messageSource);
-    console.log("[InternalMessageService] shouldMirror:", this.crossOrgMirror.shouldMirror(chatRecord));
-
     if (this.crossOrgMirror.shouldMirror(chatRecord)) {
       await this.handleCrossOrgMirroring(
         organizationId,
@@ -472,8 +469,6 @@ export class InternalMessageService {
     metadata?: Record<string, unknown>,
     attachmentData?: CreateMessageInput["attachmentData"],
   ): Promise<void> {
-    console.log("[InternalMessageService] handleCrossOrgMirroring called");
-
     // Contar mensagens TEXT do chat (excluindo SYSTEM)
     const textMessagesCount = await tenantDb
       .select({ count: sql<number>`count(*)` })
@@ -486,11 +481,9 @@ export class InternalMessageService {
       );
 
     const isFirstTextMessage = Number(textMessagesCount[0]?.count ?? 0) === 1;
-    console.log("[InternalMessageService] textMessagesCount:", textMessagesCount[0]?.count, "isFirstTextMessage:", isFirstTextMessage);
 
     if (isFirstTextMessage) {
       // Primeira mensagem: criar contact e chat na org target
-      console.log("[InternalMessageService] calling mirrorFirstMessage");
       await this.crossOrgMirror.mirrorFirstMessage(
         organizationId,
         tenantDb,
@@ -504,7 +497,6 @@ export class InternalMessageService {
       );
     } else {
       // Mensagem subsequente: espelhar no chat existente
-      console.log("[InternalMessageService] calling mirrorSubsequentMessage");
       await this.crossOrgMirror.mirrorSubsequentMessage(
         organizationId,
         tenantDb,
