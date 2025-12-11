@@ -39,7 +39,20 @@ export function OrganizationSwitcher() {
   );
 
   const setActiveMutation = useMutation(
-    trpc.organization.setActive.mutationOptions(),
+    trpc.organization.setActive.mutationOptions({
+      onSuccess: () => {
+        // Invalidar TODAS as queries (sem argumentos = invalida tudo)
+        // Garante que dados da organização anterior não apareçam
+        void queryClient.invalidateQueries();
+
+        // Navegar para tela de chats após invalidação
+        router.push("/chats");
+      },
+      onError: (error) => {
+        // Log do erro - usuário vê estado via setActiveMutation.isError
+        console.error("Failed to switch organization:", error);
+      },
+    }),
   );
 
   // Se não há organização ativa mas há organizações disponíveis, use a primeira
@@ -55,14 +68,8 @@ export function OrganizationSwitcher() {
 
   function handleClick(organizationId: string) {
     // Sincronizar com servidor e AGUARDAR (UX honesta)
-    void setActiveMutation.mutateAsync({ organizationId }).then(() => {
-      // Invalidar queries para forçar refetch
-      void queryClient.invalidateQueries({
-        queryKey: trpc.organization.getCurrent.queryKey(),
-      });
-      // Navegar DEPOIS que mudou no backend
-      router.push("/overview");
-    });
+    // Callbacks (invalidação e navegação) estão em mutationOptions
+    void setActiveMutation.mutateAsync({ organizationId });
   }
 
   return (
