@@ -72,12 +72,16 @@ export function buildUsername(
 }
 
 /**
- * Build Bright Data username for ISP proxy (simpler format)
+ * Build Bright Data username for ISP proxy
  *
- * ISP proxies use session for sticky IP allocation from the pool.
- * Each unique session ID gets assigned a specific IP from the pool.
+ * ISP proxies use session ID for dedicated IP allocation.
+ * Each unique session ID gets a persistent dedicated IP from the pool.
+ * The IP persists as long as the session ID remains the same.
  *
  * Format: brd-customer-{customer_id}-zone-{zone}-session-{session_id}
+ *
+ * NOTE: We track ipIndex in our database for pool management, but DON'T send it
+ * to Bright Data. The session ID alone guarantees a dedicated IP.
  *
  * @param customerId - Bright Data customer ID
  * @param zone - Bright Data ISP zone name

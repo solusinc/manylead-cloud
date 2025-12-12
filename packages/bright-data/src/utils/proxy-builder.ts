@@ -43,7 +43,8 @@ export async function buildProxyFieldsForCreate(
     return null;
   }
 
-  // ISP: simpler username with session for sticky IP allocation
+  // ISP: username with session ID for dedicated IP allocation
+  // Each session ID gets a persistent dedicated IP from Bright Data's pool
   if (proxyType === "isp") {
     const sessionId = settings.sessionId ?? generateSessionId(organizationId);
     const username = buildIspUsername(config.customerId, config.zone, sessionId);
@@ -114,7 +115,8 @@ export async function buildEvolutionProxyConfig(
     return { enabled: false };
   }
 
-  // ISP: simpler username with session for sticky IP allocation
+  // ISP: username with session ID for dedicated IP allocation
+  // Each session ID gets a persistent dedicated IP from Bright Data's pool
   if (proxyType === "isp") {
     const sessionId = settings.sessionId ?? generateSessionId(organizationId);
     const username = buildIspUsername(config.customerId, config.zone, sessionId);
@@ -191,7 +193,7 @@ export async function buildRotatedProxyConfig(
 
   const newSessionId = generateSessionId(organizationId);
 
-  // ISP: simpler username
+  // ISP: username with new session ID (gets new dedicated IP from pool)
   if (proxyType === "isp") {
     const username = buildIspUsername(bdConfig.customerId, bdConfig.zone, newSessionId);
 

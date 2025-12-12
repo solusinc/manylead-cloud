@@ -2,10 +2,10 @@
  * IP Allocation Service
  *
  * Manages dedicated IP allocation for ISP proxies.
- * Each organization gets one dedicated IP from the pool.
+ * Each organization gets one dedicated IP (managed by Bright Data via session ID).
  */
 
-import { db, proxyIpAllocation, proxyZone, eq, and } from "@manylead/db";
+import { db, proxyIpAllocation, proxyZone, eq, and, count } from "@manylead/db";
 import { createLogger } from "@manylead/clients/logger";
 import type { ProxyCountry } from "../types";
 import { generateSessionId } from "../utils/session-manager";
@@ -13,7 +13,6 @@ import { generateSessionId } from "../utils/session-manager";
 const logger = createLogger({ component: "IpAllocation" });
 
 interface IpAllocation {
-  ipIndex: number;
   sessionId: string;
   isNew: boolean;
 }
@@ -23,11 +22,11 @@ interface IpAllocation {
  *
  * Flow:
  * 1. Check if org already has active IP → reuse
- * 2. Find next available IP index in pool
- * 3. If pool full → add new IP via Bright Data API
+ * 2. Check if pool has available slots
+ * 3. Generate session ID (Bright Data assigns dedicated IP automatically)
  * 4. Register allocation in database
  *
- * @returns IP index and session ID to use
+ * @returns Session ID to use (each session ID gets a dedicated IP from Bright Data)
  */
 export async function allocateIp(
   organizationId: string,
@@ -51,13 +50,11 @@ export async function allocateIp(
     logger.info(
       {
         organizationId,
-        ipIndex: existing.ipIndex,
         sessionId: existing.sessionId,
       },
       "Reusing existing IP allocation",
     );
     return {
-      ipIndex: existing.ipIndex,
       sessionId: existing.sessionId,
       isNew: false,
     };
@@ -89,41 +86,33 @@ export async function allocateIp(
     "Found ISP zone",
   );
 
-  // 3. Find next available IP index
-  const allocations = await db
-    .select({ ipIndex: proxyIpAllocation.ipIndex })
+  // 3. Count active allocations for this zone
+  const result = await db
+    .select({ activeCount: count() })
     .from(proxyIpAllocation)
     .where(
       and(
         eq(proxyIpAllocation.proxyZoneId, zone.id),
         eq(proxyIpAllocation.status, "active"),
       ),
-    )
-    .orderBy(proxyIpAllocation.ipIndex);
+    );
 
-  // Find first gap in sequence or use next index
-  let nextIpIndex = 0;
-  const usedIndices = new Set(allocations.map((a) => a.ipIndex));
-
-  while (usedIndices.has(nextIpIndex)) {
-    nextIpIndex++;
-  }
+  const activeCount = result[0]?.activeCount ?? 0;
 
   logger.info(
     {
-      usedIndices: Array.from(usedIndices),
-      nextIpIndex,
-      currentPoolSize: zone.poolSize ?? 0,
+      activeAllocations: activeCount,
+      maxPoolSize: zone.poolSize ?? 0,
     },
-    "Calculated next IP index",
+    "Checked pool availability",
   );
 
-  // 4. Check if pool has available IPs
+  // 4. Check if pool has available slots
   const maxPoolSize = zone.poolSize ?? 0;
-  if (nextIpIndex >= maxPoolSize) {
+  if (activeCount >= maxPoolSize) {
     logger.error(
       {
-        nextIpIndex,
+        activeCount,
         maxPoolSize,
         organizationId,
       },
@@ -131,18 +120,18 @@ export async function allocateIp(
     );
 
     throw new Error(
-      `Limite de IPs atingido. Pool atual: ${maxPoolSize}, IPs em uso: ${usedIndices.size}. ` +
+      `Limite de IPs atingido. Pool atual: ${maxPoolSize}, IPs em uso: ${activeCount}. ` +
       `Entre em contato com o suporte para aumentar o limite.`,
     );
   }
 
   logger.info(
     {
-      nextIpIndex,
+      activeCount,
       maxPoolSize,
-      availableSlots: maxPoolSize - nextIpIndex - 1,
+      availableSlots: maxPoolSize - activeCount,
     },
-    "Using IP from pool",
+    "Pool has available slots",
   );
 
   // 5. Generate session ID and register allocation
@@ -151,7 +140,6 @@ export async function allocateIp(
   await db.insert(proxyIpAllocation).values({
     organizationId,
     proxyZoneId: zone.id,
-    ipIndex: nextIpIndex,
     sessionId,
     status: "active",
   });
@@ -159,14 +147,12 @@ export async function allocateIp(
   logger.info(
     {
       organizationId,
-      ipIndex: nextIpIndex,
       sessionId,
     },
     "IP allocation completed successfully",
   );
 
   return {
-    ipIndex: nextIpIndex,
     sessionId,
     isNew: true,
   };
@@ -222,7 +208,6 @@ export async function getIpAllocation(
   }
 
   return {
-    ipIndex: allocation.ipIndex,
     sessionId: allocation.sessionId,
     isNew: false,
   };

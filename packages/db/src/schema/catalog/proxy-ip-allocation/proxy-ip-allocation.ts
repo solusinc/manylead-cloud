@@ -17,13 +17,13 @@ import { proxyIpAllocationStatus } from "./constants";
 /**
  * Proxy IP Allocation table
  *
- * Tracks which organization is using which IP from the proxy pool.
- * For ISP proxies: 1 IP = 1 organization (dedicated).
+ * Tracks which organization is using a dedicated IP from the proxy pool.
+ * For ISP proxies: 1 session ID = 1 dedicated IP (managed by Bright Data).
  *
  * Flow:
- * 1. Channel created → allocate IP (find available ip_index)
- * 2. Channel deleted → release IP (status = 'released')
- * 3. Org creates new channel → reuse same IP if exists
+ * 1. Channel created → allocate session ID (gets dedicated IP from Bright Data)
+ * 2. Channel deleted → release allocation (status = 'released')
+ * 3. Org creates new channel → reuse same allocation if exists
  */
 export const proxyIpAllocation = pgTable(
   "proxy_ip_allocation",
@@ -40,12 +40,8 @@ export const proxyIpAllocation = pgTable(
       .notNull()
       .references(() => proxyZone.id, { onDelete: "cascade" }),
 
-    // IP index in the pool (0, 1, 2, ...)
-    // Not the actual IP address - Bright Data manages IPs
-    // We just track which "slot" in the pool this org is using
-    ipIndex: integer("ip_index").notNull(),
-
     // Session ID used for this allocation
+    // Each session ID gets a dedicated IP from Bright Data automatically
     sessionId: text("session_id").notNull(),
 
     // Allocation status
@@ -63,10 +59,10 @@ export const proxyIpAllocation = pgTable(
     index("proxy_ip_allocation_zone_idx").on(table.proxyZoneId),
     index("proxy_ip_allocation_status_idx").on(table.status),
 
-    // Unique constraint: 1 IP index = 1 active org per zone
-    unique("proxy_ip_allocation_zone_ip_active_unique").on(
+    // Unique constraint: 1 active allocation per org per zone
+    unique("proxy_ip_allocation_org_zone_active_unique").on(
+      table.organizationId,
       table.proxyZoneId,
-      table.ipIndex,
       table.status,
     ),
   ],

@@ -317,7 +317,6 @@ export const channelsRouter = createTRPCRouter({
               logger.info(
                 {
                   organizationId,
-                  ipIndex: allocation.ipIndex,
                   sessionId: allocation.sessionId,
                   isNew: allocation.isNew,
                 },
@@ -327,7 +326,11 @@ export const channelsRouter = createTRPCRouter({
               // Build proxy config with allocated session ID
               const proxyConfig = await buildEvolutionProxyConfig(
                 organizationId,
-                { ...currentProxySettings, enabled: true, sessionId: allocation.sessionId },
+                {
+                  ...currentProxySettings,
+                  enabled: true,
+                  sessionId: allocation.sessionId,
+                },
                 timezone,
               );
 
@@ -356,6 +359,13 @@ export const channelsRouter = createTRPCRouter({
                   {
                     organizationId,
                     instanceName: evolutionInstanceName,
+                    proxyConfig: {
+                      host: proxyConfig.host,
+                      port: proxyConfig.port,
+                      protocol: proxyConfig.protocol,
+                      username: proxyConfig.username,
+                      // Don't log password
+                    },
                   },
                   "Proxy configured for channel"
                 );
