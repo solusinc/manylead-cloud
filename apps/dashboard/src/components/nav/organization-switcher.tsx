@@ -40,16 +40,20 @@ export function OrganizationSwitcher() {
 
   const setActiveMutation = useMutation(
     trpc.organization.setActive.mutationOptions({
-      onSuccess: () => {
-        // Invalidar TODAS as queries (sem argumentos = invalida tudo)
-        // Garante que dados da organização anterior não apareçam
-        void queryClient.invalidateQueries();
+      onSuccess: async () => {
+        // Invalidar TODAS as queries para recarregar dados da nova org
+        await queryClient.invalidateQueries();
 
-        // Navegar para tela de chats após invalidação
+        // Forçar re-render dos server components (busca novo role/permissions do servidor)
+        router.refresh();
+
+        // Delay para garantir que o servidor busque o novo role antes de navegar
+        await new Promise((resolve) => setTimeout(resolve, 300));
+
+        // Navegar para chats
         router.push("/chats");
       },
       onError: (error) => {
-        // Log do erro - usuário vê estado via setActiveMutation.isError
         console.error("Failed to switch organization:", error);
       },
     }),
