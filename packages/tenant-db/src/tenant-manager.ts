@@ -6,7 +6,7 @@ import { LRUCache } from "lru-cache";
 import type postgres from "postgres";
 
 import { createLogger } from "@manylead/clients/logger";
-import { createPostgresClient } from "@manylead/clients/postgres";
+import { createPostgresClient, closePostgres } from "@manylead/clients/postgres";
 import { createQueue } from "@manylead/clients/queue";
 import { createRedisClient } from "@manylead/clients/redis";
 import { encrypt, decrypt } from "@manylead/crypto";
@@ -313,7 +313,8 @@ export class TenantDatabaseManager {
       await adminClient.unsafe(
         `CREATE DATABASE "${existingTenant.databaseName}"`,
       );
-      await adminClient.end();
+      // Close admin connection and remove from cache
+      await closePostgres(adminConnString);
 
       // Decrypt connection string
       const connectionString = decrypt<string>({
@@ -356,7 +357,8 @@ export class TenantDatabaseManager {
       );
       await seedTenantDefaults(tenantClient, existingTenant.organizationId);
 
-      await tenantClient.end();
+      // Close connection and remove from cache to avoid CONNECTION_ENDED errors
+      await closePostgres(connectionString);
 
       // Atualizar status para active
       await this.catalogDb
