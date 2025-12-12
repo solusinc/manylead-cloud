@@ -177,7 +177,7 @@ export class TenantDatabaseManager {
         connectionStringTag: encryptedConnectionString.tag,
         databaseHostId: host.id,
         host: host.host,
-        port: connectionPort, // Use connection port (6432 if PgBouncer, host.port otherwise)
+        port: host.port, // Porta direta do host (não PgBouncer)
         region: host.region,
         tier: params.tier ?? "shared",
         status: "provisioning",
