@@ -21,6 +21,10 @@ export function initAuth<
     }),
     baseURL: options.baseUrl,
     secret: options.secret,
+    trustedOrigins: [
+      "http://localhost:3000",
+      "https://cloud.manylead.com.br",
+    ],
     emailAndPassword: {
       enabled: true,
     },

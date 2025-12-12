@@ -21,7 +21,7 @@ async function main() {
     .values({
       name: "postgres-ca-primary",
       host: "148.113.164.109",
-      port: 5454,
+      port: 5469,
       region: "ca-toronto",
       tier: "shared",
       maxTenants: 70,
@@ -30,7 +30,7 @@ async function main() {
       status: "active",
       capabilities: {
         pgVersion: "16",
-        extensions: ["timescaledb", "pg_cron", "vector"],
+        extensions: ["timescaledb", "pg_cron", "vector", "dblink"],
         features: ["full-text-search", "pgbouncer"],
       },
     })
