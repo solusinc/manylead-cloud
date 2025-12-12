@@ -56,6 +56,13 @@ export {
   addIpsToZone,
 } from "./services/ip-manager";
 
+// IP Allocation (dedicated IPs)
+export {
+  allocateIp,
+  releaseIp,
+  getIpAllocation,
+} from "./services/ip-allocation";
+
 // Environment
 export { env } from "./env";
 

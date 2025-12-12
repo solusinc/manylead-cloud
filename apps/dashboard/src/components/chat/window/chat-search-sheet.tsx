@@ -59,6 +59,7 @@ export function ChatSearchSheet({
   useEffect(() => {
     if (open) {
       // Resetar input
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSearchTerm("");
       // Timeout para aguardar animação do sheet
       const timer = setTimeout(() => {

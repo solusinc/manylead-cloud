@@ -17,13 +17,16 @@ import {
 import type { CreateInstanceRequest } from "@manylead/evolution-api-client";
 import { EvolutionAPIClient } from "@manylead/evolution-api-client";
 import {
-  ensureIspIpAvailable,
+  allocateIp,
+  releaseIp,
   buildEvolutionProxyConfig,
-  generateSessionId,
 } from "@manylead/bright-data";
+import { createLogger } from "@manylead/clients/logger";
 
 import { env } from "../env";
 import { createTRPCRouter, memberProcedure, ownerProcedure, tenantManager } from "../trpc";
+
+const logger = createLogger({ component: "ChannelRouter" });
 
 // Helper para criar Evolution API Client com env vars do runtime
 function getEvolutionClient() {
@@ -249,25 +252,7 @@ export const channelsRouter = createTRPCRouter({
         try {
           const evolutionClient = getEvolutionClient();
 
-          // CLEANUP: Verificar se existe instância antiga com apenas o slug (sem ID)
-          // Isso garante migração suave do formato antigo (slug) para novo (slug_id)
-          const oldInstanceName = org.slug;
-          try {
-            await evolutionClient.instance.fetch(oldInstanceName);
-
-            // Se chegou aqui, instância antiga existe - deletar ela
-            try {
-              await evolutionClient.instance.logout(oldInstanceName);
-            } catch {
-              // Ignorar erro de logout
-            }
-
-            await evolutionClient.instance.delete(oldInstanceName);
-          } catch {
-            // Instância antiga não existe, continuar normalmente
-          }
-
-          // CLEANUP: Verificar se existe instância com o novo nome também
+          // CLEANUP: Verificar se existe instância com este nome
           // (caso tenha sido criada antes mas o canal foi deletado)
           try {
             await evolutionClient.instance.fetch(evolutionInstanceName);
@@ -324,26 +309,29 @@ export const channelsRouter = createTRPCRouter({
             const country = currentProxySettings.country ?? "br";
             const timezone = orgSettings.timezone;
 
-            // Contar orgs com ISP ativo para verificar se precisa de IP
-            // Por agora, usamos o poolSize como referência
-            // TODO: Contar orgs com proxy ISP ativo no tenant
-            const activeOrgCount = 0; // Placeholder - primeira org
-
             try {
-              // Garantir que tem IP disponível (adiciona via API se necessário)
-              await ensureIspIpAvailable(country, activeOrgCount);
+              // Allocate dedicated IP for this organization
+              // Automatically adds IP to pool if needed via Bright Data API
+              const allocation = await allocateIp(organizationId, country);
 
-              // Gerar sessionId para esta org
-              const sessionId = generateSessionId(organizationId);
+              logger.info(
+                {
+                  organizationId,
+                  ipIndex: allocation.ipIndex,
+                  sessionId: allocation.sessionId,
+                  isNew: allocation.isNew,
+                },
+                "IP allocated for channel"
+              );
 
-              // Buscar config do proxy
+              // Build proxy config with allocated session ID
               const proxyConfig = await buildEvolutionProxyConfig(
                 organizationId,
-                { ...currentProxySettings, enabled: true, sessionId },
+                { ...currentProxySettings, enabled: true, sessionId: allocation.sessionId },
                 timezone,
               );
 
-              // Adicionar campos de proxy ao payload (SEM campo enabled)
+              // Add proxy fields to instance creation payload
               if (proxyConfig.enabled && proxyConfig.host) {
                 createPayload.proxyHost = proxyConfig.host;
                 createPayload.proxyPort = proxyConfig.port;
@@ -351,21 +339,43 @@ export const channelsRouter = createTRPCRouter({
                 createPayload.proxyUsername = proxyConfig.username;
                 createPayload.proxyPassword = proxyConfig.password;
 
-                // Atualizar sessionId no DB
+                // Update sessionId in organization settings
                 await tenantDb
                   .update(organizationSettings)
                   .set({
                     proxySettings: {
                       ...currentProxySettings,
                       enabled: true,
-                      sessionId,
+                      sessionId: allocation.sessionId,
                     },
                     updatedAt: new Date(),
                   })
                   .where(eq(organizationSettings.organizationId, organizationId));
+
+                logger.info(
+                  {
+                    organizationId,
+                    instanceName: evolutionInstanceName,
+                  },
+                  "Proxy configured for channel"
+                );
               }
-            } catch {
-              // Continua sem proxy se falhar
+            } catch (error) {
+              logger.error(
+                {
+                  organizationId,
+                  country,
+                  error: error instanceof Error ? error.message : String(error),
+                  stack: error instanceof Error ? error.stack : undefined,
+                },
+                "Failed to allocate IP for proxy"
+              );
+
+              throw new TRPCError({
+                code: "INTERNAL_SERVER_ERROR",
+                message: "Não foi possível conectar seu canal neste momento. Entre em contato com o suporte.",
+                cause: error,
+              });
             }
           }
 
@@ -541,6 +551,25 @@ export const channelsRouter = createTRPCRouter({
         } catch {
           // Ignorar erro de delete
         }
+      }
+
+      // Release IP allocation for this organization
+      try {
+        await releaseIp(organizationId);
+        logger.info(
+          { organizationId, channelId: ch.id },
+          "IP released for deleted channel"
+        );
+      } catch (error) {
+        logger.warn(
+          {
+            organizationId,
+            channelId: ch.id,
+            error: error instanceof Error ? error.message : String(error),
+          },
+          "Failed to release IP allocation"
+        );
+        // Continue with deletion even if IP release fails
       }
 
       // Deletar do DB
