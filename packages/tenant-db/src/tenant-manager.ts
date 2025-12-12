@@ -150,12 +150,12 @@ export class TenantDatabaseManager {
     const postgresUser = env.POSTGRES_USER;
     const postgresPassword = env.POSTGRES_PASSWORD;
 
-    const hasPgBouncer = host.capabilities?.features?.includes("pgbouncer");
-    const connectionPort = hasPgBouncer ? 6432 : host.port;
-
+    // IMPORTANTE: Connection string do tenant SEMPRE usa porta direta (não PgBouncer)
+    // PgBouncer em transaction mode não suporta CREATE EXTENSION e migrations
+    // Runtime queries (SELECT/INSERT/UPDATE) podem usar PgBouncer se necessário
     const connectionString = buildConnectionString({
       host: host.host,
-      port: connectionPort,
+      port: host.port, // Porta direta, não PgBouncer
       database: dbName,
       user: postgresUser,
       password: postgresPassword,
