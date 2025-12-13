@@ -144,6 +144,8 @@ export function ChatSidebarList({
           name: item.contact?.customName ?? item.contact?.name ?? "Sem nome",
           avatar: item.contact?.avatar ?? null,
           isGroup: item.contact?.isGroup ?? false,
+          phoneNumber: item.contact?.phoneNumber ?? null,
+          customName: item.contact?.customName ?? null,
         },
         lastMessage: item.chat.lastMessageContent ?? "",
         lastMessageAt: item.chat.lastMessageAt ?? item.chat.createdAt,

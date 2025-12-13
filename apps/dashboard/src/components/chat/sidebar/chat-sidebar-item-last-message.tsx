@@ -1,6 +1,6 @@
 "use client";
 
-import { BanIcon, FileText, Image as ImageIcon, Video, Mic } from "lucide-react";
+import { BanIcon, FileText, Image as ImageIcon, Video, Mic, User } from "lucide-react";
 
 import { cn } from "@manylead/ui";
 
@@ -34,7 +34,7 @@ export function ChatSidebarItemLastMessage({
   lastMessageIsDeleted?: boolean;
   messageSender?: "agent" | "contact" | "system";
   messageStatus?: MessageStatus;
-  messageType?: "text" | "image" | "video" | "audio" | "document" | "system";
+  messageType?: "text" | "image" | "video" | "audio" | "document" | "contact" | "system";
   message: string;
   isGroup?: boolean;
   className?: string;
@@ -77,7 +77,7 @@ export function ChatSidebarItemLastMessage({
         <MessageStatusIcon status={messageStatus} size={14} className="shrink-0" />
       )}
 
-      {/* Ícone de mídia (imagem/vídeo/documento/áudio) */}
+      {/* Ícone de mídia (imagem/vídeo/documento/áudio/contato) */}
       {messageType === "image" && (
         <ImageIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
       )}
@@ -90,17 +90,22 @@ export function ChatSidebarItemLastMessage({
       {messageType === "audio" && (
         <Mic className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
       )}
+      {messageType === "contact" && (
+        <User className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+      )}
 
       {/* Texto da mensagem ou label do tipo de mídia */}
       <p className="text-muted-foreground flex-1 truncate text-sm">
         {messageType === "image"
-          ? stripMarkdown(message.trim()) || "Foto"
+          ? stripMarkdown(message.trim()) || "Enviou uma foto"
           : messageType === "video"
-          ? stripMarkdown(message.trim()) || "Vídeo"
+          ? stripMarkdown(message.trim()) || "Enviou um vídeo"
           : messageType === "document"
-          ? stripMarkdown(message.trim()) || "Documento"
+          ? stripMarkdown(message.trim()) || "Enviou um documento"
           : messageType === "audio"
-          ? stripMarkdown(message.trim()) || "Áudio"
+          ? stripMarkdown(message.trim()) || "Enviou um áudio"
+          : messageType === "contact"
+          ? stripMarkdown(message.trim()) || "Enviou um contato"
           : stripMarkdown(message)}
       </p>
     </div>

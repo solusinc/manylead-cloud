@@ -16,6 +16,7 @@ import { ChatMessageActions } from "./chat-message-actions";
 import { useChatImages } from "./chat-images-context";
 import { AudioPlayer } from "./audio-player";
 import type { Message } from "./chat-message";
+import { ChatMessageContact } from "./chat-message-contact";
 
 /**
  * Scroll para uma mensagem específica e destacá-la
@@ -288,8 +289,14 @@ export function ChatMessageBubble({
         />
       )}
 
-      {/* Renderizar baseado em ter ou não attachment */}
-      {message.attachment && !message.isDeleted ? (
+      {/* Renderizar baseado no tipo de mensagem */}
+      {message.messageType === "contact" && message.metadata ? (
+        /* Mensagem de contato - preview especial */
+        <ChatMessageContact
+          metadata={message.metadata}
+          isOutgoing={isOutgoing}
+        />
+      ) : message.attachment && !message.isDeleted ? (
         <>
           {/* Attachment/Mídia */}
           <ChatMessageAttachment

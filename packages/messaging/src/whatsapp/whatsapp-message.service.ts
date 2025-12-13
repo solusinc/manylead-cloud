@@ -722,7 +722,7 @@ export class WhatsAppMessageService {
       .where(
         and(
           eq(message.chatId, input.chatId),
-          eq(message.sender, "customer"), // customer, não contact!
+          eq(message.sender, "contact"),
           eq(message.status, "received"), // received, não delivered!
           isNotNull(message.whatsappMessageId),
         ),
@@ -772,7 +772,7 @@ export class WhatsAppMessageService {
         );
 
       // 5. Atualizar chat.lastMessageStatus se necessário
-      if (chatRecord.chat.lastMessageSender === "customer") {
+      if (chatRecord.chat.lastMessageSender === "contact") {
         await tenantDb
           .update(chat)
           .set({

@@ -18,6 +18,7 @@ import type { MessageStatus } from "../message/message-status-icon";
 import { QuickActions } from "~/components/dropdowns/quick-actions";
 import { useDebouncedValue } from "~/hooks/use-debounced-value";
 import { useOptimisticChatArchive } from "~/hooks/use-optimistic-chat-archive";
+import { usePhoneDisplay } from "~/hooks/use-phone-display";
 import { useOptimisticChatPin } from "~/hooks/use-optimistic-chat-pin";
 import { useChatViewStore } from "~/stores/use-chat-view-store";
 import { ChatSidebarItemLastMessage } from "./chat-sidebar-item-last-message";
@@ -43,6 +44,8 @@ interface ChatSidebarItemProps {
       name: string;
       avatar: string | null;
       isGroup: boolean;
+      phoneNumber: string | null;
+      customName: string | null;
     };
     lastMessage: string;
     lastMessageAt: Date;
@@ -82,6 +85,12 @@ export function ChatSidebarItem({
   const isClosed = chat.status === "closed";
   const isPending = chat.status === "pending";
   const view = useChatViewStore((state) => state.view);
+  const { formatPhone } = usePhoneDisplay();
+
+  // Format phone number if name is a phone number (no custom name)
+  const displayName = !chat.contact.customName && chat.contact.phoneNumber
+    ? formatPhone(chat.contact.phoneNumber)
+    : chat.contact.name;
 
   // Optimistic pin - instant UI feedback
   const togglePinMutation = useOptimisticChatPin();
@@ -117,14 +126,14 @@ export function ChatSidebarItem({
       {...props}
     >
       <ChatSidebarItemAvatar
-        name={chat.contact.name}
+        name={displayName}
         avatar={chat.contact.avatar}
         messageSource={chat.messageSource}
       />
 
       <div className="min-w-0 flex-1">
         <ChatSidebarItemContent
-          name={chat.contact.name}
+          name={displayName}
           message={chat.lastMessage}
           timestamp={chat.lastMessageAt}
           messageStatus={chat.lastMessageStatus}

@@ -14,6 +14,7 @@ import { ChatHistorySheet } from "./chat-history-sheet";
 import { ChatWindowHeaderActions } from "./chat-window-header-actions";
 import { ChatImagesProvider } from "../message/chat-images-context";
 import { ScheduleSheet } from "../schedule";
+import { usePhoneDisplay } from "~/hooks/use-phone-display";
 
 interface ChatWindowHeaderProps {
   chat: {
@@ -131,14 +132,20 @@ export const ChatWindowHeaderInfo = memo(function ChatWindowHeaderInfo({
   className?: string;
   onClick?: () => void;
 }) {
+  const { formatPhone } = usePhoneDisplay();
   const displayName = contact.customName ?? contact.name;
+
+  // Format phone number if name is a phone number (no custom name)
+  const formattedName = !contact.customName && contact.phoneNumber
+    ? formatPhone(contact.phoneNumber)
+    : displayName;
 
   return (
     <button onClick={onClick} className={cn("flex cursor-pointer items-center gap-3", className)}>
       <Avatar className="h-10 w-10 border">
         {contact.avatar ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={contact.avatar} alt={displayName} className="object-cover" />
+          <img src={contact.avatar} alt={formattedName} className="object-cover" />
         ) : (
           <AvatarFallback className="bg-muted text-muted-foreground">
             {contact.isGroup ? (
@@ -152,7 +159,7 @@ export const ChatWindowHeaderInfo = memo(function ChatWindowHeaderInfo({
 
       <div className="flex-1 text-left">
         <div className="flex items-center gap-2">
-          <h3 className="font-semibold">{displayName}</h3>
+          <h3 className="font-semibold">{formattedName}</h3>
           {source === "whatsapp" ? (
             <FaWhatsapp className="h-4 w-4" />
           ) : (

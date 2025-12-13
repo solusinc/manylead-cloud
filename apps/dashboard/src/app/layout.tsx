@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@manylead/ui/theme";
-import { Toaster } from "@manylead/ui/toast";
+import { Toaster } from "sonner";
 import { TooltipProvider } from "@manylead/ui/tooltip";
 import { cn } from "@manylead/ui";
 import { NuqsAdapter } from "nuqs/adapters/next/app";

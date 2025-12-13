@@ -234,11 +234,18 @@ export class WhatsAppMessageProcessor {
         : participantMetadata;
     }
 
+    // Adicionar contactData ao metadata se existir
+    if (messageContent.contactData) {
+      messageMetadata = messageMetadata
+        ? { ...messageMetadata, ...messageContent.contactData }
+        : messageContent.contactData;
+    }
+
     const messageToInsert = {
       chatId: chatRecord.id,
       messageSource: "whatsapp" as const,
-      sender: "customer" as const,
-      senderId: null, // Customer não tem senderId (para auto-cancel funcionar)
+      sender: "contact" as const,
+      senderId: null, // Contact não tem senderId (para auto-cancel funcionar)
       messageType,
       content: messageContent.text,
       whatsappMessageId: msg.key.id,
@@ -284,14 +291,13 @@ export class WhatsAppMessageProcessor {
     );
 
     // 8. Emitir evento para auto-cancelamento de scheduled messages
-    // Mensagens do customer sempre têm sender="customer", então mapear para "contact"
     const eventPublisher = getEventPublisher(env.REDIS_URL);
     await eventPublisher.messageCreated(
       channel.organizationId,
       chatRecord.id,
       newMessage,
       {
-        senderId: undefined, // Customer não tem senderId de agent, forçar undefined para emitir como "contact"
+        senderId: undefined, // Contact não tem senderId de agent
       },
     );
 
@@ -736,7 +742,7 @@ export class WhatsAppMessageProcessor {
       .set({
         lastMessageAt: timestamp,
         lastMessageContent: content,
-        lastMessageSender: "customer",
+        lastMessageSender: "contact",
         lastMessageStatus: "delivered",
         lastMessageType: messageType,
         lastMessageIsDeleted: false,

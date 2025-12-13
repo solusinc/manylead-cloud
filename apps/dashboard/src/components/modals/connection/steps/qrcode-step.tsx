@@ -3,7 +3,7 @@
 import { useEffect, useCallback, useRef } from "react";
 import { ChevronLeft, Loader2, MoreVertical, Settings } from "lucide-react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { toast } from "@manylead/ui/toast";
+import { toast } from "sonner";
 
 import { useConnectionModalStore } from "~/stores/use-connection-modal-store";
 import { useChannelSocket } from "~/hooks/use-channel-socket";

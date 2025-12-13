@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { X, Image as ImageIcon, Video, Mic, FileText } from "lucide-react";
+import { X, Image as ImageIcon, Video, Mic, FileText, User } from "lucide-react";
 
 import { cn } from "@manylead/ui";
 import { Button } from "@manylead/ui/button";
@@ -11,7 +11,7 @@ interface ChatReplyPreviewProps {
     id: string;
     content: string;
     senderName: string;
-    messageType?: "text" | "image" | "video" | "audio" | "document";
+    messageType?: "text" | "image" | "video" | "audio" | "document" | "contact";
   } | null;
   onCancel: () => void;
   className?: string;
@@ -51,10 +51,11 @@ export function ChatReplyPreview({
 
   // Map de ícones e labels para cada tipo de mídia
   const mediaConfig: Record<string, { icon: typeof ImageIcon; label: string }> = {
-    image: { icon: ImageIcon, label: "Foto" },
-    video: { icon: Video, label: "Vídeo" },
+    image: { icon: ImageIcon, label: truncatedContent || "Foto" },
+    video: { icon: Video, label: truncatedContent || "Vídeo" },
     audio: { icon: Mic, label: "Áudio" },
-    document: { icon: FileText, label: "Documento" },
+    document: { icon: FileText, label: truncatedContent || "Documento" },
+    contact: { icon: User, label: truncatedContent || "Contato" },
   };
 
   const mediaInfo = isMedia && messageType in mediaConfig

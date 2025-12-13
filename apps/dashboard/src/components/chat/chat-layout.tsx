@@ -216,6 +216,7 @@ function ChatLayoutInner({
         lastMessageAt: new Date(messageData.timestamp as string),
         lastMessageSender: isSystemMessageFromAgent ? "agent" : (messageData.sender as string),
         lastMessageStatus: messageData.status as string,
+        lastMessageType: messageData.messageType as string,
         // Increment unreadCount if message is NOT from current agent
         unreadCount: isOwnMessage ? current.unreadCount : (current.unreadCount ?? 0) + 1,
       }));

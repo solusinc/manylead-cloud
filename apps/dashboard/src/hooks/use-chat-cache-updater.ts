@@ -20,6 +20,7 @@ interface ChatItem {
     lastMessageAt?: Date;
     lastMessageStatus?: string;
     lastMessageSender?: string;
+    lastMessageType?: string;
     unreadCount?: number;
     assignedToId?: string | null;
     status?: string;
@@ -87,6 +88,9 @@ export function useChatCacheUpdater() {
             ...currentChat,
             ...resolvedUpdates,
           },
+          // CRITICAL: Also update top-level fields (duplicated from chat for query compatibility)
+          lastMessageType: resolvedUpdates.lastMessageType ?? chatItem.lastMessageType,
+          lastMessageIsDeleted: resolvedUpdates.lastMessageIsDeleted ?? chatItem.lastMessageIsDeleted,
         } as ChatItem;
 
         // If lastMessageAt was updated, reorder the list

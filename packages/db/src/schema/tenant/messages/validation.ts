@@ -13,7 +13,7 @@ export const selectMessageSchema = createSelectSchema(message);
  */
 export const insertMessageSchema = createInsertSchema(message, {
   content: z.string().min(1, "Conteúdo é obrigatório"),
-  messageType: z.enum(["text", "image", "video", "audio", "document", "system", "comment"]),
+  messageType: z.enum(["text", "image", "video", "audio", "document", "contact", "system", "comment"]),
   messageSource: z.enum(["whatsapp", "internal"]),
   sender: z.enum(["contact", "agent", "system"]),
   status: z.enum(["pending", "sent", "delivered", "read", "failed"]).default("pending"),

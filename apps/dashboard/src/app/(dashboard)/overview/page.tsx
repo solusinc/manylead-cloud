@@ -1,3 +1,5 @@
+"use client";
+
 import {
   SectionDescription,
   SectionGroup,
@@ -21,6 +23,8 @@ import {
 import { List, Search, Terminal } from "lucide-react";
 import Link from "next/link";
 import { TestMessageButton } from "./_components/test-message-button";
+import { Button } from "@manylead/ui/button";
+import { toast } from "sonner";
 
 export default function OverviewPage() {
   // TODO: Implement TRPC queries
@@ -86,7 +90,18 @@ export default function OverviewPage() {
             Envie uma mensagem de teste para +5521984848843
           </SectionDescription>
         </SectionHeader>
-        <TestMessageButton />
+        <div className="flex gap-2">
+          <TestMessageButton />
+          <Button
+            onClick={() => {
+              toast.success("Toast funcionando!", {
+                description: "Sonner está configurado corretamente",
+              });
+            }}
+          >
+            Testar Toast
+          </Button>
+        </div>
       </Section>
       <Section>
         <SectionHeader>

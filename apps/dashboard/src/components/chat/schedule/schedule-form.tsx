@@ -9,7 +9,7 @@ import { ArrowLeft } from "lucide-react";
 
 import type { ScheduledMessage } from "@manylead/db";
 import { Button } from "@manylead/ui/button";
-import { toast } from "@manylead/ui/toast";
+import { toast } from "sonner";
 import { Checkbox } from "@manylead/ui/checkbox";
 import { Label } from "@manylead/ui/label";
 import { Textarea } from "@manylead/ui/textarea";

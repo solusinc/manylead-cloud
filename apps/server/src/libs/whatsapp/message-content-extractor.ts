@@ -44,6 +44,16 @@ export class MessageContentExtractor {
       return this.extractDocument(messageObj);
     }
 
+    // Contato (único)
+    if (messageObj.contactMessage) {
+      return this.extractContact(messageObj);
+    }
+
+    // Contatos (múltiplos)
+    if (messageObj.contactsArrayMessage) {
+      return this.extractContactsArray(messageObj);
+    }
+
     return { text: "[Mensagem não suportada]", hasMedia: false };
   }
 
@@ -59,6 +69,7 @@ export class MessageContentExtractor {
     if (lower.includes("video")) return "video";
     if (lower.includes("audio")) return "audio";
     if (lower.includes("document")) return "document";
+    if (lower.includes("contact")) return "contact";
 
     return "text";
   }
@@ -122,7 +133,7 @@ export class MessageContentExtractor {
     const caption = typeof doc.caption === "string" ? doc.caption : "";
     const fileName = typeof doc.fileName === "string" ? doc.fileName : "document.pdf";
     return {
-      text: caption || fileName || "[Documento]",
+      text: fileName || "[Documento]",
       hasMedia: true,
       mediaUrl: typeof doc.url === "string" ? doc.url : "",
       mimeType: typeof doc.mimetype === "string" ? doc.mimetype : "application/pdf",
@@ -130,9 +141,56 @@ export class MessageContentExtractor {
       caption,
     };
   }
+
+  private extractContact(messageObj: Record<string, unknown>): MessageContent {
+    const contact = messageObj.contactMessage as Record<string, unknown>;
+    const displayName = typeof contact.displayName === "string" ? contact.displayName : "Contato";
+    const vcard = typeof contact.vcard === "string" ? contact.vcard : "";
+
+    return {
+      text: displayName,
+      hasMedia: false,
+      contactData: {
+        displayName,
+        vcard,
+      },
+    };
+  }
+
+  private extractContactsArray(messageObj: Record<string, unknown>): MessageContent {
+    const contactsArray = messageObj.contactsArrayMessage as Record<string, unknown>;
+    const contacts = Array.isArray(contactsArray.contacts) ? contactsArray.contacts : [];
+
+    // Mapear contatos
+    const mappedContacts = contacts.map((c: Record<string, unknown>) => ({
+      displayName: typeof c.displayName === "string" ? c.displayName : "",
+      vcard: typeof c.vcard === "string" ? c.vcard : "",
+    }));
+
+    // Gerar texto: "FirstName e outros X contatos" se múltiplos
+    let text: string;
+    if (mappedContacts.length > 1) {
+      const firstName = mappedContacts[0]?.displayName ?? "Contato";
+      const othersCount = mappedContacts.length - 1;
+      text = `${firstName} e outros ${othersCount} contato${othersCount > 1 ? 's' : ''}`;
+    } else if (mappedContacts.length === 1) {
+      text = mappedContacts[0]?.displayName ?? "Contato";
+    } else {
+      text = "Contatos";
+    }
+
+    return {
+      text,
+      hasMedia: false,
+      contactData: {
+        displayName: text,
+        contacts: mappedContacts,
+      },
+    };
+  }
 }
 
-export type MessageType = "text" | "image" | "video" | "audio" | "document";
+export type MessageType = "text" | "image" | "video" | "audio" | "document" | "contact";
 
 export interface MessageContent {
   text: string;
@@ -141,4 +199,12 @@ export interface MessageContent {
   mimeType?: string;
   fileName?: string;
   caption?: string;
+  contactData?: {
+    displayName: string;
+    vcard?: string;
+    contacts?: {
+      displayName: string;
+      vcard: string;
+    }[];
+  };
 }

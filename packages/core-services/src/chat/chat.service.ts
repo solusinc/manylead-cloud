@@ -387,7 +387,7 @@ Duração: ${duration}`;
     id: string,
     createdAt: Date,
     content: string,
-    sender: "agent" | "customer" | "system",
+    sender: "agent" | "contact" | "system",
     status?: "pending" | "sent" | "delivered" | "read" | "failed",
   ): Promise<void> {
     await ctx.tenantDb

@@ -9,7 +9,7 @@ import TextareaAutosize from "react-textarea-autosize";
 
 import { cn } from "@manylead/ui";
 import { Button } from "@manylead/ui/button";
-import { toast } from "@manylead/ui/toast";
+import { toast } from "sonner";
 
 import type { QuickReplySelection } from "./quick-reply-dropdown";
 import { ChatCommentDialog } from "./chat-comment-dialog";

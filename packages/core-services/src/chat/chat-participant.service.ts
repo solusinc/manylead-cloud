@@ -144,7 +144,7 @@ export class ChatParticipantService {
   /**
    * Incrementar unreadCount quando nova mensagem chega
    *
-   * Usado no WhatsApp message processor quando mensagem do customer chega
+   * Usado no WhatsApp message processor quando mensagem do contact chega
    * e o chat está atribuído a algum agent
    */
   async incrementUnreadForAssignedAgent(
