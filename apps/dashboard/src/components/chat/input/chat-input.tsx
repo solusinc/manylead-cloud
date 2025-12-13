@@ -17,6 +17,7 @@ import { ChatInputToolbar } from "./chat-input-toolbar";
 import { ChatReplyPreview } from "./chat-reply-preview";
 import { QuickReplyDropdown } from "./quick-reply-dropdown";
 import { AudioRecorder } from "./audio-recorder";
+import { CustomVariablesDialog } from "./custom-variables-dialog";
 import { useTRPC } from "~/lib/trpc/react";
 import { useChatReply } from "../providers/chat-reply-provider";
 import { useCurrentAgent } from "~/hooks/chat/use-current-agent";
@@ -71,7 +72,12 @@ export function ChatInput({
     closeQuickReply,
     textareaRef,
   } = useInputContent({ onTypingStart, onTypingStop });
-  const { handleQuickReplySelect: handleQuickReplySelectHook } = useQuickReplySelect(chatId);
+  const {
+    handleQuickReplySelect: handleQuickReplySelectHook,
+    customVariablesDialog,
+    handleCustomVariablesSubmit,
+    setCustomVariablesDialog,
+  } = useQuickReplySelect(chatId);
 
   // Buscar informações do agent assigned (se houver)
   const { data: assignedAgent } = useQuery({
@@ -300,6 +306,27 @@ export function ChatInput({
     textareaRef.current?.focus();
   }, [closeQuickReply, textareaRef]);
 
+  const handleCustomVariablesSubmitWrapper = useCallback(
+    async (values: Record<string, string>) => {
+      try {
+        const result = await handleCustomVariablesSubmit(values);
+
+        if (result) {
+          // Single message: colocar no input
+          handleContentChange(result);
+        } else {
+          // Multiple messages sent: limpar o input completamente
+          clearContent();
+        }
+
+        textareaRef.current?.focus();
+      } catch (error: unknown) {
+        console.error("Failed to send with custom variables:", error);
+      }
+    },
+    [handleCustomVariablesSubmit, handleContentChange, clearContent, textareaRef]
+  );
+
   const insertEmoji = useCallback(
     (emoji: string) => {
       handleContentChange(content + emoji);
@@ -474,6 +501,14 @@ export function ChatInput({
         isOpen={quickReplyOpen}
       />
 
+      {/* Custom Variables Modal */}
+      <CustomVariablesDialog
+        open={customVariablesDialog.open}
+        onOpenChange={(open) => setCustomVariablesDialog(prev => ({ ...prev, open }))}
+        variables={customVariablesDialog.variables}
+        onSubmit={handleCustomVariablesSubmitWrapper}
+      />
+
       {/* Reply preview */}
       <ChatReplyPreview
         repliedMessage={
@@ -494,8 +529,8 @@ export function ChatInput({
         {mode === "text" ? (
           <div
             className={cn(
-              "border-input bg-background flex flex-1 items-center gap-1 border px-2 transition-all",
-              isMultiLine ? "rounded-3xl" : "rounded-full"
+              "border-input bg-background flex flex-1 gap-1 border px-2 transition-all",
+              isMultiLine ? "rounded-3xl items-end" : "rounded-full items-center"
             )}
           >
             <ChatInputToolbar chatId={chatId} onEmojiSelect={insertEmoji} onFileSelect={handleFileSelect} disabled={!hasChannel} />

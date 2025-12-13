@@ -652,7 +652,7 @@ export const quickRepliesRouter = createTRPCRouter({
           contactName: z.string(),
           agentName: z.string(),
           organizationName: z.string(),
-        }),
+        }).passthrough(), // Permitir variáveis customizadas adicionais
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -734,13 +734,26 @@ export const quickRepliesRouter = createTRPCRouter({
       const messages = quickReplyData.messages;
 
       // Processar variáveis em cada mensagem
-      const processedMessages = messages.map((msg) => ({
-        ...msg,
-        content: msg.content
-          .replace(/\{\{contact\.name\}\}/g, input.variables.contactName)
-          .replace(/\{\{agent\.name\}\}/g, input.variables.agentName)
-          .replace(/\{\{organization\.name\}\}/g, input.variables.organizationName),
-      }));
+      const processedMessages = messages.map((msg) => {
+        let processedContent = msg.content;
+
+        // Substituir todas as variáveis (conhecidas + customizadas)
+        Object.entries(input.variables).forEach(([key, value]) => {
+          // Converter camelCase para dot notation para variáveis conhecidas
+          let variableName = key;
+          if (key === 'contactName') variableName = 'contact.name';
+          else if (key === 'agentName') variableName = 'agent.name';
+          else if (key === 'organizationName') variableName = 'organization.name';
+
+          const regex = new RegExp(`\\{\\{${variableName.replace(/\./g, '\\.')}\\}\\}`, 'g');
+          processedContent = processedContent.replace(regex, value as string);
+        });
+
+        return {
+          ...msg,
+          content: processedContent,
+        };
+      });
 
       // Inicializar serviços baseado no tipo de chat
       if (isWhatsAppChat) {
