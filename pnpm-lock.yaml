@@ -671,6 +671,9 @@ importers:
 
   packages/core-services:
     dependencies:
+      '@manylead/auth':
+        specifier: workspace:*
+        version: link:../auth
       '@manylead/clients':
         specifier: workspace:*
         version: link:../clients

@@ -10,13 +10,16 @@
     "./department": "./src/department/index.ts",
     "./chat": "./src/chat/index.ts",
     "./message": "./src/message/index.ts",
-    "./whatsapp": "./src/whatsapp/index.ts"
+    "./whatsapp": "./src/whatsapp/index.ts",
+    "./invitation": "./src/invitation/index.ts",
+    "./member": "./src/member/index.ts"
   },
   "scripts": {
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@manylead/auth": "workspace:*",
     "@manylead/clients": "workspace:*",
     "@manylead/db": "workspace:*",
     "@manylead/evolution-api-client": "workspace:*",

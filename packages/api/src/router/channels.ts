@@ -7,8 +7,10 @@ import {
   channel,
   CHANNEL_STATUS,
   CHANNEL_TYPE,
+  chat,
   eq,
   insertChannelSchema,
+  isNull,
   organization,
   organizationSettings,
   selectChannelSchema,
@@ -456,6 +458,19 @@ export const channelsRouter = createTRPCRouter({
           code: "INTERNAL_SERVER_ERROR",
           message: "Falha ao atualizar canal",
         });
+      }
+
+      // Se o canal foi conectado, associar chats sem canal
+      if (updated.status === "connected" && existing.status !== "connected") {
+        await tenantDb
+          .update(chat)
+          .set({ channelId: input.id })
+          .where(
+            and(
+              eq(chat.messageSource, "whatsapp"),
+              isNull(chat.channelId),
+            ),
+          );
       }
 
       return selectChannelSchema.parse(updated);

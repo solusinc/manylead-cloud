@@ -2,6 +2,7 @@ import { TRPCError } from "@trpc/server";
 import { z } from "zod";
 
 import { agent, and, eq, gte, invitation, organization } from "@manylead/db";
+import { invitationService } from "@manylead/core-services";
 import { EmailClient } from "@manylead/emails";
 
 import { env } from "../env";
@@ -219,6 +220,33 @@ export const invitationRouter = createTRPCRouter({
           message: "Selecione pelo menos um departamento",
         });
       }
+
+      // VALIDAÇÕES usando InvitationService
+      // 1. Validar se email já é membro
+      await invitationService.validateNotExistingMember(
+        ctx.db,
+        input.email,
+        activeOrgId,
+      );
+
+      // 2. Validar se já existe convite pendente
+      const { existingInvitationId } =
+        await invitationService.validateNoDuplicatePending(
+          ctx.db,
+          input.email,
+          activeOrgId,
+        );
+
+      if (existingInvitationId) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "Existe um convite expirado. Use reenviar.",
+          cause: { existingInvitationId },
+        });
+      }
+
+      // 3. Rate limiting
+      await invitationService.checkRateLimit(ctx.db, activeOrgId);
 
       // Get organization data
       const org = await ctx.db
@@ -472,5 +500,46 @@ export const invitationRouter = createTRPCRouter({
       }
 
       await ctx.db.delete(invitation).where(eq(invitation.id, input.id));
+    }),
+
+  /**
+   * Resend invitation
+   * Reenviar convite expirado
+   */
+  resend: ownerProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const activeOrgId = ctx.session.session.activeOrganizationId;
+
+      if (!activeOrgId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Nenhuma organização ativa encontrada",
+        });
+      }
+
+      // Usar InvitationService para reenviar
+      const { email, organizationName } = await invitationService.resend(
+        ctx.db,
+        input.id,
+        activeOrgId,
+      );
+
+      // Reenviar email
+      await emailClient.sendTeamInvitation({
+        to: email,
+        token: input.id,
+        organizationName,
+        invitedBy: ctx.session.user.email,
+        baseUrl: `${BASE_URL}/invite`,
+      });
+
+      if (env.NODE_ENV === "development") {
+        console.log(
+          `>>>> Resent invitation link: ${BASE_URL}/invite?token=${input.id} <<<<`,
+        );
+      }
+
+      return { success: true };
     }),
 });

@@ -1039,7 +1039,7 @@ export const messagesRouter = createTRPCRouter({
    *
    * Refatorado para usar WhatsAppMessageService (Fase 2)
    */
-  sendWhatsApp: ownerProcedure
+  sendWhatsApp: memberProcedure
     .input(
       z.object({
         chatId: z.string().uuid(),
@@ -1185,7 +1185,7 @@ export const messagesRouter = createTRPCRouter({
   /**
    * Enviar mensagem com mídia para WhatsApp
    */
-  sendWhatsAppMedia: ownerProcedure
+  sendWhatsAppMedia: memberProcedure
     .input(
       z.object({
         chatId: z.string().uuid(),

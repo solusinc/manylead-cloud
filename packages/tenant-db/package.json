@@ -20,6 +20,7 @@
     "generate:tenant": "pnpm with-env drizzle-kit generate",
     "migrate:tenant": "pnpm with-env tsx src/scripts/migrate-tenant.ts",
     "migrate:all": "pnpm with-env tsx src/scripts/migrate-all.ts",
+    "migrate:all:prod": "pnpm with-env:prod tsx src/scripts/migrate-all.ts",
     "studio:tenant": "pnpm with-env drizzle-kit studio --config=drizzle.config.tenant-studio.ts",
     "create-tenant": "pnpm with-env tsx src/scripts/create-tenant.ts",
     "delete-tenant": "pnpm with-env tsx src/scripts/delete-tenant.ts",
@@ -27,7 +28,8 @@
     "delete-organization": "pnpm with-env tsx src/scripts/delete-organization.ts",
     "list-tenants": "pnpm with-env tsx src/scripts/list-tenants.ts",
     "health-check": "pnpm with-env tsx src/scripts/health-check.ts",
-    "with-env": "dotenv -e ../../.env --"
+    "with-env": "dotenv -e ../../.env --",
+    "with-env:prod": "dotenv -e ../../.env.prod --"
   },
   "dependencies": {
     "@manylead/clients": "workspace:*",

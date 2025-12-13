@@ -47,3 +47,6 @@ export * from "./scheduled-messages";
 
 // Chat Ratings
 export * from "./chat-ratings";
+
+// Notifications
+export * from "./notifications";

@@ -1,4 +1,4 @@
-import { channel, CHANNEL_STATUS, eq } from "@manylead/db";
+import { channel, chat, CHANNEL_STATUS, eq, isNull, and } from "@manylead/db";
 
 import { getSocketManager } from "~/socket";
 import { tenantManager } from "~/libs/tenant-manager";
@@ -154,6 +154,27 @@ export async function handleConnectionUpdate(
     phoneNumber,
     displayName: finalProfileName,
   });
+
+  // AUTO-ASSOCIAR chats órfãos quando conectar
+  if (state === "open") {
+    const associatedChats = await tenantDb
+      .update(chat)
+      .set({ channelId: ch.id })
+      .where(
+        and(
+          eq(chat.messageSource, "whatsapp"),
+          isNull(chat.channelId)
+        )
+      )
+      .returning({ id: chat.id });
+
+    if (associatedChats.length > 0) {
+      logger.info("Auto-associated orphaned WhatsApp chats", {
+        channelId: ch.id,
+        chatCount: associatedChats.length,
+      });
+    }
+  }
 
   // Emitir evento via Socket.io
   const socketManager = getSocketManager();

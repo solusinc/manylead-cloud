@@ -13,6 +13,7 @@ import {
   updateAgentSchema,
   user,
 } from "@manylead/db";
+import { memberService } from "@manylead/core-services";
 
 import {
   createTRPCRouter,
@@ -395,10 +396,7 @@ export const agentsRouter = createTRPCRouter({
         });
       }
 
-      // 1. Deletar agent do tenant database
-      await ctx.tenantDb.delete(agent).where(eq(agent.id, input.id));
-
-      // 2. Verificar se existe member no catalog database e deletar
+      // Buscar member correspondente no catalog
       const [memberToDelete] = await ctx.db
         .select()
         .from(member)
@@ -410,27 +408,22 @@ export const agentsRouter = createTRPCRouter({
         )
         .limit(1);
 
-      if (memberToDelete) {
-        try {
-          // Remove member usando Better Auth API
-          // IMPORTANTE: Usar member.id (não userId) como memberIdOrEmail
-          await ctx.authApi.removeMember({
-            body: {
-              memberIdOrEmail: memberToDelete.id,
-              organizationId,
-            },
-            headers: ctx.headers,
-          });
-        } catch (error) {
-          // Se o member não existir no Better Auth, não é erro crítico
-          // O agent já foi removido do tenant DB com sucesso
-          console.warn(
-            `[agents.delete] Falha ao remover member via Better Auth (memberId: ${memberToDelete.id}):`,
-            error,
-          );
-          // Não lançar erro - o agent já foi removido do tenant DB
-        }
+      if (!memberToDelete) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Membro não encontrado",
+        });
       }
+
+      // Usar MemberService para remoção com cleanup completo
+      await memberService.removeMemberWithCleanup({
+        catalogDb: ctx.db,
+        tenantDb: ctx.tenantDb,
+        memberId: memberToDelete.id,
+        organizationId,
+        authApi: ctx.authApi,
+        headers: ctx.headers,
+      });
 
       return { success: true };
     }),

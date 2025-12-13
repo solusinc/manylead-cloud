@@ -9,6 +9,7 @@ const LOAD_MORE_LIMIT = 30;
 export interface MessageWithSender extends Omit<Message, "sender"> {
   sender: "contact" | "agent" | "system";
   attachment?: Attachment;
+  isOwnMessage?: boolean; // Se a mensagem é do agente logado
 }
 
 export interface UseMessageDataReturn {
@@ -42,13 +43,9 @@ export function useMessageData(chatId: string): UseMessageDataReturn {
       .flatMap((page) => page.items)
       .map((item): MessageWithSender => ({
         ...item.message,
-        sender:
-          item.message.sender === "system"
-            ? ("system" as const)
-            : item.isOwnMessage
-              ? ("agent" as const)
-              : ("contact" as const),
+        sender: item.message.sender as "contact" | "agent" | "system", // Preservar sender original
         attachment: item.attachment ?? undefined,
+        isOwnMessage: item.isOwnMessage, // Adicionar flag de mensagem própria
       }));
   }, [data?.pages]);
 

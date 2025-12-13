@@ -25,6 +25,7 @@ export interface Message {
   metadata?: Record<string, unknown>;
   chatId?: string;
   attachment?: Attachment;
+  isOwnMessage?: boolean; // Se a mensagem é do agente logado
 }
 
 export function ChatMessage({
@@ -42,7 +43,11 @@ export function ChatMessage({
   canDeleteMessages?: boolean;
   onImageLoad?: () => void;
 } & React.ComponentProps<"div">) {
-  const isOutgoing = message.sender === "agent";
+  // Mensagem vai para direita (outgoing) se:
+  // - É de qualquer AGENTE (qualquer membro da equipe)
+  // - OU é SYSTEM message
+  // Apenas mensagens do CONTATO vão para esquerda
+  const isOutgoing = message.sender === "agent" || message.sender === "system";
   const [isHovered, setIsHovered] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
 

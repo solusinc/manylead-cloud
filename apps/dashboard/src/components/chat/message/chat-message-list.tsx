@@ -199,7 +199,7 @@ export function ChatMessageList({
     // Only scroll for NEW messages, not when loading older ones
     if (isNewMessage && !loadedOlderMessages) {
       const context = getScrollContext();
-      const isOwnMessage = lastMessage.sender === "agent";
+      const isOwnMessage = lastMessage.isOwnMessage === true;
       const isSystemMessage = lastMessage.sender === "system";
       const hasMedia = !!(lastMessage.messageType && !["text", "comment"].includes(lastMessage.messageType));
 

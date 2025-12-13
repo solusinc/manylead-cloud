@@ -879,7 +879,7 @@ export class WhatsAppMessageProcessor {
     });
 
     // 2. Salvar mensagem do rating (como system para não aparecer na lista de mensagens)
-    const [ratingMessage] = await tenantDb
+    const [_ratingMessage] = await tenantDb
       .insert(message)
       .values({
         chatId: chatRecord.id,
@@ -923,7 +923,7 @@ export class WhatsAppMessageProcessor {
     }
 
     // 5. Salvar mensagem de agradecimento
-    const [thanksMessage] = await tenantDb
+    const [_thanksMessage] = await tenantDb
       .insert(message)
       .values({
         chatId: chatRecord.id,

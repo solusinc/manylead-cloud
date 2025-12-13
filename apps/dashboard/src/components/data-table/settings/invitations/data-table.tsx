@@ -13,7 +13,8 @@ import { formatDate } from "~/lib/formatter";
 import { useTRPC } from "~/lib/trpc/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { usePermissions } from "~/lib/permissions";
-import { Pencil } from "lucide-react";
+import { Pencil, Send } from "lucide-react";
+import { toast } from "sonner";
 
 export function DataTable() {
   const router = useRouter();
@@ -24,6 +25,17 @@ export function DataTable() {
   const deleteInvitationMutation = useMutation(
     trpc.invitation.delete.mutationOptions({
       onSuccess: () => refetch(),
+    }),
+  );
+  const resendInvitationMutation = useMutation(
+    trpc.invitation.resend.mutationOptions({
+      onSuccess: () => {
+        toast.success("Convite reenviado com sucesso!");
+        void refetch();
+      },
+      onError: (error) => {
+        toast.error(error.message);
+      },
     }),
   );
   const { can } = usePermissions();
@@ -78,6 +90,15 @@ export function DataTable() {
                   {can("manage", "Agent") && (
                     <QuickActions
                       actions={[
+                        {
+                          id: "resend",
+                          label: "Reenviar",
+                          icon: Send,
+                          variant: "default" as const,
+                          onClick: () => {
+                            resendInvitationMutation.mutate({ id: item.id });
+                          },
+                        },
                         {
                           id: "edit",
                           label: "Editar",
